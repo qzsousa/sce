@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Shared') ?>
+</head>
+<body>
+  <!--
+    Este arquivo assume que só chega até aqui um usuário de nível "Filial"
+    já autenticado — a checagem de role é feita inteiramente no doGet do
+    Code.gs. Nenhuma lógica de "se for Matriz, senão..." deve existir aqui.
+  -->
+  <div class="sce-container">
+    <h5>Painel da Unidade: <?= session.filial ?></h5>
+
+    <div class="row">
+      <button class="btn waves-effect" id="btn-abrir-cadastro">
+        <i class="material-icons left">add</i>Adicionar equipamento
+      </button>
+      <button class="btn waves-effect" id="btn-abrir-emprestimo">
+        <i class="material-icons left">assignment_turned_in</i>Emprestar
+      </button>
+      <button class="btn waves-effect" id="btn-devolver-selecionados">
+        <i class="material-icons left">keyboard_return</i>Devolver
+      </button>
+      <button class="btn-flat waves-effect" id="btn-atualizar-lista">
+        <i class="material-icons left">refresh</i>Atualizar
+      </button>
+    </div>
+
+    <div class="row">
+      <div class="input-field col s6">
+        <input type="text" id="filtro-busca">
+        <label for="filtro-busca">Buscar por patrimonio, serie ou modelo</label>
+      </div>
+      <div class="input-field col s3">
+        <select id="filtro-status"><option value="">Todos os status</option></select>
+        <label>Status</label>
+      </div>
+      <div class="input-field col s3">
+        <select id="filtro-categoria"><option value="">Todas as categorias</option></select>
+        <label>Categoria</label>
+      </div>
+    </div>
+
+    <div id="kpis" class="row"><!-- KPIs preenchidos via JS --></div>
+
+    <div id="chart-status" style="width:100%;height:300px;"></div>
+
+    <table class="striped" id="tabela-equipamentos">
+      <thead>
+        <tr>
+          <th><label><input type="checkbox" id="check-todos"><span></span></label></th><th>Categoria</th><th>Marca</th><th>Modelo</th>
+          <th>Patrimônio</th><th>Status</th><th>Ações</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="row">
+      <button class="btn-flat" id="btn-pagina-anterior">Anterior</button>
+      <span id="pagina-info"></span>
+      <button class="btn-flat" id="btn-proxima-pagina">Proxima</button>
+    </div>
+  </div>
+
+  <!-- Modal de confirmação de remoção (soft-delete), a ser ligado na próxima etapa -->
+  <div id="modal-emprestimo" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5>Registrar emprestimo</h5>
+      <div class="row">
+        <div class="input-field col s6">
+          <input type="text" id="emp-responsavel">
+          <label for="emp-responsavel">Responsavel</label>
+        </div>
+        <div class="input-field col s3">
+          <input type="text" id="emp-cpf">
+          <label for="emp-cpf">CPF</label>
+        </div>
+        <div class="input-field col s3">
+          <input type="email" id="emp-email">
+          <label for="emp-email">E-mail</label>
+        </div>
+        <div class="input-field col s4">
+          <input type="date" id="emp-prevista">
+          <label for="emp-prevista" class="active">Previsao de devolucao</label>
+        </div>
+        <div class="input-field col s8">
+          <textarea id="emp-observacoes" class="materialize-textarea"></textarea>
+          <label for="emp-observacoes">Observacoes</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-confirmar-emprestimo">Registrar</a>
+    </div>
+  </div>
+
+  <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5>Adicionar equipamento</h5>
+
+      <div class="row">
+        <div class="input-field col s6">
+          <input type="text" id="new-categoria">
+          <label for="new-categoria">Categoria</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-marca">
+          <label for="new-marca">Marca</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-modelo">
+          <label for="new-modelo">Modelo</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-patrimonio">
+          <label for="new-patrimonio">Patrimonio</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-numeroSerie">
+          <label for="new-numeroSerie">Numero de serie</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="new-status">
+            <option value="Dispon&#237;vel" selected>Dispon&#237;vel</option>
+            <option value="Manuten&#231;&#227;o">Manuten&#231;&#227;o</option>
+            <option value="Emprestado">Emprestado</option>
+            <option value="Extraviado">Extraviado</option>
+            <option value="Inserv&#237;vel">Inserv&#237;vel</option>
+            <option value="Em verifica&#231;&#227;o">Em verifica&#231;&#227;o</option>
+          </select>
+          <label>Status</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-sistemaOperacional">
+          <label for="new-sistemaOperacional">Sistema operacional</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-processador">
+          <label for="new-processador">Processador</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-memoriaRAM">
+          <label for="new-memoriaRAM">Memoria RAM</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-armazenamento">
+          <label for="new-armazenamento">Armazenamento</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-tamanhoTela">
+          <label for="new-tamanhoTela">Tamanho da tela</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-responsavelAtual">
+          <label for="new-responsavelAtual">Responsavel atual</label>
+        </div>
+        <div class="input-field col s12">
+          <textarea id="new-observacoes" class="materialize-textarea"></textarea>
+          <label for="new-observacoes">Observacoes</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-salvar-cadastro">Salvar</a>
+    </div>
+  </div>
+
+  <div id="modal-confirmar-remocao" class="modal">
+    <div class="modal-content">
+      <h5>Confirmar remoção</h5>
+      <p>Esta ação marcará o item como removido. Deseja continuar?</p>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn red" id="btn-confirmar-remocao">Remover</a>
+    </div>
+  </div>
+
+  <!-- Modal de edição — campos padrão do equipamento + campos condicionais
+       de status especial (manutenção/extravio/verificação) -->
+  <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5>Editar equipamento</h5>
+      <input type="hidden" id="edit-id">
+
+      <div class="row">
+        <div class="input-field col s6">
+          <input type="text" id="edit-categoria">
+          <label for="edit-categoria" class="active">Categoria</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-marca">
+          <label for="edit-marca" class="active">Marca</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-modelo">
+          <label for="edit-modelo" class="active">Modelo</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-patrimonio">
+          <label for="edit-patrimonio" class="active">Patrimônio</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-numeroSerie">
+          <label for="edit-numeroSerie" class="active">Número de série</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="edit-status" onchange="atualizarCamposCondicionais()">
+            <option value="Disponível">Disponível</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Emprestado">Emprestado</option>
+            <option value="Extraviado">Extraviado</option>
+            <option value="Inservível">Inservível</option>
+            <option value="Em verificação">Em verificação</option>
+          </select>
+          <label>Status</label>
+        </div>
+
+        <!-- Campos condicionais — visibilidade controlada por atualizarCamposCondicionais() -->
+        <div class="input-field col s12" id="campo-chamado" style="display:none;">
+          <input type="text" id="edit-numeroChamadoManutencao">
+          <label for="edit-numeroChamadoManutencao" class="active">Nº do chamado de manutenção</label>
+        </div>
+        <div class="input-field col s12" id="campo-bo" style="display:none;">
+          <input type="text" id="edit-boletimOcorrencia">
+          <label for="edit-boletimOcorrencia" class="active">Boletim de ocorrência</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa" style="display:none;">
+          <textarea id="edit-justificativaVerificacao" class="materialize-textarea"></textarea>
+          <label for="edit-justificativaVerificacao" class="active">Justificativa da verificação</label>
+        </div>
+
+        <div class="input-field col s6">
+          <input type="text" id="edit-sistemaOperacional">
+          <label for="edit-sistemaOperacional" class="active">Sistema operacional</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-processador">
+          <label for="edit-processador" class="active">Processador</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-memoriaRAM">
+          <label for="edit-memoriaRAM" class="active">Memória RAM</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-armazenamento">
+          <label for="edit-armazenamento" class="active">Armazenamento</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-tamanhoTela">
+          <label for="edit-tamanhoTela" class="active">Tamanho da tela</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-responsavelAtual">
+          <label for="edit-responsavelAtual" class="active">Responsável atual</label>
+        </div>
+        <div class="input-field col s12">
+          <textarea id="edit-observacoes" class="materialize-textarea"></textarea>
+          <label for="edit-observacoes" class="active">Observações</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-salvar-edicao">Salvar</a>
+    </div>
+  </div>
+
+</body>
+
+<script>
+  const SCE_TOKEN = localStorage.getItem('sce_token');
+
+  // Cache local dos equipamentos carregados — usado pra popular o modal de
+  // edição sem precisar de uma segunda chamada ao servidor por item.
+  let equipamentosCache = [];
+
+  let idPendenteRemocao = null;
+  let modalRemocaoInstance = null;
+  let modalEdicaoInstance = null;
+  let modalCadastroInstance = null;
+  let modalEmprestimoInstance = null;
+  let equipamentosFiltrados = [];
+  let paginaAtual = 1;
+  const ITENS_POR_PAGINA = 25;
+
+  // Campos editáveis do modal — usados tanto pra popular quanto pra montar o diff.
+  const CAMPOS_EDITAVEIS = [
+    'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+    'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
+    'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+    'tamanhoTela', 'responsavelAtual', 'observacoes'
+  ];
+
+  const CAMPOS_CADASTRO = [
+    'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+    'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+    'tamanhoTela', 'responsavelAtual', 'observacoes'
+  ];
+
+  function carregarEquipamentos() {
+    google.script.run
+      .withSuccessHandler(function (equipamentos) {
+        equipamentosCache = equipamentos;
+        atualizarFiltrosOpcoes(equipamentos);
+        aplicarFiltros();
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar: ' + err.message }); })
+      .getEquipamentosDaFilial(SCE_TOKEN);
+  }
+
+  function renderTabelaEquipamentos(equipamentos) {
+    const tbody = document.querySelector('#tabela-equipamentos tbody');
+    tbody.innerHTML = '';
+    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+    const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
+    pagina.forEach(function (item) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
+        '<td>' + (item.categoria || '') + '</td>' +
+        '<td>' + (item.marca || '') + '</td>' +
+        '<td>' + (item.modelo || '') + '</td>' +
+        '<td>' + (item.patrimonio || '') + '</td>' +
+        '<td>' + (item.status || '') + '</td>' +
+        '<td>' +
+          '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar">' +
+            '<i class="material-icons">edit</i></a> ' +
+          '<a class="btn-small waves-effect" onclick="clonarEquipamentoUI(\'' + item.id + '\')" title="Clonar">' +
+            '<i class="material-icons">content_copy</i></a> ' +
+          '<a class="btn-small waves-effect red" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover">' +
+            '<i class="material-icons">delete</i></a>' +
+        '</td>';
+      tbody.appendChild(tr);
+    });
+    const totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));
+    document.getElementById('pagina-info').innerText = 'Pagina ' + paginaAtual + ' de ' + totalPaginas + ' - ' + equipamentos.length + ' itens';
+  }
+
+  function aplicarFiltros() {
+    const busca = document.getElementById('filtro-busca').value.trim().toLowerCase();
+    const status = document.getElementById('filtro-status').value;
+    const categoria = document.getElementById('filtro-categoria').value;
+    equipamentosFiltrados = equipamentosCache.filter(function (item) {
+      if (status && item.status !== status) return false;
+      if (categoria && item.categoria !== categoria) return false;
+      if (!busca) return true;
+      return [item.patrimonio, item.numeroSerie, item.modelo].join(' ').toLowerCase().indexOf(busca) !== -1;
+    });
+    paginaAtual = 1;
+    renderTabelaEquipamentos(equipamentosFiltrados);
+  }
+
+  function atualizarFiltrosOpcoes(equipamentos) {
+    preencherSelectFiltro('filtro-status', equipamentos.map(function (e) { return e.status; }), 'Todos os status');
+    preencherSelectFiltro('filtro-categoria', equipamentos.map(function (e) { return e.categoria; }), 'Todas as categorias');
+  }
+
+  function preencherSelectFiltro(id, valores, label) {
+    const select = document.getElementById(id);
+    const atual = select.value;
+    const unicos = valores.filter(Boolean).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).sort();
+    select.innerHTML = '<option value="">' + label + '</option>' + unicos.map(function (v) {
+      return '<option value="' + v + '">' + v + '</option>';
+    }).join('');
+    select.value = atual;
+    M.FormSelect.init(select);
+  }
+
+  function getIdsSelecionados() {
+    return Array.prototype.slice.call(document.querySelectorAll('.check-equipamento:checked')).map(function (el) {
+      return el.value;
+    });
+  }
+
+  // --- Remoção (soft-delete) com confirmação via modal ---------------------
+
+  function abrirCadastroEquipamento() {
+    CAMPOS_CADASTRO.forEach(function (campo) {
+      const el = document.getElementById('new-' + campo);
+      if (el) el.value = campo === 'status' ? 'Disponível' : '';
+    });
+    M.FormSelect.init(document.getElementById('new-status'));
+    M.updateTextFields();
+
+    if (!modalCadastroInstance) {
+      modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
+    }
+    modalCadastroInstance.open();
+  }
+
+  function salvarCadastro() {
+    const dados = {};
+    CAMPOS_CADASTRO.forEach(function (campo) {
+      const el = document.getElementById('new-' + campo);
+      if (el && el.value) dados[campo] = el.value;
+    });
+
+    if (!dados.categoria || !dados.patrimonio) {
+      M.toast({ html: 'Preencha pelo menos Categoria e Patrimonio.' });
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function () {
+        M.toast({ html: 'Equipamento cadastrado.' });
+        modalCadastroInstance.close();
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao cadastrar: ' + err.message }); })
+      .createEquipamento(SCE_TOKEN, dados);
+  }
+
+  function abrirEmprestimoSelecionados() {
+    const ids = getIdsSelecionados();
+    if (ids.length === 0) {
+      M.toast({ html: 'Selecione pelo menos um equipamento.' });
+      return;
+    }
+    if (!modalEmprestimoInstance) {
+      modalEmprestimoInstance = M.Modal.init(document.getElementById('modal-emprestimo'));
+    }
+    modalEmprestimoInstance.open();
+  }
+
+  function confirmarEmprestimo() {
+    const ids = getIdsSelecionados();
+    const dados = {
+      responsavel: document.getElementById('emp-responsavel').value.trim(),
+      cpf: document.getElementById('emp-cpf').value.trim(),
+      emailResponsavel: document.getElementById('emp-email').value.trim(),
+      dataPrevistaDevolucao: document.getElementById('emp-prevista').value,
+      observacoes: document.getElementById('emp-observacoes').value.trim()
+    };
+    if (!dados.responsavel) {
+      M.toast({ html: 'Informe o responsavel.' });
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        M.toast({ html: res.message });
+        modalEmprestimoInstance.close();
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro no emprestimo: ' + err.message }); })
+      .registrarEmprestimo(SCE_TOKEN, ids, dados);
+  }
+
+  function devolverSelecionados() {
+    const ids = getIdsSelecionados();
+    if (ids.length === 0) {
+      M.toast({ html: 'Selecione pelo menos um equipamento.' });
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        M.toast({ html: res.message });
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro na devolucao: ' + err.message }); })
+      .registrarDevolucao(SCE_TOKEN, ids, '');
+  }
+
+  function abrirModalRemocao(id) {
+    idPendenteRemocao = id;
+    if (!modalRemocaoInstance) {
+      modalRemocaoInstance = M.Modal.init(document.getElementById('modal-confirmar-remocao'));
+    }
+    modalRemocaoInstance.open();
+  }
+
+  function confirmarRemocao() {
+    if (!idPendenteRemocao) return;
+    const id = idPendenteRemocao;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        M.toast({ html: res.message });
+        modalRemocaoInstance.close();
+        idPendenteRemocao = null;
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) {
+        M.toast({ html: 'Erro ao remover: ' + err.message });
+        modalRemocaoInstance.close();
+        idPendenteRemocao = null;
+      })
+      .removerEquipamento(SCE_TOKEN, id);
+  }
+
+  // --- Clonagem --------------------------------------------------------------
+
+  function clonarEquipamentoUI(id) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        M.toast({ html: 'Equipamento clonado.' });
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao clonar: ' + err.message }); })
+      .cloneEquipamento(SCE_TOKEN, id);
+  }
+
+  // --- Edição --------------------------------------------------------------
+
+  // Guarda os valores originais do item aberto no modal, pra montar um diff
+  // na hora de salvar (só manda pro servidor o que realmente mudou).
+  let itemEmEdicaoOriginal = null;
+
+  function editarEquipamento(id) {
+    const item = equipamentosCache.filter(function (e) { return e.id === id; })[0];
+    if (!item) { M.toast({ html: 'Item não encontrado no cache local.' }); return; }
+
+    itemEmEdicaoOriginal = item;
+    document.getElementById('edit-id').value = item.id;
+
+    CAMPOS_EDITAVEIS.forEach(function (campo) {
+      const el = document.getElementById('edit-' + campo);
+      if (el) el.value = item[campo] || '';
+    });
+
+    atualizarCamposCondicionais();
+    M.FormSelect.init(document.getElementById('edit-status'));
+    M.updateTextFields(); // reposiciona labels do Materialize pros valores pré-preenchidos
+
+    if (!modalEdicaoInstance) {
+      modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
+    }
+    modalEdicaoInstance.open();
+  }
+
+  // Mostra/esconde os campos de justificativa conforme o status selecionado —
+  // espelha a regra server-side de validarStatusEspecial_ no Code.gs.
+  function atualizarCamposCondicionais() {
+    const status = document.getElementById('edit-status').value;
+    document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
+    document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
+    document.getElementById('campo-justificativa').style.display = (status === 'Em verificação') ? 'block' : 'none';
+  }
+
+  function salvarEdicao() {
+    const id = document.getElementById('edit-id').value;
+    const camposAlterados = {};
+
+    CAMPOS_EDITAVEIS.forEach(function (campo) {
+      const el = document.getElementById('edit-' + campo);
+      if (!el) return;
+      const valorNovo = el.value;
+      const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
+      if (String(valorNovo) !== String(valorAntigo)) {
+        camposAlterados[campo] = valorNovo;
+      }
+    });
+
+    // Validação client-side espelhando a regra do servidor — evita um
+    // roundtrip só pra descobrir que faltou preencher a justificativa.
+    const status = document.getElementById('edit-status').value;
+    const regrasStatus = {
+      'Manutenção': 'numeroChamadoManutencao',
+      'Extraviado': 'boletimOcorrencia',
+      'Em verificação': 'justificativaVerificacao'
+    };
+    const campoObrigatorio = regrasStatus[status];
+    if (campoObrigatorio) {
+      const valorFinal = camposAlterados[campoObrigatorio] !== undefined
+        ? camposAlterados[campoObrigatorio]
+        : (itemEmEdicaoOriginal[campoObrigatorio] || '');
+      if (!valorFinal) {
+        M.toast({ html: 'Preencha o campo obrigatório para o status "' + status + '".' });
+        return;
+      }
+    }
+
+    if (Object.keys(camposAlterados).length === 0) {
+      M.toast({ html: 'Nada foi alterado.' });
+      modalEdicaoInstance.close();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function () {
+        M.toast({ html: 'Equipamento atualizado.' });
+        modalEdicaoInstance.close();
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao salvar: ' + err.message }); })
+      .updateEquipamento(SCE_TOKEN, id, camposAlterados);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    M.FormSelect.init(document.querySelectorAll('select'));
+    carregarEquipamentos();
+    document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
+    document.getElementById('btn-abrir-emprestimo').addEventListener('click', abrirEmprestimoSelecionados);
+    document.getElementById('btn-confirmar-emprestimo').addEventListener('click', confirmarEmprestimo);
+    document.getElementById('btn-devolver-selecionados').addEventListener('click', devolverSelecionados);
+    document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
+    document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
+    document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
+    document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
+    document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
+    document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
+    document.getElementById('check-todos').addEventListener('change', function () {
+      const checked = this.checked;
+      document.querySelectorAll('.check-equipamento').forEach(function (el) { el.checked = checked; });
+    });
+    document.getElementById('btn-pagina-anterior').addEventListener('click', function () {
+      if (paginaAtual > 1) {
+        paginaAtual--;
+        renderTabelaEquipamentos(equipamentosFiltrados);
+      }
+    });
+    document.getElementById('btn-proxima-pagina').addEventListener('click', function () {
+      if (paginaAtual < Math.ceil(equipamentosFiltrados.length / ITENS_POR_PAGINA)) {
+        paginaAtual++;
+        renderTabelaEquipamentos(equipamentosFiltrados);
+      }
+    });
+  });
+
+  // TODO (próxima etapa): fluxo de empréstimo/devolução (individual e em massa)
+  // TODO (próxima etapa): filtros/busca + paginação na tabela
+</script>
+
+</html>

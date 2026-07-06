@@ -1,0 +1,48 @@
+<!-- ============================================================================
+     Shared.html — incluído via <?!= include('Shared') ?>
+     Contém: CSS global (Materialize + ajustes), header e função de logout.
+     ========================================================================== -->
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
+
+<style>
+  :root {
+    --sce-primary: #1565c0;
+    --sce-accent: #0d47a1;
+  }
+  body { background: #f4f6f8; }
+  .sce-header {
+    background: var(--sce-primary);
+    color: white;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sce-header .brand { font-weight: 600; font-size: 1.2rem; }
+  .sce-header .logout-btn { cursor: pointer; }
+  .sce-container { padding: 24px; }
+</style>
+
+<div class="sce-header">
+  <span class="brand">SCE — Sistema de Controle de Equipamentos</span>
+  <span class="logout-btn" onclick="sceLogout()">
+    <i class="material-icons" style="vertical-align:middle;">logout</i> Sair
+  </span>
+</div>
+
+<script>
+  // Limpa o token salvo localmente e volta para a tela de login (doGet sem token).
+  function sceLogout() {
+    localStorage.removeItem('sce_token');
+    top.location.href = getScriptUrlBase_();
+  }
+
+  // Reconstrói a URL base do Web App (sem query string) a partir da URL atual.
+  function getScriptUrlBase_() {
+    return window.location.href.split('?')[0];
+  }
+</script>

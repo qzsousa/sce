@@ -1,0 +1,89 @@
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Shared') ?>
+</head>
+<body>
+  <div class="sce-container" style="max-width:420px;margin:60px auto;">
+    <div class="card" style="padding:32px;">
+      <h5>Login — SCE</h5>
+
+      <div id="step-email">
+        <div class="input-field">
+          <input type="email" id="email" autocomplete="email">
+          <label for="email">E-mail institucional</label>
+        </div>
+        <button class="btn waves-effect" onclick="enviarCodigo()">Enviar código</button>
+      </div>
+
+      <div id="step-code" style="display:none;">
+        <p id="msg-code"></p>
+        <div class="input-field">
+          <input type="text" id="code" maxlength="6" inputmode="numeric">
+          <label for="code">Código de 6 dígitos</label>
+        </div>
+        <button class="btn waves-effect" onclick="validarCodigo()">Validar</button>
+        <button class="btn-flat waves-effect" onclick="enviarCodigo()">Reenviar código</button>
+      </div>
+
+      <div id="feedback" style="color:#c62828;margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <script>
+    let emailAtual = '';
+
+    function enviarCodigo() {
+      const email = document.getElementById('email').value.trim();
+      if (!email) { setFeedback('Informe um e-mail.'); return; }
+      emailAtual = email;
+      setFeedback('Enviando...');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          setFeedback(res.message);
+          if (res.ok) {
+            document.getElementById('step-email').style.display = 'none';
+            document.getElementById('step-code').style.display = 'block';
+          }
+        })
+        .withFailureHandler(function (err) { setFeedback('Erro: ' + err.message); })
+        .requestOtp(email);
+    }
+
+    function validarCodigo() {
+      const code = document.getElementById('code').value.trim();
+      setFeedback('Validando...');
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res.ok) {
+            // Sessão de 24h persistida no client; usada apenas como cache —
+            // a validação real acontece sempre no servidor via validateSession_.
+            localStorage.setItem('sce_token', res.redirectUrl.split('token=')[1]);
+            top.location.href = res.redirectUrl;
+          } else {
+            setFeedback(res.message);
+          }
+        })
+        .withFailureHandler(function (err) { setFeedback('Erro: ' + err.message); })
+        .validateOtp(emailAtual, code);
+    }
+
+    function setFeedback(msg) {
+      document.getElementById('feedback').innerText = msg;
+    }
+
+    // Se já existe token salvo localmente, tenta reaproveitar a sessão
+    // (o servidor valida de novo no doGet; se expirado ou usuário removido,
+    // simplesmente cai de volta nesta tela de login).
+    (function tentarSessaoSalva() {
+      const token = localStorage.getItem('sce_token');
+      if (token) {
+        top.location.href = window.location.href.split('?')[0] + '?token=' + token;
+      }
+    })();
+  </script>
+</body>
+</html>
