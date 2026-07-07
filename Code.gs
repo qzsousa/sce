@@ -28,6 +28,90 @@ function testarEmail() {
     console.error('Erro no teste de e-mail:', err.message);
   }
 }
+function testarPlanilhaUI() {
+  Logger.log('[testarPlanilhaUI] INÍCIO');
+  var resultado;
+  try {
+    Logger.log('[testarPlanilhaUI] SPREADSHEET_ID = ' + CONFIG.SPREADSHEET_ID);
+    var sheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
+    Logger.log('[testarPlanilhaUI] aba encontrada: ' + sheet.getName());
+    var data = sheet.getDataRange().getValues();
+    Logger.log('[testarPlanilhaUI] total linhas: ' + data.length);
+    resultado = {
+      ok: true,
+      totalLinhas: data.length,
+      cabecalho: data[0],
+      primeiraLinha: data[1] || null
+    };
+  } catch (err) {
+    Logger.log('[testarPlanilhaUI] ERRO: ' + err.message);
+    resultado = { ok: false, motivo: 'Erro ao ler planilha: ' + err.message };
+  }
+  Logger.log('[testarPlanilhaUI] retornando: ' + JSON.stringify(resultado));
+  return resultado;
+}
+
+// Função temporária para testar a sessão
+function getSessionByToken_(token) {
+  try {
+    const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEETS.SESSOES);
+    if (!sheet) {
+      Logger.log("Aba 'Sessoes' não encontrada");
+      return null;
+    }
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const rows = data.slice(1);
+    
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] === token) {
+        // Pega os valores pelas colunas
+        const sessionObj = {
+          token: row[0],
+          email: row[1],
+          nivel: row[2],
+          filial: row[3],
+          criadoEm: row[4],
+          expiraEm: row[5]
+        };
+        // Verifica se expirou
+        const agora = Date.now();
+        if (sessionObj.expiraEm && sessionObj.expiraEm < agora) {
+          Logger.log("Token expirado: " + token);
+          return null;
+        }
+        return sessionObj;
+      }
+    }
+    Logger.log("Token não encontrado: " + token);
+    return null;
+  } catch (e) {
+    Logger.log("Erro em getSessionByToken_: " + e.message);
+    return null;
+  }
+}
+
+// Função temporária para testar a leitura da planilha (pode ser chamada do frontend)
+function testarLeituraEquipamentos() {
+  try {
+    const todos = getAllEquipamentos_();
+    return {
+      total: todos.length,
+      primeiros: todos.slice(0, 3),
+      colunas: todos.length > 0 ? Object.keys(todos[0]) : []
+    };
+  } catch (e) {
+    return { erro: e.message };
+  }
+}
+
+function testarRetorno() {
+  return [
+    { id: 'teste1', categoria: 'Notebook', marca: 'Lenovo', modelo: 'Ultra', patrimonio: '123', status: 'Disponível', unidade: 'PABLO FILIAL' },
+    { id: 'teste2', categoria: 'Desktop', marca: 'Dell', modelo: 'OptiPlex', patrimonio: '456', status: 'Disponível', unidade: 'PABLO FILIAL' }
+  ];
+}
 
 
 const CONFIG = {
@@ -418,37 +502,50 @@ function getAllEquipamentos_() {
  * @return {Array<Object>}
  */
 function getEquipamentosDaFilial(token) {
-  const session = requireSession_(token);
-  const filial = session.nivel === CONFIG.NIVEIS.MATRIZ ? null : session.filial;
-
-  // --- LOGS ---
-  Logger.log("Token recebido: " + token);
-  Logger.log("Sessão: " + JSON.stringify(session));
-  Logger.log("Filial extraída: '" + filial + "'");
-
-  const todos = getAllEquipamentos_();
-  Logger.log("Total de equipamentos lidos: " + todos.length);
-
-  if (todos.length > 0) {
-    Logger.log("Primeiro equipamento: " + JSON.stringify(todos[0]));
-    // Verifica o valor exato de 'unidade' (com aspas para ver espaços)
-    Logger.log("Valor de 'unidade' no primeiro: '" + todos[0]['unidade'] + "'");
-    if (todos[1]) {
-      Logger.log("Valor de 'unidade' no segundo: '" + todos[1]['unidade'] + "'");
+  try {
+    // 1. Obtém a sessão
+    const session = requireSession_(token);
+    if (!session) {
+      Logger.log("Sessão não encontrada");
+      return [];
     }
+
+    const filial = session.nivel === CONFIG.NIVEIS.MATRIZ ? null : session.filial;
+    Logger.log("Filial: " + filial);
+
+    // 2. Obtém todos os equipamentos
+    const todos = getAllEquipamentos_();
+    if (!todos) {
+      Logger.log("Nenhum equipamento encontrado");
+      return [];
+    }
+    Logger.log("Total bruto: " + todos.length);
+
+    // 3. Aplica o filtro
+    const filtrados = todos.filter(function (item) {
+      const naoRemovido = item['status'] !== 'Removido';
+      let pertenceAFilial = true;
+      if (filial) {
+        const unidadeItem = (item['unidade'] || '').trim().toUpperCase();
+        const filialNormalizada = filial.trim().toUpperCase();
+        pertenceAFilial = unidadeItem === filialNormalizada;
+      }
+      return naoRemovido && pertenceAFilial;
+    });
+
+    Logger.log("Filtrados: " + filtrados.length);
+
+    // Converte para JSON e volta para objeto
+    // Isso remove qualquer data (Date), função ou referência circular
+    // que possa estar causando o erro de serialização.
+    const jsonString = JSON.stringify(filtrados);
+    return JSON.parse(jsonString);
+
+  } catch (e) {
+    Logger.log("ERRO CRÍTICO: " + e.message);
+    Logger.log("Stack: " + e.stack);
+    return [];
   }
-  // --- FIM LOGS ---
-
-  const filtrados = todos.filter(function (item) {
-    const naoRemovido = item['status'] !== 'Removido';
-    const pertenceAFilial = filial
-      ? (item['unidade'] || '').trim().toUpperCase() === filial.trim().toUpperCase()
-      : true;
-    return naoRemovido && pertenceAFilial;
-  });
-
-  Logger.log("Equipamentos após filtro: " + filtrados.length);
-  return filtrados;
 }
 /**
  * Retorna TODOS os equipamentos de TODAS as unidades — restrito à Matriz.
@@ -459,11 +556,49 @@ function getEquipamentosDaFilial(token) {
  * @return {Array<Object>}
  */
 function getEquipamentosGlobal(token, incluirRemovidos) {
-  requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  try {
+    // 1. Obtém a sessão (sem validação de nível aqui)
+    const session = requireSession_(token);
+    if (!session) {
+      Logger.log("Sessão inválida para token: " + token);
+      return [];
+    }
 
-  return getAllEquipamentos_().filter(function (item) {
-    return incluirRemovidos ? true : item['status'] !== 'Removido';
-  });
+    // 2. Verifica se o nível é Matriz
+    const nivel = session.nivel || '';
+    const isMatriz = nivel.trim().toUpperCase() === (CONFIG.NIVEIS.MATRIZ || 'MATRIZ').trim().toUpperCase();
+
+    if (!isMatriz) {
+      Logger.log("Usuário não é Matriz. Nível: " + nivel);
+      return []; // Retorna array vazio, não null
+    }
+
+    Logger.log("Usuário Matriz autenticado: " + session.email);
+
+    // 3. Obtém todos os equipamentos
+    const todos = getAllEquipamentos_();
+    if (!todos || !Array.isArray(todos)) {
+      Logger.log("Falha ao ler equipamentos");
+      return [];
+    }
+
+    Logger.log("Total bruto: " + todos.length);
+
+    // 4. Filtra removidos, se necessário
+    const filtrados = todos.filter(function (item) {
+      return incluirRemovidos ? true : item['status'] !== 'Removido';
+    });
+
+    Logger.log("Filtrados (Removidos " + (incluirRemovidos ? 'incluídos' : 'excluídos') + "): " + filtrados.length);
+
+    // 5. Serialização forçada (evita problemas com Date)
+    const jsonString = JSON.stringify(filtrados);
+    return JSON.parse(jsonString);
+
+  } catch (e) {
+    Logger.log("ERRO CRÍTICO em getEquipamentosGlobal: " + e.message);
+    return [];
+  }
 }
 
 /**
