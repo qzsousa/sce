@@ -421,13 +421,35 @@ function getEquipamentosDaFilial(token) {
   const session = requireSession_(token);
   const filial = session.nivel === CONFIG.NIVEIS.MATRIZ ? null : session.filial;
 
-  return getAllEquipamentos_().filter(function (item) {
+  // --- LOGS ---
+  Logger.log("Token recebido: " + token);
+  Logger.log("Sessão: " + JSON.stringify(session));
+  Logger.log("Filial extraída: '" + filial + "'");
+
+  const todos = getAllEquipamentos_();
+  Logger.log("Total de equipamentos lidos: " + todos.length);
+
+  if (todos.length > 0) {
+    Logger.log("Primeiro equipamento: " + JSON.stringify(todos[0]));
+    // Verifica o valor exato de 'unidade' (com aspas para ver espaços)
+    Logger.log("Valor de 'unidade' no primeiro: '" + todos[0]['unidade'] + "'");
+    if (todos[1]) {
+      Logger.log("Valor de 'unidade' no segundo: '" + todos[1]['unidade'] + "'");
+    }
+  }
+  // --- FIM LOGS ---
+
+  const filtrados = todos.filter(function (item) {
     const naoRemovido = item['status'] !== 'Removido';
-    const pertenceAFilial = filial ? item['unidade'] === filial : true;
+    const pertenceAFilial = filial
+      ? (item['unidade'] || '').trim().toUpperCase() === filial.trim().toUpperCase()
+      : true;
     return naoRemovido && pertenceAFilial;
   });
-}
 
+  Logger.log("Equipamentos após filtro: " + filtrados.length);
+  return filtrados;
+}
 /**
  * Retorna TODOS os equipamentos de TODAS as unidades — restrito à Matriz.
  * Exclui soft-deleted por padrão; passar incluirRemovidos=true para auditoria.

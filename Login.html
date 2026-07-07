@@ -3,28 +3,104 @@
   <base target="_top">
   <meta charset="utf-8">
   <?!= include('Shared') ?>
+  <style>
+    body {
+      background: radial-gradient(circle at top left, #e3f0fd 0%, #f2f5f9 45%, #f2f5f9 100%);
+      min-height: 100vh;
+    }
+    .sce-login-wrap {
+      max-width: 420px;
+      margin: 64px auto;
+      padding: 0 16px;
+    }
+    .sce-login-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 22px;
+      text-align: center;
+    }
+    .sce-login-logo .material-icons {
+      font-size: 34px;
+      color: white;
+      background: linear-gradient(135deg, var(--sce-primary) 0%, var(--sce-primary-dark) 100%);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: var(--sce-shadow-md);
+    }
+    .sce-login-logo h5 { margin: 0; font-size: 1.15rem; }
+    .sce-login-logo p { margin: 2px 0 0; color: var(--sce-muted); font-size: .85rem; }
+
+    .sce-login-card {
+      padding: 34px 30px 26px;
+      border-radius: 14px !important;
+      box-shadow: var(--sce-shadow-md) !important;
+    }
+    .sce-login-card h5 {
+      font-size: 1.05rem;
+      margin: 0 0 18px;
+      color: var(--sce-ink);
+    }
+    .sce-login-card .input-field { margin-bottom: 14px; }
+    .sce-login-card .btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .sce-login-card .btn-flat {
+      width: 100%;
+      margin-top: 4px;
+    }
+    #feedback {
+      min-height: 20px;
+      font-size: .88rem;
+      text-align: center;
+    }
+    #msg-code {
+      color: var(--sce-muted);
+      font-size: .85rem;
+      margin-bottom: 4px;
+    }
+  </style>
 </head>
 <body>
-  <div class="sce-container" style="max-width:420px;margin:60px auto;">
-    <div class="card" style="padding:32px;">
-      <h5>Login — SCE</h5>
+  <div class="sce-login-wrap">
+    <div class="sce-login-logo">
+      <i class="material-icons">inventory_2</i>
+      <h5>SCE</h5>
+      <p>Sistema de Controle de Equipamentos</p>
+    </div>
 
+    <div class="card sce-login-card">
       <div id="step-email">
+        <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">mail_outline</i>Acesse sua conta</h5>
         <div class="input-field">
+          <i class="material-icons prefix" style="color:var(--sce-muted);">alternate_email</i>
           <input type="email" id="email" autocomplete="email">
           <label for="email">E-mail institucional</label>
         </div>
-        <button class="btn waves-effect" onclick="enviarCodigo()">Enviar código</button>
+        <button class="btn waves-effect" onclick="enviarCodigo()">
+          <i class="material-icons">send</i>Enviar código
+        </button>
       </div>
 
       <div id="step-code" style="display:none;">
+        <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">verified_user</i>Verificação</h5>
         <p id="msg-code"></p>
         <div class="input-field">
+          <i class="material-icons prefix" style="color:var(--sce-muted);">password</i>
           <input type="text" id="code" maxlength="6" inputmode="numeric">
           <label for="code">Código de 6 dígitos</label>
         </div>
-        <button class="btn waves-effect" onclick="validarCodigo()">Validar</button>
-        <button class="btn-flat waves-effect" onclick="enviarCodigo()">Reenviar código</button>
+        <button class="btn waves-effect" onclick="validarCodigo()">
+          <i class="material-icons">check_circle</i>Validar
+        </button>
+        <button class="btn-flat waves-effect" onclick="enviarCodigo()">
+          <i class="material-icons left">refresh</i>Reenviar código
+        </button>
       </div>
 
       <div id="feedback" style="color:#c62828;margin-top:12px;"></div>

@@ -5,32 +5,209 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 <script src="https://www.gstatic.com/charts/loader.js"></script>
 
 <style>
   :root {
     --sce-primary: #1565c0;
-    --sce-accent: #0d47a1;
+    --sce-primary-dark: #0d47a1;
+    --sce-primary-light: #e3f0fd;
+    --sce-accent: #ef6c00;
+    --sce-ink: #1c2733;
+    --sce-muted: #64748b;
+    --sce-border: #e2e8f0;
+    --sce-bg: #f2f5f9;
+    --sce-radius: 10px;
+    --sce-shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+    --sce-shadow-md: 0 4px 12px rgba(16,24,40,.08), 0 2px 4px rgba(16,24,40,.06);
   }
-  body { background: #f4f6f8; }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    background: var(--sce-bg);
+    font-family: 'Inter', 'Roboto', -apple-system, sans-serif;
+    color: var(--sce-ink);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', 'Roboto', -apple-system, sans-serif;
+    font-weight: 600;
+    color: var(--sce-ink);
+    letter-spacing: -0.01em;
+  }
+
+  /* ---------- Header ---------- */
   .sce-header {
-    background: var(--sce-primary);
+    background: linear-gradient(135deg, var(--sce-primary) 0%, var(--sce-primary-dark) 100%);
     color: white;
-    padding: 12px 24px;
+    padding: 14px 28px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    box-shadow: var(--sce-shadow-md);
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }
-  .sce-header .brand { font-weight: 600; font-size: 1.2rem; }
-  .sce-header .logout-btn { cursor: pointer; }
-  .sce-container { padding: 24px; }
+  .sce-header .brand {
+    font-weight: 700;
+    font-size: 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.01em;
+  }
+  .sce-header .brand .material-icons {
+    font-size: 26px;
+    background: rgba(255,255,255,.15);
+    border-radius: 8px;
+    padding: 6px;
+  }
+  .sce-header .brand .brand-sub {
+    display: block;
+    font-size: .7rem;
+    font-weight: 400;
+    opacity: .85;
+    letter-spacing: .02em;
+  }
+  .sce-header .logout-btn {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: .9rem;
+    font-weight: 500;
+    transition: background .15s ease;
+  }
+  .sce-header .logout-btn:hover { background: rgba(255,255,255,.15); }
+  .sce-header .logout-btn .material-icons { font-size: 20px; vertical-align: middle; }
+
+  /* ---------- Layout helpers ---------- */
+  .sce-container { padding: 28px; max-width: 1400px; margin: 0 auto; }
+  .sce-page-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .sce-page-title .material-icons {
+    background: var(--sce-primary-light);
+    color: var(--sce-primary-dark);
+    border-radius: 10px;
+    padding: 8px;
+    font-size: 26px;
+  }
+  .sce-page-title h5 {
+    margin: 0;
+    font-size: 1.3rem;
+  }
+
+  /* ---------- Cards / panels ---------- */
+  .card {
+    border-radius: var(--sce-radius) !important;
+    box-shadow: var(--sce-shadow) !important;
+    border: 1px solid var(--sce-border);
+  }
+  .sce-panel {
+    background: white;
+    border-radius: var(--sce-radius);
+    box-shadow: var(--sce-shadow);
+    border: 1px solid var(--sce-border);
+    padding: 20px 22px;
+    margin-bottom: 22px;
+  }
+  .sce-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: .95rem;
+    font-weight: 600;
+    color: var(--sce-muted);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 14px;
+  }
+  .sce-panel-title .material-icons { font-size: 18px; }
+
+  /* ---------- KPI cards ---------- */
+  .sce-kpi {
+    background: white;
+    border: 1px solid var(--sce-border);
+    border-radius: var(--sce-radius);
+    box-shadow: var(--sce-shadow);
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .sce-kpi .sce-kpi-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--sce-primary-light);
+    color: var(--sce-primary-dark);
+    flex-shrink: 0;
+  }
+  .sce-kpi .sce-kpi-value { font-size: 1.4rem; font-weight: 700; line-height: 1.1; }
+  .sce-kpi .sce-kpi-label { font-size: .78rem; color: var(--sce-muted); font-weight: 500; }
+
+  /* ---------- Buttons ---------- */
+  .btn, .btn-flat, .btn-small {
+    border-radius: 8px !important;
+    font-weight: 500;
+    letter-spacing: .01em;
+    text-transform: none !important;
+  }
+  .btn, .btn-large { background-color: var(--sce-primary) !important; box-shadow: none !important; }
+  .btn:hover, .btn-large:hover { background-color: var(--sce-primary-dark) !important; }
+  .btn.red { background-color: #d32f2f !important; }
+  .btn.red:hover { background-color: #b71c1c !important; }
+  .btn-flat { color: var(--sce-primary-dark) !important; }
+  .btn-small.waves-effect { background-color: transparent !important; color: var(--sce-muted) !important; box-shadow: none !important; }
+  .btn-small.waves-effect:hover { background-color: var(--sce-primary-light) !important; color: var(--sce-primary-dark) !important; }
+  .btn-small.red { color: #d32f2f !important; }
+  .btn-small.red:hover { background-color: #ffebee !important; }
+
+  /* ---------- Tables ---------- */
+  table.striped, table.highlight {
+    border-radius: var(--sce-radius);
+    overflow: hidden;
+  }
+  table.striped thead tr, table.highlight thead tr {
+    background: var(--sce-primary-light);
+  }
+  table.striped thead th, table.highlight thead th {
+    color: var(--sce-primary-dark);
+    font-weight: 600;
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+
+  /* ---------- Modals ---------- */
+  .modal { border-radius: var(--sce-radius); }
+  .modal .modal-content h5 { color: var(--sce-primary-dark); }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 </style>
 
 <div class="sce-header">
-  <span class="brand">SCE — Sistema de Controle de Equipamentos</span>
+  <span class="brand">
+    <i class="material-icons">inventory_2</i>
+    <span>
+      SCE
+      <span class="brand-sub">Sistema de Controle de Equipamentos</span>
+    </span>
+  </span>
   <span class="logout-btn" onclick="sceLogout()">
-    <i class="material-icons" style="vertical-align:middle;">logout</i> Sair
+    <i class="material-icons">logout</i> Sair
   </span>
 </div>
 

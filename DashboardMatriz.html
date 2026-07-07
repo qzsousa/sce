@@ -11,42 +11,60 @@
     validado no doGet. Não replicar checagem de role aqui.
   -->
   <div class="sce-container">
-    <h5>Painel Estratégico — Matriz</h5>
+
+    <div class="sce-page-title">
+      <i class="material-icons">account_balance</i>
+      <h5>Painel Estratégico — Matriz</h5>
+    </div>
 
     <div id="kpis-globais" class="row"></div>
 
-    <div class="row">
-      <div id="chart-por-unidade" style="width:50%;height:300px;display:inline-block;"></div>
-      <div id="chart-por-categoria" style="width:50%;height:300px;display:inline-block;"></div>
+    <div class="sce-panel">
+      <div class="row" style="margin-bottom:0;">
+        <div id="chart-por-unidade" style="width:50%;height:300px;display:inline-block;"></div>
+        <div id="chart-por-categoria" style="width:50%;height:300px;display:inline-block;"></div>
+      </div>
     </div>
 
-    <div class="row">
-      <button class="btn" onclick="abrirGestaoUsuarios()">Gerenciar usuários</button>
-      <button class="btn waves-effect" id="btn-abrir-cadastro">
-        <i class="material-icons left">add</i>Adicionar equipamento
-      </button>
-      <button class="btn-flat waves-effect" id="btn-atualizar-lista">
-        <i class="material-icons left">refresh</i>Atualizar
-      </button>
-      <button class="btn" onclick="exportarCSV()">Exportar CSV</button>
-      <button class="btn" onclick="exportarPDF()">Exportar PDF</button>
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações</div>
+      <div class="row" style="margin-bottom:0;">
+        <button class="btn" onclick="abrirGestaoUsuarios()">
+          <i class="material-icons left">group</i>Gerenciar usuários
+        </button>
+        <button class="btn waves-effect" id="btn-abrir-cadastro">
+          <i class="material-icons left">add</i>Adicionar equipamento
+        </button>
+        <button class="btn-flat waves-effect" id="btn-atualizar-lista">
+          <i class="material-icons left">refresh</i>Atualizar
+        </button>
+        <button class="btn" onclick="exportarCSV()">
+          <i class="material-icons left">description</i>Exportar CSV
+        </button>
+        <button class="btn" onclick="exportarPDF()">
+          <i class="material-icons left">picture_as_pdf</i>Exportar PDF
+        </button>
+      </div>
     </div>
 
-    <table class="striped" id="tabela-equipamentos-global">
-      <thead>
-        <tr>
-          <th>Unidade</th><th>Categoria</th><th>Marca</th>
-          <th>Patrimônio</th><th>Status</th><th>Ações</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos — todas as unidades</div>
+      <table class="striped" id="tabela-equipamentos-global">
+        <thead>
+          <tr>
+            <th>Unidade</th><th>Categoria</th><th>Marca</th>
+            <th>Patrimônio</th><th>Status</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- Modal de confirmação de remoção (soft-delete) — escopo global, qualquer unidade -->
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5>Adicionar equipamento</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
 
       <div class="row">
         <div class="input-field col s6">
@@ -122,7 +140,7 @@
 
   <div id="modal-usuarios" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5>Gerenciar usuarios</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">group</i>Gerenciar usuarios</h5>
 
       <div class="row">
         <div class="input-field col s3">
@@ -167,7 +185,7 @@
 
   <div id="modal-confirmar-remocao" class="modal">
     <div class="modal-content">
-      <h5>Confirmar remoção</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
       <p>Esta ação marcará o item como removido. Deseja continuar?</p>
     </div>
     <div class="modal-footer">
@@ -179,7 +197,7 @@
   <!-- Modal de edição — Matriz também pode alterar a unidade do equipamento -->
   <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5>Editar equipamento</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5>
       <input type="hidden" id="edit-id">
 
       <div class="row">

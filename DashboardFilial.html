@@ -12,62 +12,78 @@
     Code.gs. Nenhuma lógica de "se for Matriz, senão..." deve existir aqui.
   -->
   <div class="sce-container">
-    <h5>Painel da Unidade: <?= session.filial ?></h5>
 
-    <div class="row">
-      <button class="btn waves-effect" id="btn-abrir-cadastro">
-        <i class="material-icons left">add</i>Adicionar equipamento
-      </button>
-      <button class="btn waves-effect" id="btn-abrir-emprestimo">
-        <i class="material-icons left">assignment_turned_in</i>Emprestar
-      </button>
-      <button class="btn waves-effect" id="btn-devolver-selecionados">
-        <i class="material-icons left">keyboard_return</i>Devolver
-      </button>
-      <button class="btn-flat waves-effect" id="btn-atualizar-lista">
-        <i class="material-icons left">refresh</i>Atualizar
-      </button>
+    <div class="sce-page-title">
+      <i class="material-icons">store</i>
+      <h5>Painel da Unidade: <?= session.filial ?></h5>
     </div>
 
-    <div class="row">
-      <div class="input-field col s6">
-        <input type="text" id="filtro-busca">
-        <label for="filtro-busca">Buscar por patrimonio, serie ou modelo</label>
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações rápidas</div>
+      <div class="row" style="margin-bottom:0;">
+        <button class="btn waves-effect" id="btn-abrir-cadastro">
+          <i class="material-icons left">add</i>Adicionar equipamento
+        </button>
+        <button class="btn waves-effect" id="btn-abrir-emprestimo">
+          <i class="material-icons left">assignment_turned_in</i>Emprestar
+        </button>
+        <button class="btn waves-effect" id="btn-devolver-selecionados">
+          <i class="material-icons left">keyboard_return</i>Devolver
+        </button>
+        <button class="btn-flat waves-effect" id="btn-atualizar-lista">
+          <i class="material-icons left">refresh</i>Atualizar
+        </button>
       </div>
-      <div class="input-field col s3">
-        <select id="filtro-status"><option value="">Todos os status</option></select>
-        <label>Status</label>
-      </div>
-      <div class="input-field col s3">
-        <select id="filtro-categoria"><option value="">Todas as categorias</option></select>
-        <label>Categoria</label>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros</div>
+      <div class="row" style="margin-bottom:0;">
+        <div class="input-field col s6">
+          <i class="material-icons prefix" style="color:var(--sce-muted);">search</i>
+          <input type="text" id="filtro-busca">
+          <label for="filtro-busca">Buscar por patrimonio, serie ou modelo</label>
+        </div>
+        <div class="input-field col s3">
+          <select id="filtro-status"><option value="">Todos os status</option></select>
+          <label>Status</label>
+        </div>
+        <div class="input-field col s3">
+          <select id="filtro-categoria"><option value="">Todas as categorias</option></select>
+          <label>Categoria</label>
+        </div>
       </div>
     </div>
 
     <div id="kpis" class="row"><!-- KPIs preenchidos via JS --></div>
 
-    <div id="chart-status" style="width:100%;height:300px;"></div>
+    <div class="sce-panel">
+      <div id="chart-status" style="width:100%;height:300px;"></div>
+    </div>
 
-    <table class="striped" id="tabela-equipamentos">
-      <thead>
-        <tr>
-          <th><label><input type="checkbox" id="check-todos"><span></span></label></th><th>Categoria</th><th>Marca</th><th>Modelo</th>
-          <th>Patrimônio</th><th>Status</th><th>Ações</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-    <div class="row">
-      <button class="btn-flat" id="btn-pagina-anterior">Anterior</button>
-      <span id="pagina-info"></span>
-      <button class="btn-flat" id="btn-proxima-pagina">Proxima</button>
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos</div>
+      <table class="striped" id="tabela-equipamentos">
+        <thead>
+          <tr>
+            <th><label><input type="checkbox" id="check-todos"><span></span></label></th><th>Categoria</th><th>Marca</th><th>Modelo</th>
+            <th>Patrimônio</th><th>Status</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="row" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
+        <button class="btn-flat" id="btn-pagina-anterior"><i class="material-icons left">chevron_left</i>Anterior</button>
+        <span id="pagina-info" style="color:var(--sce-muted);font-size:.9rem;"></span>
+        <button class="btn-flat" id="btn-proxima-pagina">Proxima<i class="material-icons right">chevron_right</i></button>
+      </div>
     </div>
   </div>
 
   <!-- Modal de confirmação de remoção (soft-delete), a ser ligado na próxima etapa -->
   <div id="modal-emprestimo" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5>Registrar emprestimo</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Registrar emprestimo</h5>
       <div class="row">
         <div class="input-field col s6">
           <input type="text" id="emp-responsavel">
@@ -99,7 +115,7 @@
 
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5>Adicionar equipamento</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
 
       <div class="row">
         <div class="input-field col s6">
@@ -171,7 +187,7 @@
 
   <div id="modal-confirmar-remocao" class="modal">
     <div class="modal-content">
-      <h5>Confirmar remoção</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
       <p>Esta ação marcará o item como removido. Deseja continuar?</p>
     </div>
     <div class="modal-footer">
@@ -184,7 +200,7 @@
        de status especial (manutenção/extravio/verificação) -->
   <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5>Editar equipamento</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5>
       <input type="hidden" id="edit-id">
 
       <div class="row">
