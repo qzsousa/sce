@@ -5,11 +5,15 @@
   <meta charset="utf-8">
   <?!= include('Shared') ?>
 </head>
-<body>
+<body class="theme-filial">
+  </div>
+  <!-- resto do conteúdo -->
   <!--
     Este arquivo assume que só chega até aqui um usuário de nível "Filial"
     já autenticado — a checagem de role é feita inteiramente no doGet do
     Code.gs. Nenhuma lógica de "se for Matriz, senão..." deve existir aqui.
+    Por isso o botão de Remover NÃO existe neste dashboard: remoção agora é
+    restrita à Matriz (backend valida isso também, nunca confiar só no client).
   -->
   <div class="sce-container">
 
@@ -33,10 +37,16 @@
         <button class="btn-flat waves-effect" id="btn-atualizar-lista">
           <i class="material-icons left">refresh</i>Atualizar
         </button>
+        <button class="btn" id="btn-exportar-csv">
+          <i class="material-icons left">description</i>Exportar CSV
+        </button>
+        <button class="btn" id="btn-exportar-pdf">
+          <i class="material-icons left">picture_as_pdf</i>Exportar PDF
+        </button>
       </div>
     </div>
 
-    <div class="sce-panel">
+    <div class="sce-panel no-print">
       <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros</div>
       <div class="row" style="margin-bottom:0;">
         <div class="input-field col s6">
@@ -58,7 +68,10 @@
     <div id="kpis" class="row"><!-- KPIs preenchidos via JS --></div>
 
     <div class="sce-panel">
-      <div id="chart-status" style="width:100%;height:300px;"></div>
+      <div class="sce-panel-title"><i class="material-icons">pie_chart</i>Distribuição por status</div>
+      <div id="chart-status" style="width:100%;height:280px;position:relative;">
+        <canvas id="canvas-chart-status"></canvas>
+      </div>
     </div>
 
     <div class="sce-panel">
@@ -66,13 +79,13 @@
       <table class="striped" id="tabela-equipamentos">
         <thead>
           <tr>
-            <th><label><input type="checkbox" id="check-todos"><span></span></label></th><th>Categoria</th><th>Marca</th><th>Modelo</th>
-            <th>Patrimônio</th><th>Status</th><th>Ações</th>
+            <th class="no-print"><label><input type="checkbox" id="check-todos"><span></span></label></th><th>Categoria</th><th>Marca</th><th>Modelo</th>
+            <th>Patrimônio</th><th>Status</th><th class="no-print">Ações</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
-      <div class="row" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
+      <div class="row no-print" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
         <button class="btn-flat" id="btn-pagina-anterior"><i class="material-icons left">chevron_left</i>Anterior</button>
         <span id="pagina-info" style="color:var(--sce-muted);font-size:.9rem;"></span>
         <button class="btn-flat" id="btn-proxima-pagina">Proxima<i class="material-icons right">chevron_right</i></button>
@@ -80,7 +93,6 @@
     </div>
   </div>
 
-  <!-- Modal de confirmação de remoção (soft-delete), a ser ligado na próxima etapa -->
   <div id="modal-emprestimo" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Registrar emprestimo</h5>
@@ -185,17 +197,6 @@
     </div>
   </div>
 
-  <div id="modal-confirmar-remocao" class="modal">
-    <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
-      <p>Esta ação marcará o item como removido. Deseja continuar?</p>
-    </div>
-    <div class="modal-footer">
-      <a class="modal-close btn-flat">Cancelar</a>
-      <a class="btn red" id="btn-confirmar-remocao">Remover</a>
-    </div>
-  </div>
-
   <!-- Modal de edição — campos padrão do equipamento + campos condicionais
        de status especial (manutenção/extravio/verificação) -->
   <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
@@ -290,6 +291,7 @@
 
 <script>
   const SCE_TOKEN = localStorage.getItem('sce_token');
+  const userLevel = 'Filial'; // este dashboard só é renderizado para Filial (ver doGet)
 
   // Cache local dos equipamentos carregados — usado pra popular o modal de
   // edição sem precisar de uma segunda chamada ao servidor por item.
@@ -303,6 +305,7 @@
   let equipamentosFiltrados = [];
   let paginaAtual = 1;
   const ITENS_POR_PAGINA = 25;
+  let sceChartStatus = null;
 
   // Campos editáveis do modal — usados tanto pra popular quanto pra montar o diff.
   const CAMPOS_EDITAVEIS = [
@@ -319,13 +322,18 @@
   ];
 
   function carregarEquipamentos() {
+    sceShowLoading();
     google.script.run
       .withSuccessHandler(function (equipamentos) {
         equipamentosCache = equipamentos;
         atualizarFiltrosOpcoes(equipamentos);
         aplicarFiltros();
+        sceHideLoading();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        M.toast({ html: 'Erro ao carregar: ' + err.message });
+        sceHideLoading();
+      })
       .getEquipamentosDaFilial(SCE_TOKEN);
   }
 
@@ -336,20 +344,19 @@
     const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
     pagina.forEach(function (item) {
       const tr = document.createElement('tr');
+      // Sem botão de remover: Filial não tem permissão de remoção (restrito à Matriz).
       tr.innerHTML =
-        '<td><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
+        '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
         '<td>' + (item.categoria || '') + '</td>' +
         '<td>' + (item.marca || '') + '</td>' +
         '<td>' + (item.modelo || '') + '</td>' +
         '<td>' + (item.patrimonio || '') + '</td>' +
         '<td>' + (item.status || '') + '</td>' +
-        '<td>' +
+        '<td class="no-print">' +
           '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar">' +
             '<i class="material-icons">edit</i></a> ' +
           '<a class="btn-small waves-effect" onclick="clonarEquipamentoUI(\'' + item.id + '\')" title="Clonar">' +
-            '<i class="material-icons">content_copy</i></a> ' +
-          '<a class="btn-small waves-effect red" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover">' +
-            '<i class="material-icons">delete</i></a>' +
+            '<i class="material-icons">content_copy</i></a>' +
         '</td>';
       tbody.appendChild(tr);
     });
@@ -369,6 +376,7 @@
     });
     paginaAtual = 1;
     renderTabelaEquipamentos(equipamentosFiltrados);
+    atualizarKpisEGrafico(equipamentosFiltrados);
   }
 
   function atualizarFiltrosOpcoes(equipamentos) {
@@ -393,7 +401,71 @@
     });
   }
 
-  // --- Remoção (soft-delete) com confirmação via modal ---------------------
+  // --- KPIs + gráfico ---------------------------------------------------------
+
+  function kpiCard_(icone, valor, label, extraClass) {
+  return '<div class="col s12 m3">' +
+    '<div class="sce-kpi ' + (extraClass || '') + '">' +
+      '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
+      '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
+    '</div></div>';
+}
+
+  function atualizarKpisEGrafico(equipamentos) {
+    const porStatus = {};
+    equipamentos.forEach(function (item) {
+      const s = item.status || 'Não definido';
+      porStatus[s] = (porStatus[s] || 0) + 1;
+    });
+
+    const total = equipamentos.length;
+    const disponiveis = porStatus['Disponível'] || 0;
+    const manutencao = porStatus['Manutenção'] || 0;
+    const quebrados = porStatus['Quebrado'] || porStatus['Inservível'] || 0;
+
+    document.getElementById('kpis').innerHTML =
+    kpiCard_('devices', total, 'Total de equipamentos', 'kpi-total') +
+    kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
+    kpiCard_('build', manutencao, 'Em manutenção', 'kpi-manutencao') +
+    kpiCard_('report', quebrados, 'Quebrados / inservíveis', 'kpi-quebrados');
+
+    renderGraficoStatus_(porStatus);
+  }
+
+  function renderGraficoStatus_(porStatus) {
+    const canvas = document.getElementById('canvas-chart-status');
+    const labels = Object.keys(porStatus);
+    const valores = labels.map(function (l) { return porStatus[l]; });
+
+    if (sceChartStatus) { sceChartStatus.destroy(); }
+    sceChartStatus = new Chart(canvas.getContext('2d'), {
+      type: 'pie',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: valores,
+          backgroundColor: ['#1565c0', '#43a047', '#ef6c00', '#d32f2f', '#8e24aa', '#00838f']
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  }
+
+  // --- Exportação CSV / PDF ---------------------------------------------------
+
+  function exportarCSVUI() {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res.ok) { M.toast({ html: 'Erro ao exportar: ' + (res.error || '') }); return; }
+        sceBaixarCsv(res.csv, 'sce-equipamentos-' + Date.now() + '.csv');
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao exportar: ' + err.message }); })
+      .exportarCSV(SCE_TOKEN);
+  }
+
+  // sceExportarPDF() vem do Shared.html (window.print + CSS de impressão)
+
+  // --- Cadastro ----------------------------------------------------------------
 
   function abrirCadastroEquipamento() {
     CAMPOS_CADASTRO.forEach(function (campo) {
@@ -481,33 +553,6 @@
       .registrarDevolucao(SCE_TOKEN, ids, '');
   }
 
-  function abrirModalRemocao(id) {
-    idPendenteRemocao = id;
-    if (!modalRemocaoInstance) {
-      modalRemocaoInstance = M.Modal.init(document.getElementById('modal-confirmar-remocao'));
-    }
-    modalRemocaoInstance.open();
-  }
-
-  function confirmarRemocao() {
-    if (!idPendenteRemocao) return;
-    const id = idPendenteRemocao;
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        M.toast({ html: res.message });
-        modalRemocaoInstance.close();
-        idPendenteRemocao = null;
-        carregarEquipamentos();
-      })
-      .withFailureHandler(function (err) {
-        M.toast({ html: 'Erro ao remover: ' + err.message });
-        modalRemocaoInstance.close();
-        idPendenteRemocao = null;
-      })
-      .removerEquipamento(SCE_TOKEN, id);
-  }
-
   // --- Clonagem --------------------------------------------------------------
 
   function clonarEquipamentoUI(id) {
@@ -522,8 +567,6 @@
 
   // --- Edição --------------------------------------------------------------
 
-  // Guarda os valores originais do item aberto no modal, pra montar um diff
-  // na hora de salvar (só manda pro servidor o que realmente mudou).
   let itemEmEdicaoOriginal = null;
 
   function editarEquipamento(id) {
@@ -540,7 +583,7 @@
 
     atualizarCamposCondicionais();
     M.FormSelect.init(document.getElementById('edit-status'));
-    M.updateTextFields(); // reposiciona labels do Materialize pros valores pré-preenchidos
+    M.updateTextFields();
 
     if (!modalEdicaoInstance) {
       modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
@@ -548,8 +591,6 @@
     modalEdicaoInstance.open();
   }
 
-  // Mostra/esconde os campos de justificativa conforme o status selecionado —
-  // espelha a regra server-side de validarStatusEspecial_ no Code.gs.
   function atualizarCamposCondicionais() {
     const status = document.getElementById('edit-status').value;
     document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
@@ -571,8 +612,6 @@
       }
     });
 
-    // Validação client-side espelhando a regra do servidor — evita um
-    // roundtrip só pra descobrir que faltou preencher a justificativa.
     const status = document.getElementById('edit-status').value;
     const regrasStatus = {
       'Manutenção': 'numeroChamadoManutencao',
@@ -615,8 +654,9 @@
     document.getElementById('btn-devolver-selecionados').addEventListener('click', devolverSelecionados);
     document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
     document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
-    document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
     document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
+    document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
+    document.getElementById('btn-exportar-pdf').addEventListener('click', sceExportarPDF);
     document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
     document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
     document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
@@ -637,9 +677,6 @@
       }
     });
   });
-
-  // TODO (próxima etapa): fluxo de empréstimo/devolução (individual e em massa)
-  // TODO (próxima etapa): filtros/busca + paginação na tabela
 </script>
 
 </html>

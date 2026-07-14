@@ -2,22 +2,343 @@
  * ============================================================================
  * SCE - Sistema de Controle de Equipamentos
  * Code.gs — núcleo do servidor: roteamento, autenticação e acesso a dados
+ * ----------------------------------------------------------------------------
+ * ARQUITETURA (v2 - Sheets API v4 + 3 planilhas):
+ *
+ *   Este projeto NÃO é mais "bound" a uma única planilha via SpreadsheetApp.
+ *   Todo acesso a dados passa pelo serviço avançado "Sheets API" (Sheets.*),
+ *   e as abas estão distribuídas em 3 planilhas separadas:
+ *
+ *     SCE_Core            -> Equipamentos, Listas, Filiais
+ *     SCE_Movimentacao    -> Historico_Itens, Emprestimos, Auditoria
+ *     SCE_Autenticacao    -> Usuarios, Sessoes, Otp_Codes
+ *
+ *   Por quê: Core é lido o tempo todo (dashboards); Movimentacao cresce
+ *   rápido e não deveria "pesar" a leitura de Core; Autenticacao guarda
+ *   dado sensível (sessão, e-mail, OTP) separado do resto.
+ *
+ *   IMPORTANTE — ATIVAÇÃO OBRIGATÓRIA ANTES DE RODAR:
+ *   1. No editor do Apps Script: Serviços (ícone "+") > adicionar
+ *      "Google Sheets API" (serviço avançado). Isso expõe o objeto global
+ *      `Sheets` usado neste arquivo.
+ *   2. No Google Cloud Console do projeto associado ao script (Configurações
+ *      do projeto > Projeto do Google Cloud), ative a API "Google Sheets API"
+ *      em "APIs e serviços > Biblioteca".
+ *   3. Preencha CONFIG.SPREADSHEETS.CORE / MOVIMENTACAO / AUTENTICACAO com
+ *      os IDs reais das 3 planilhas (retire da URL de cada uma).
+ *   4. Compartilhe as 3 planilhas com a conta que executa o script (se não
+ *      forem do mesmo dono) e garanta que cada uma tenha as abas com os
+ *      cabeçalhos exatos esperados (ver getAllEquipamentos_, Usuarios, etc).
+ *
+ *   REGRA DE ROTEAMENTO (inalterada):
+ *   Toda decisão de "qual dashboard mostrar" acontece SOMENTE no doGet.
+ *   DashboardFilial.html e DashboardMatriz.html não têm lógica de role.
+ *
+ *   COMPATIBILIDADE COM O FRONTEND:
+ *   Nenhuma função chamada via google.script.run mudou de nome ou de
+ *   assinatura. Só a implementação interna (como os dados são lidos/
+ *   escritos) mudou, de SpreadsheetApp para Sheets API.
  * ============================================================================
- *
- * REGRA DE ROTEAMENTO:
- *   Toda decisão de "qual dashboard mostrar" acontece SOMENTE aqui, no doGet.
- *   DashboardFilial.html e DashboardMatriz.html não devem ter lógica de role;
- *   eles assumem que, se foram renderizados, o usuário já é do perfil certo.
- *
- * ARQUITETURA DE SESSÃO:
- *   CacheService tem TTL máximo de 6h, então sessão de 24h fica em uma aba
- *   "Sessoes" na própria planilha (token, email, nivel, filial, criadoEm,
- *   expiraEm). Isso também permite invalidar sessão de um usuário removido
- *   mesmo com token ainda "válido" no localStorage do client.
  */
 
 // ============================================================================
 // CONFIGURAÇÃO GLOBAL
+// ============================================================================
+
+const CONFIG = {
+  // Cada planilha é um arquivo do Google Sheets diferente agora.
+  // Preencha com o ID real (parte da URL entre /d/ e /edit).
+  SPREADSHEETS: {
+    CORE: '12_mPXKeEZJMpj2ZEpzI3HOYwqShJWDjD7787elXVxXk',
+    MOVIMENTACAO: '1BhGd2zUMkD1u1NfgzPO3xJx8s_8oLt22X3VX9jvwA6A',
+    AUTENTICACAO: '1Put-0wIVN-60oP5EaunbSCwbDhzCo2yLxJ_FV26auy0'
+  },
+  SHEETS: {
+    EQUIPAMENTOS: 'Equipamentos',
+    LISTAS: 'Listas',
+    FILIAIS: 'Filiais',
+    HISTORICO: 'Historico_Itens',
+    EMPRESTIMOS: 'Emprestimos',
+    AUDITORIA: 'Auditoria',
+    REGISTROS_MANUTENCAO: 'Registros_Manutencao',
+    USUARIOS: 'Usuarios',
+    SESSOES: 'Sessoes',
+    OTP: 'Otp_Codes'
+  },
+  PDF_FOLDER_ID: '',
+  SESSION_DURATION_MS: 24 * 60 * 60 * 1000,   // 24h
+  OTP_EXPIRATION_MS: 10 * 60 * 1000,          // 10min
+  NIVEIS: {
+    MATRIZ: 'Matriz',
+    FILIAL: 'Filial',
+    TECNICO: 'Tecnico'
+  },
+  STATUS_USUARIO: {
+    ATIVO: 'Ativo',
+    REMOVIDO: 'Removido'
+  }
+};
+
+// Mapeia cada nome de aba para a planilha (spreadsheetId) onde ela vive.
+// Isso é o que permite que o resto do código continue falando "a aba
+// Equipamentos" sem se importar em qual arquivo físico ela está.
+function getSpreadsheetIdFor_(sheetName) {
+  const mapa = {};
+  mapa[CONFIG.SHEETS.EQUIPAMENTOS] = CONFIG.SPREADSHEETS.CORE;
+  mapa[CONFIG.SHEETS.LISTAS] = CONFIG.SPREADSHEETS.CORE;
+  mapa[CONFIG.SHEETS.FILIAIS] = CONFIG.SPREADSHEETS.CORE;
+  mapa[CONFIG.SHEETS.HISTORICO] = CONFIG.SPREADSHEETS.MOVIMENTACAO;
+  mapa[CONFIG.SHEETS.EMPRESTIMOS] = CONFIG.SPREADSHEETS.MOVIMENTACAO;
+  mapa[CONFIG.SHEETS.AUDITORIA] = CONFIG.SPREADSHEETS.MOVIMENTACAO;
+  mapa[CONFIG.SHEETS.REGISTROS_MANUTENCAO] = CONFIG.SPREADSHEETS.MOVIMENTACAO;
+  mapa[CONFIG.SHEETS.USUARIOS] = CONFIG.SPREADSHEETS.AUTENTICACAO;
+  mapa[CONFIG.SHEETS.SESSOES] = CONFIG.SPREADSHEETS.AUTENTICACAO;
+  mapa[CONFIG.SHEETS.OTP] = CONFIG.SPREADSHEETS.AUTENTICACAO;
+
+  const id = mapa[sheetName];
+  if (!id) {
+    throw new Error('Nenhuma planilha mapeada para a aba "' + sheetName + '". Verifique getSpreadsheetIdFor_.');
+  }
+  if (id.indexOf('COLOQUE_AQUI') === 0) {
+    throw new Error('CONFIG.SPREADSHEETS não foi preenchido com IDs reais ainda (aba "' + sheetName + '").');
+  }
+  return id;
+}
+
+// Atalhos usados em código legado / clareza de leitura.
+function getCoreSheetId_() { return CONFIG.SPREADSHEETS.CORE; }
+function getMovimentacaoSheetId_() { return CONFIG.SPREADSHEETS.MOVIMENTACAO; }
+function getAutenticacaoSheetId_() { return CONFIG.SPREADSHEETS.AUTENTICACAO; }
+
+// ============================================================================
+// CAMADA DE ACESSO — Sheets API v4 (substitui SpreadsheetApp em todo o projeto)
+// ============================================================================
+
+/**
+ * Lê todos os valores de uma aba inteira (equivalente a getDataRange().getValues()).
+ * Usa Values.get, que é uma única chamada de API.
+ * @return {Array<Array>} matriz de valores, ou [] se a aba estiver vazia.
+ */
+function sheetsApiGetValues_(sheetName) {
+  const spreadsheetId = getSpreadsheetIdFor_(sheetName);
+  try {
+    const resp = Sheets.Spreadsheets.Values.get(spreadsheetId, sheetName);
+    return resp.values || [];
+  } catch (e) {
+    throw new Error('Erro ao ler aba "' + sheetName + '" via Sheets API: ' + e.message);
+  }
+}
+
+/**
+ * Lê múltiplas abas de uma vez (mesma planilha ou não) minimizando chamadas.
+ * Abas da mesma planilha são agrupadas num único batchGet.
+ * @param {Array<string>} sheetNames
+ * @return {Object} map sheetName -> Array<Array>
+ */
+function sheetsApiBatchGetValues_(sheetNames) {
+  const porPlanilha = {}; // spreadsheetId -> [sheetName,...]
+  sheetNames.forEach(function (nome) {
+    const id = getSpreadsheetIdFor_(nome);
+    if (!porPlanilha[id]) porPlanilha[id] = [];
+    porPlanilha[id].push(nome);
+  });
+
+  const resultado = {};
+  Object.keys(porPlanilha).forEach(function (spreadsheetId) {
+    const ranges = porPlanilha[spreadsheetId];
+    const resp = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, { ranges: ranges });
+    (resp.valueRanges || []).forEach(function (vr, idx) {
+      resultado[ranges[idx]] = vr.values || [];
+    });
+  });
+  return resultado;
+}
+
+/**
+ * Adiciona uma linha ao final de uma aba (equivalente a sheet.appendRow(...)).
+ */
+function sheetsApiAppendRow_(sheetName, rowValues) {
+  const spreadsheetId = getSpreadsheetIdFor_(sheetName);
+  const resource = { values: [rowValues] };
+  Sheets.Spreadsheets.Values.append(
+    resource, spreadsheetId, sheetName,
+    { valueInputOption: 'USER_ENTERED', insertDataOption: 'INSERT_ROWS' }
+  );
+}
+
+/** Converte índice de coluna 1-based em letra (1 -> A, 27 -> AA). */
+function columnToLetter_(col) {
+  let letra = '';
+  while (col > 0) {
+    const resto = (col - 1) % 26;
+    letra = String.fromCharCode(65 + resto) + letra;
+    col = Math.floor((col - 1) / 26);
+  }
+  return letra;
+}
+
+/**
+ * Atualiza uma única célula (equivalente a sheet.getRange(row, col).setValue(v)).
+ */
+function sheetsApiUpdateCell_(sheetName, row, col, value) {
+  sheetsApiBatchUpdateCells_(sheetName, [{ row: row, col: col, value: value }]);
+}
+
+/**
+ * Atualiza várias células de uma aba EM UMA ÚNICA chamada de API
+ * (Values.batchUpdate), mesmo que sejam linhas/colunas diferentes.
+ * Isso é o que evita "1 chamada por campo alterado" no updateEquipamento.
+ * @param {Array<{row:number, col:number, value:*}>} cellUpdates
+ */
+function sheetsApiBatchUpdateCells_(sheetName, cellUpdates) {
+  if (!cellUpdates || cellUpdates.length === 0) return;
+  const spreadsheetId = getSpreadsheetIdFor_(sheetName);
+  const data = cellUpdates.map(function (u) {
+    return {
+      range: sheetName + '!' + columnToLetter_(u.col) + u.row,
+      values: [[u.value === undefined || u.value === null ? '' : u.value]]
+    };
+  });
+  Sheets.Spreadsheets.Values.batchUpdate(
+    { valueInputOption: 'USER_ENTERED', data: data },
+    spreadsheetId
+  );
+}
+
+/** Cache simples em memória (por execução) do sheetId numérico de cada aba. */
+const _sheetIdCache_ = {};
+
+function getNumericSheetId_(sheetName) {
+  if (_sheetIdCache_[sheetName] !== undefined) return _sheetIdCache_[sheetName];
+  const spreadsheetId = getSpreadsheetIdFor_(sheetName);
+  const meta = Sheets.Spreadsheets.get(spreadsheetId, { fields: 'sheets(properties(sheetId,title))' });
+  const encontrada = (meta.sheets || []).filter(function (s) { return s.properties.title === sheetName; })[0];
+  if (!encontrada) throw new Error('Aba "' + sheetName + '" não encontrada na planilha.');
+  _sheetIdCache_[sheetName] = encontrada.properties.sheetId;
+  return encontrada.properties.sheetId;
+}
+
+/**
+ * Remove fisicamente uma linha (equivalente a sheet.deleteRow(n)).
+ * Usado apenas onde já era usado antes (ex: Otp_Codes) — o restante do
+ * sistema usa soft-delete (marcar status) e não precisa disso.
+ */
+function sheetsApiDeleteRow_(sheetName, rowIndex1Based) {
+  const spreadsheetId = getSpreadsheetIdFor_(sheetName);
+  const sheetId = getNumericSheetId_(sheetName);
+  Sheets.Spreadsheets.batchUpdate({
+    requests: [{
+      deleteDimension: {
+        range: { sheetId: sheetId, dimension: 'ROWS', startIndex: rowIndex1Based - 1, endIndex: rowIndex1Based }
+      }
+    }]
+  }, spreadsheetId);
+}
+
+/**
+ * Garante que uma aba existe numa planilha, criando com cabeçalho se não
+ * existir ainda (equivalente ao antigo getEmprestimosSheet_ "create if missing").
+ */
+function ensureSheetExists_(sheetName, headers) {
+  const spreadsheetId = getSpreadsheetIdFor_(sheetName);
+  const meta = Sheets.Spreadsheets.get(spreadsheetId, { fields: 'sheets(properties(title))' });
+  const existe = (meta.sheets || []).some(function (s) { return s.properties.title === sheetName; });
+  if (!existe) {
+    Sheets.Spreadsheets.batchUpdate({ requests: [{ addSheet: { properties: { title: sheetName } } }] }, spreadsheetId);
+    sheetsApiAppendRow_(sheetName, headers);
+    delete _sheetIdCache_[sheetName];
+  }
+}
+
+// ============================================================================
+// AUDITORIA
+// ============================================================================
+
+const EMPRESTIMOS_HEADERS_ = [
+  'id', 'equipamentoId', 'patrimonio', 'unidade', 'responsavel', 'cpf',
+  'emailResponsavel', 'dataEmprestimo', 'dataPrevistaDevolucao',
+  'dataDevolucao', 'status', 'termoPdfUrl', 'criadoPor', 'devolvidoPor',
+  'observacoes'
+];
+
+const AUDITORIA_HEADERS_ = ['data', 'usuario', 'acao', 'detalhes'];
+
+const REGISTROS_MANUTENCAO_HEADERS_ = ['id', 'equipamentoId', 'autor', 'data', 'descricao'];
+
+// ============================================================================
+// SUPORTE A MULTI-UNIDADE (perfil Técnico)
+// ----------------------------------------------------------------------------
+// Filial tem 1 unidade (session.filial, string). Técnico pode ter várias,
+// guardadas na MESMA coluna "filial" da aba Usuarios, separadas por vírgula
+// (ex: "Unidade A, Unidade B"). Isso evita criar uma aba nova só para isso.
+// ============================================================================
+
+/** Transforma "Unidade A, Unidade B" em ['Unidade A', 'Unidade B']. */
+function parseFiliais_(filialRaw) {
+  return String(filialRaw || '')
+    .split(',')
+    .map(function (f) { return f.trim(); })
+    .filter(function (f) { return f.length > 0; });
+}
+
+/**
+ * Verifica se a sessão (Matriz/Filial/Técnico) tem permissão sobre uma
+ * determinada unidade. Ponto único de checagem — usado em todo lugar que
+ * antes comparava "session.filial !== linha.unidade" diretamente.
+ */
+function sessaoTemAcessoAUnidade_(session, unidade) {
+  if (session.nivel === CONFIG.NIVEIS.MATRIZ) return true;
+
+  const unidadeNormalizada = String(unidade || '').trim().toUpperCase();
+  const unidadesDaSessao = parseFiliais_(session.filial).map(function (f) { return f.toUpperCase(); });
+  return unidadesDaSessao.indexOf(unidadeNormalizada) !== -1;
+}
+
+/**
+ * Decide qual unidade gravar num equipamento novo:
+ *   - Matriz: usa a unidade informada no payload (ou a própria, se não vier).
+ *   - Filial: sempre a própria unidade (nunca confia no payload do client).
+ *   - Técnico: exige que a unidade informada no payload esteja entre as
+ *     unidades vinculadas a ele. Se ele só atende 1 unidade, usa por padrão.
+ */
+function resolverUnidadeParaEscrita_(session, unidadeInformada) {
+  if (session.nivel === CONFIG.NIVEIS.MATRIZ) {
+    return unidadeInformada || session.filial;
+  }
+
+  if (session.nivel === CONFIG.NIVEIS.TECNICO) {
+    const unidadesTecnico = parseFiliais_(session.filial);
+    if (unidadeInformada) {
+      if (!sessaoTemAcessoAUnidade_(session, unidadeInformada)) {
+        throw new Error('Você não atende a unidade "' + unidadeInformada + '".');
+      }
+      return unidadeInformada;
+    }
+    if (unidadesTecnico.length === 1) return unidadesTecnico[0];
+    throw new Error('Informe para qual unidade este equipamento deve ser cadastrado.');
+  }
+
+  // Filial
+  return session.filial;
+}
+
+/**
+ * Registra uma linha de auditoria para QUALQUER operação de escrita
+ * (create/update/clone/remover equipamento, empréstimo/devolução, usuários).
+ * Não lança erro se falhar — auditoria não pode derrubar a operação principal.
+ */
+function registrarAuditoria_(acao, usuarioEmail, detalhes) {
+  try {
+    ensureSheetExists_(CONFIG.SHEETS.AUDITORIA, AUDITORIA_HEADERS_);
+    const detalhesStr = typeof detalhes === 'string' ? detalhes : JSON.stringify(detalhes || {});
+    sheetsApiAppendRow_(CONFIG.SHEETS.AUDITORIA, [new Date(), usuarioEmail || '', acao, detalhesStr]);
+  } catch (e) {
+    Logger.log('Falha ao registrar auditoria (' + acao + '): ' + e.message);
+  }
+}
+
+// ============================================================================
+// FUNÇÕES DE DIAGNÓSTICO (mantidas, adaptadas para a nova camada de acesso)
 // ============================================================================
 
 function testarEmail() {
@@ -28,19 +349,17 @@ function testarEmail() {
     console.error('Erro no teste de e-mail:', err.message);
   }
 }
+
 function testarPlanilhaUI() {
   Logger.log('[testarPlanilhaUI] INÍCIO');
-  var resultado;
+  let resultado;
   try {
-    Logger.log('[testarPlanilhaUI] SPREADSHEET_ID = ' + CONFIG.SPREADSHEET_ID);
-    var sheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-    Logger.log('[testarPlanilhaUI] aba encontrada: ' + sheet.getName());
-    var data = sheet.getDataRange().getValues();
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     Logger.log('[testarPlanilhaUI] total linhas: ' + data.length);
     resultado = {
       ok: true,
       totalLinhas: data.length,
-      cabecalho: data[0],
+      cabecalho: data[0] || [],
       primeiraLinha: data[1] || null
     };
   } catch (err) {
@@ -51,48 +370,6 @@ function testarPlanilhaUI() {
   return resultado;
 }
 
-// Função temporária para testar a sessão
-function getSessionByToken_(token) {
-  try {
-    const sheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID).getSheetByName(CONFIG.SHEETS.SESSOES);
-    if (!sheet) {
-      Logger.log("Aba 'Sessoes' não encontrada");
-      return null;
-    }
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const rows = data.slice(1);
-    
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (row[0] === token) {
-        // Pega os valores pelas colunas
-        const sessionObj = {
-          token: row[0],
-          email: row[1],
-          nivel: row[2],
-          filial: row[3],
-          criadoEm: row[4],
-          expiraEm: row[5]
-        };
-        // Verifica se expirou
-        const agora = Date.now();
-        if (sessionObj.expiraEm && sessionObj.expiraEm < agora) {
-          Logger.log("Token expirado: " + token);
-          return null;
-        }
-        return sessionObj;
-      }
-    }
-    Logger.log("Token não encontrado: " + token);
-    return null;
-  } catch (e) {
-    Logger.log("Erro em getSessionByToken_: " + e.message);
-    return null;
-  }
-}
-
-// Função temporária para testar a leitura da planilha (pode ser chamada do frontend)
 function testarLeituraEquipamentos() {
   try {
     const todos = getAllEquipamentos_();
@@ -113,69 +390,78 @@ function testarRetorno() {
   ];
 }
 
-
-const CONFIG = {
-  SPREADSHEET_ID: '14JQS8QiogznfTYXTzvlhNfKIaq0bv3aDPGVAZrcCEaM', // SpreadsheetApp.getActiveSpreadsheet() se bound
-  SHEETS: {
-    EQUIPAMENTOS: 'Equipamentos',
-    HISTORICO: 'Historico_Itens',
-    USUARIOS: 'Usuarios',
-    SESSOES: 'Sessoes',
-    OTP: 'Otp_Codes',
-    EMPRESTIMOS: 'Emprestimos'
-  },
-  PDF_FOLDER_ID: '',
-  SESSION_DURATION_MS: 24 * 60 * 60 * 1000,   // 24h
-  OTP_EXPIRATION_MS: 10 * 60 * 1000,          // 10min
-  NIVEIS: {
-    MATRIZ: 'Matriz',
-    FILIAL: 'Filial'
-  },
-  STATUS_USUARIO: {
-    ATIVO: 'Ativo',
-    REMOVIDO: 'Removido'
+// Função temporária para testar a sessão (mantida por compatibilidade com
+// chamadas manuais de diagnóstico já usadas anteriormente).
+function getSessionByToken_(token) {
+  try {
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.SESSOES);
+    const rows = data.slice(1);
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] === token) {
+        const sessionObj = {
+          token: row[0], email: row[1], nivel: row[2], filial: row[3],
+          criadoEm: row[4], expiraEm: row[5]
+        };
+        if (sessionObj.expiraEm && sessionObj.expiraEm < Date.now()) {
+          Logger.log('Token expirado: ' + token);
+          return null;
+        }
+        return sessionObj;
+      }
+    }
+    Logger.log('Token não encontrado: ' + token);
+    return null;
+  } catch (e) {
+    Logger.log('Erro em getSessionByToken_: ' + e.message);
+    return null;
   }
-};
+}
 
 // ============================================================================
-// doGet — PONTO ÚNICO DE ROTEAMENTO
+// doGet — PONTO ÚNICO DE ROTEAMENTO (inalterado)
 // ============================================================================
 
 function doGet(e) {
   try {
     const token = e && e.parameter ? e.parameter.token : null;
     const session = token ? validateSession_(token) : null;
+    
+    // LOG PARA DIAGNÓSTICO
+    console.log('SESSION:', session);
+    console.log('NIVEL:', session ? session.nivel : 'null');
 
     if (!session) {
       return renderTemplate_('Login');
     }
 
     if (session.nivel === CONFIG.NIVEIS.MATRIZ) {
+      console.log('Servindo DashboardMatriz');
       return renderTemplate_('DashboardMatriz', { session: session });
     }
 
+    if (session.nivel === CONFIG.NIVEIS.TECNICO) {
+      console.log('Servindo DashboardTecnico');
+      return renderTemplate_('DashboardTecnico', { session: session });
+    }
+
+    console.log('Servindo DashboardFilial (fallback)');
     return renderTemplate_('DashboardFilial', { session: session });
   } catch (err) {
-    // Isso vai mostrar o erro VERDADEIRO no navegador
+    console.error('ERRO em doGet:', err.message);
     return HtmlService.createHtmlOutput(
       '<h2 style="color:red;">ERRO NO SERVIDOR</h2>' +
       '<p><strong>Mensagem:</strong> ' + err.message + '</p>' +
       '<p><strong>Stack:</strong> <pre>' + err.stack + '</pre></p>' +
-      '<p><em>Verifique o ID da planilha e as permissões.</em></p>'
+      '<p><em>Verifique os IDs das 3 planilhas em CONFIG.SPREADSHEETS e se a Sheets API está ativada.</em></p>'
     );
   }
 }
 
-/**
- * Renderiza um template HTML, injetando variáveis via template.<chave>.
- * Usa createTemplateFromFile para permitir <?!= include(...) ?> dentro do HTML.
- */
 function renderTemplate_(fileName, vars) {
   const template = HtmlService.createTemplateFromFile(fileName);
   if (vars) {
-    Object.keys(vars).forEach(function (key) {
-      template[key] = vars[key];
-    });
+    Object.keys(vars).forEach(function (key) { template[key] = vars[key]; });
   }
   return template.evaluate()
     .setTitle('SCE - Sistema de Controle de Equipamentos')
@@ -183,33 +469,20 @@ function renderTemplate_(fileName, vars) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/**
- * Permite <?!= include('Shared') ?> dentro de qualquer template HTML.
- */
 function include(fileName) {
   try {
     return HtmlService.createHtmlOutputFromFile(fileName).getContent();
   } catch (e) {
-    // Se o arquivo não existir, retorna uma string vazia (sem erro)
     return '<!-- Arquivo "' + fileName + '" não encontrado -->';
   }
 }
 
 // ============================================================================
-// AUTENTICAÇÃO — OTP (One-Time Password)
+// AUTENTICAÇÃO — OTP (One-Time Password) — dados agora em SCE_Autenticacao
 // ============================================================================
 
-/**
- * Gera um código de 6 dígitos, salva na aba Otp_Codes com expiração,
- * e envia por e-mail. Chamado pelo Login.html via google.script.run.
- *
- * @param {string} email
- * @return {{ok: boolean, message: string}}
- */
 function requestOtp(email) {
-  // Log inicial: se aparecer no console do Apps Script, sabemos que a função foi chamada.
   console.log('requestOtp chamada com email:', email);
-
   try {
     email = String(email || '').trim().toLowerCase();
     if (!email) {
@@ -224,7 +497,6 @@ function requestOtp(email) {
       console.warn('Usuário não cadastrado:', email);
       return { ok: false, message: 'Se este e-mail estiver cadastrado, um código será enviado.' };
     }
-
     if (usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) {
       console.warn('Usuário removido:', email);
       return { ok: false, message: 'Acesso não autorizado para este e-mail.' };
@@ -232,19 +504,15 @@ function requestOtp(email) {
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const now = Date.now();
-    console.log('Código gerado:', code);
 
-    // Tenta salvar o OTP
     try {
-      const sheet = getSheet_(CONFIG.SHEETS.OTP);
-      upsertOtpRow_(sheet, email, code, now, now + CONFIG.OTP_EXPIRATION_MS);
-      console.log('OTP salvo na planilha com sucesso.');
+      upsertOtpRow_(email, code, now, now + CONFIG.OTP_EXPIRATION_MS);
+      console.log('OTP salvo via Sheets API com sucesso.');
     } catch (sheetError) {
-      console.error('Erro ao salvar OTP na planilha:', sheetError.message);
+      console.error('Erro ao salvar OTP:', sheetError.message);
       return { ok: false, message: 'Erro ao salvar código: ' + sheetError.message };
     }
 
-    // Tenta enviar e-mail
     try {
       MailApp.sendEmail({
         to: email,
@@ -264,27 +532,16 @@ function requestOtp(email) {
   }
 }
 
-/**
- * Valida o código informado. Se correto e não expirado, cria sessão de 24h
- * e retorna a URL (com token) para o client redirecionar via top.location.href.
- *
- * @param {string} email
- * @param {string} code
- * @return {{ok: boolean, message: string, redirectUrl: string}}
- */
 function validateOtp(email, code) {
   email = String(email || '').trim().toLowerCase();
   code = String(code || '').trim();
 
   const usuario = findUsuarioByEmail_(email);
-  // Checagem obrigatória aqui também, mesmo que já tenha sido checada no
-  // requestOtp — usuário pode ter sido removido entre o pedido e a validação.
   if (!usuario || usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) {
     return { ok: false, message: 'Acesso não autorizado para este e-mail.' };
   }
 
-  const otpSheet = getSheet_(CONFIG.SHEETS.OTP);
-  const otpRow = findOtpRow_(otpSheet, email);
+  const otpRow = findOtpRow_(email);
   if (!otpRow) {
     return { ok: false, message: 'Nenhum código pendente para este e-mail.' };
   }
@@ -295,31 +552,18 @@ function validateOtp(email, code) {
     return { ok: false, message: 'Código incorreto.' };
   }
 
-  deleteOtpRow_(otpSheet, otpRow.rowIndex);
+  deleteOtpRow_(otpRow.rowIndex);
 
   const session = createSession_(usuario);
   const url = ScriptApp.getService().getUrl() + '?token=' + encodeURIComponent(session.token);
+  registrarAuditoria_('login', email, { via: 'otp' });
   return { ok: true, message: 'Login realizado com sucesso.', redirectUrl: url };
 }
 
-function sendOtpEmail_(email, code) {
-  MailApp.sendEmail({
-    to: email,
-    subject: 'SCE - Código de acesso',
-    body:
-      'Seu código de acesso ao SCE é: ' + code + '\n\n' +
-      'Ele expira em 10 minutos. Se você não solicitou este código, ignore este e-mail.'
-  });
-}
-
 // ============================================================================
-// SESSÃO (aba Sessoes)
+// SESSÃO (aba Sessoes, em SCE_Autenticacao)
 // ============================================================================
 
-/**
- * Cria uma sessão de 24h para o usuário autenticado e grava na aba Sessoes.
- * @return {{token:string, email:string, nivel:string, filial:string}}
- */
 function createSession_(usuario) {
   const token = Utilities.getUuid();
   const now = Date.now();
@@ -327,71 +571,35 @@ function createSession_(usuario) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sheet = getSheet_(CONFIG.SHEETS.SESSOES);
-    sheet.appendRow([
-      token,
-      usuario.email,
-      usuario.nivel,
-      usuario.filial,
-      now,
-      now + CONFIG.SESSION_DURATION_MS
+    sheetsApiAppendRow_(CONFIG.SHEETS.SESSOES, [
+      token, usuario.email, usuario.nivel, usuario.filial, now, now + CONFIG.SESSION_DURATION_MS
     ]);
   } finally {
     lock.releaseLock();
   }
 
-  return {
-    token: token,
-    email: usuario.email,
-    nivel: usuario.nivel,
-    filial: usuario.filial
-  };
+  return { token: token, email: usuario.email, nivel: usuario.nivel, filial: usuario.filial };
 }
 
-/**
- * Valida token de sessão: existe, não expirou, e o usuário associado ainda
- * está Ativo (checagem obrigatória — sessão salva localmente não basta).
- *
- * @return {Object|null} sessão válida ou null
- */
 function validateSession_(token) {
   if (!token) return null;
 
-  const sheet = getSheet_(CONFIG.SHEETS.SESSOES);
-  const data = sheet.getDataRange().getValues();
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.SESSOES);
   // Colunas: token(0) | email(1) | nivel(2) | filial(3) | criadoEm(4) | expiraEm(5)
-  for (let i = data.length - 1; i >= 0; i--) {
+  for (let i = data.length - 1; i >= 1; i--) {
     if (data[i][0] === token) {
       const expiraEm = data[i][5];
       if (Date.now() > expiraEm) return null;
 
       const usuario = findUsuarioByEmail_(data[i][1]);
-      if (!usuario || usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) {
-        return null;
-      }
+      if (!usuario || usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) return null;
 
-      return {
-        token: token,
-        email: data[i][1],
-        nivel: data[i][2],
-        filial: data[i][3]
-      };
+      return { token: token, email: data[i][1], nivel: data[i][2], filial: data[i][3] };
     }
   }
   return null;
 }
 
-/**
- * Ponto único de validação server-side para qualquer função sensível.
- * Toda função chamada via google.script.run que faz escrita ou leitura
- * privilegiada deve chamar isto ANTES de qualquer outra coisa — nunca
- * confiar apenas em validação feita no client.
- *
- * @param {string} token
- * @param {string} [nivelExigido] Se informado, exige esse nível exato.
- * @return {Object} sessão válida
- * @throws {Error} se sessão inválida ou nível insuficiente
- */
 function requireSession_(token, nivelExigido) {
   const session = validateSession_(token);
   if (!session) {
@@ -404,225 +612,168 @@ function requireSession_(token, nivelExigido) {
 }
 
 // ============================================================================
-// ACESSO A DADOS — USUÁRIOS
+// ACESSO A DADOS — USUÁRIOS (aba Usuarios, em SCE_Autenticacao)
+// Estrutura: email(0) | nome(1) | nivel(2) | filial(3) | status(4) | dataRemocao(5)
 // ============================================================================
 
-/**
- * Estrutura esperada da aba Usuarios:
- * email(0) | nome(1) | nivel(2) | filial(3) | status(4) | dataRemocao(5)
- */
 function findUsuarioByEmail_(email) {
-  const sheet = getSheet_(CONFIG.SHEETS.USUARIOS);
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) { // i=1 pula cabeçalho
-    if (String(data[i][0]).trim().toLowerCase() === email) {
-      return {
-        rowIndex: i + 1, // 1-based, para uso com getRange
-        email: data[i][0],
-        nome: data[i][1],
-        nivel: data[i][2],
-        filial: data[i][3],
-        status: data[i][4],
-        dataRemocao: data[i][5]
-      };
-    }
-  }
-  return null;
-}
-
-// ============================================================================
-// ACESSO A DADOS — OTP (aba auxiliar Otp_Codes)
-// ============================================================================
-
-/**
- * Estrutura esperada da aba Otp_Codes: email(0) | code(1) | criadoEm(2) | expiraEm(3)
- * Uma linha por e-mail — upsert substitui código anterior se já existir um pendente.
- */
-function upsertOtpRow_(sheet, email, code, criadoEm, expiraEm) {
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toLowerCase() === email) {
-      sheet.getRange(i + 1, 1, 1, 4).setValues([[email, code, criadoEm, expiraEm]]);
-      return;
-    }
-  }
-  sheet.appendRow([email, code, criadoEm, expiraEm]);
-}
-
-function findOtpRow_(sheet, email) {
-  const data = sheet.getDataRange().getValues();
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.USUARIOS);
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim().toLowerCase() === email) {
       return {
         rowIndex: i + 1,
-        email: data[i][0],
-        code: data[i][1],
-        criadoEm: data[i][2],
-        expiraEm: data[i][3]
+        email: data[i][0], nome: data[i][1], nivel: data[i][2],
+        filial: data[i][3], status: data[i][4], dataRemocao: data[i][5]
       };
     }
   }
   return null;
 }
 
-function deleteOtpRow_(sheet, rowIndex) {
-  sheet.deleteRow(rowIndex);
+// ============================================================================
+// ACESSO A DADOS — OTP (aba Otp_Codes, em SCE_Autenticacao)
+// Estrutura: email(0) | code(1) | criadoEm(2) | expiraEm(3)
+// ============================================================================
+
+function upsertOtpRow_(email, code, criadoEm, expiraEm) {
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.OTP);
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().toLowerCase() === email) {
+      sheetsApiBatchUpdateCells_(CONFIG.SHEETS.OTP, [
+        { row: i + 1, col: 1, value: email },
+        { row: i + 1, col: 2, value: code },
+        { row: i + 1, col: 3, value: criadoEm },
+        { row: i + 1, col: 4, value: expiraEm }
+      ]);
+      return;
+    }
+  }
+  sheetsApiAppendRow_(CONFIG.SHEETS.OTP, [email, code, criadoEm, expiraEm]);
+}
+
+function findOtpRow_(email) {
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.OTP);
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().toLowerCase() === email) {
+      return { rowIndex: i + 1, email: data[i][0], code: data[i][1], criadoEm: data[i][2], expiraEm: data[i][3] };
+    }
+  }
+  return null;
+}
+
+function deleteOtpRow_(rowIndex) {
+  sheetsApiDeleteRow_(CONFIG.SHEETS.OTP, rowIndex);
 }
 
 // ============================================================================
-// ACESSO A DADOS — EQUIPAMENTOS (base para as próximas etapas)
+// ACESSO A DADOS — EQUIPAMENTOS (aba Equipamentos, em SCE_Core)
 // ============================================================================
 
-/**
- * Lê toda a aba Equipamentos em lote (1 chamada de leitura) e converte para
- * array de objetos usando o cabeçalho. NUNCA iterar célula a célula.
- *
- * @return {Array<Object>}
- */
 function getAllEquipamentos_() {
-  const sheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-  const data = sheet.getDataRange().getValues();
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
+  if (!data || data.length === 0) return [];
   const headers = data[0];
   const rows = data.slice(1);
 
   return rows.map(function (row, idx) {
     const obj = { _rowIndex: idx + 2 }; // linha real na planilha (1-based + cabeçalho)
     headers.forEach(function (header, colIdx) {
-      obj[header] = row[colIdx];
+      obj[header] = row[colIdx] !== undefined ? row[colIdx] : '';
     });
     return obj;
   });
 }
 
 /**
- * Retorna equipamentos filtrados por unidade (perfil Filial) já validando
- * sessão. Exclui itens com status "Removido" (soft-delete).
- *
- * @param {string} token
- * @return {Array<Object>}
+ * Retorna os equipamentos visíveis para a sessão atual:
+ *   - Matriz: todos.
+ *   - Filial: só da própria unidade.
+ *   - Técnico: de todas as unidades vinculadas a ele (session.filial pode
+ *     conter várias, separadas por vírgula — ver sessaoTemAcessoAUnidade_).
+ * Mantido com o nome antigo (getEquipamentosDaFilial) por compatibilidade
+ * com o frontend já publicado (Filial e Matriz continuam chamando esta
+ * função sem nenhuma mudança). O dashboard do Técnico chama a mesma função.
  */
 function getEquipamentosDaFilial(token) {
   try {
-    // 1. Obtém a sessão
     const session = requireSession_(token);
     if (!session) {
-      Logger.log("Sessão não encontrada");
+      Logger.log('Sessão não encontrada');
       return [];
     }
 
-    const filial = session.nivel === CONFIG.NIVEIS.MATRIZ ? null : session.filial;
-    Logger.log("Filial: " + filial);
+    Logger.log('Sessão: ' + session.email + ' (' + session.nivel + ') unidades: ' + session.filial);
 
-    // 2. Obtém todos os equipamentos
     const todos = getAllEquipamentos_();
     if (!todos) {
-      Logger.log("Nenhum equipamento encontrado");
+      Logger.log('Nenhum equipamento encontrado');
       return [];
     }
-    Logger.log("Total bruto: " + todos.length);
+    Logger.log('Total bruto: ' + todos.length);
 
-    // 3. Aplica o filtro
     const filtrados = todos.filter(function (item) {
       const naoRemovido = item['status'] !== 'Removido';
-      let pertenceAFilial = true;
-      if (filial) {
-        const unidadeItem = (item['unidade'] || '').trim().toUpperCase();
-        const filialNormalizada = filial.trim().toUpperCase();
-        pertenceAFilial = unidadeItem === filialNormalizada;
-      }
-      return naoRemovido && pertenceAFilial;
+      const temAcesso = sessaoTemAcessoAUnidade_(session, item['unidade']);
+      return naoRemovido && temAcesso;
     });
 
-    Logger.log("Filtrados: " + filtrados.length);
+    Logger.log('Filtrados: ' + filtrados.length);
 
-    // Converte para JSON e volta para objeto
-    // Isso remove qualquer data (Date), função ou referência circular
-    // que possa estar causando o erro de serialização.
     const jsonString = JSON.stringify(filtrados);
     return JSON.parse(jsonString);
-
   } catch (e) {
-    Logger.log("ERRO CRÍTICO: " + e.message);
-    Logger.log("Stack: " + e.stack);
+    Logger.log('ERRO CRÍTICO: ' + e.message);
+    Logger.log('Stack: ' + e.stack);
     return [];
   }
 }
-/**
- * Retorna TODOS os equipamentos de TODAS as unidades — restrito à Matriz.
- * Exclui soft-deleted por padrão; passar incluirRemovidos=true para auditoria.
- *
- * @param {string} token
- * @param {boolean} [incluirRemovidos]
- * @return {Array<Object>}
- */
+
 function getEquipamentosGlobal(token, incluirRemovidos) {
   try {
-    // 1. Obtém a sessão (sem validação de nível aqui)
     const session = requireSession_(token);
     if (!session) {
-      Logger.log("Sessão inválida para token: " + token);
+      Logger.log('Sessão inválida para token: ' + token);
       return [];
     }
 
-    // 2. Verifica se o nível é Matriz
     const nivel = session.nivel || '';
     const isMatriz = nivel.trim().toUpperCase() === (CONFIG.NIVEIS.MATRIZ || 'MATRIZ').trim().toUpperCase();
-
     if (!isMatriz) {
-      Logger.log("Usuário não é Matriz. Nível: " + nivel);
-      return []; // Retorna array vazio, não null
-    }
-
-    Logger.log("Usuário Matriz autenticado: " + session.email);
-
-    // 3. Obtém todos os equipamentos
-    const todos = getAllEquipamentos_();
-    if (!todos || !Array.isArray(todos)) {
-      Logger.log("Falha ao ler equipamentos");
+      Logger.log('Usuário não é Matriz. Nível: ' + nivel);
       return [];
     }
 
-    Logger.log("Total bruto: " + todos.length);
+    Logger.log('Usuário Matriz autenticado: ' + session.email);
 
-    // 4. Filtra removidos, se necessário
+    const todos = getAllEquipamentos_();
+    if (!todos || !Array.isArray(todos)) {
+      Logger.log('Falha ao ler equipamentos');
+      return [];
+    }
+    Logger.log('Total bruto: ' + todos.length);
+
     const filtrados = todos.filter(function (item) {
       return incluirRemovidos ? true : item['status'] !== 'Removido';
     });
+    Logger.log('Filtrados (Removidos ' + (incluirRemovidos ? 'incluídos' : 'excluídos') + '): ' + filtrados.length);
 
-    Logger.log("Filtrados (Removidos " + (incluirRemovidos ? 'incluídos' : 'excluídos') + "): " + filtrados.length);
-
-    // 5. Serialização forçada (evita problemas com Date)
     const jsonString = JSON.stringify(filtrados);
     return JSON.parse(jsonString);
-
   } catch (e) {
-    Logger.log("ERRO CRÍTICO em getEquipamentosGlobal: " + e.message);
+    Logger.log('ERRO CRÍTICO em getEquipamentosGlobal: ' + e.message);
     return [];
   }
 }
 
-/**
- * Cria um novo equipamento. Filial só pode criar para a própria unidade
- * (o campo "unidade" é sempre sobrescrito pela sessão, nunca confiado
- * no payload do client — evita que uma filial cadastre em nome de outra).
- * Matriz pode informar a unidade explicitamente.
- *
- * @param {string} token
- * @param {Object} dadosEquipamento objeto com as ~22 colunas (parcial é ok;
- *   colunas ausentes ficam vazias)
- * @return {{ok:boolean, id:string}}
- */
 function createEquipamento(token, dadosEquipamento) {
   const session = requireSession_(token);
-  const unidade = session.nivel === CONFIG.NIVEIS.MATRIZ
-    ? (dadosEquipamento.unidade || session.filial)
-    : session.filial;
+  const unidade = resolverUnidadeParaEscrita_(session, dadosEquipamento.unidade);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
+    const headers = data[0];
 
     const id = Utilities.getUuid();
     const now = new Date();
@@ -637,8 +788,9 @@ function createEquipamento(token, dadosEquipamento) {
       return '';
     });
 
-    sheet.appendRow(linha);
+    sheetsApiAppendRow_(CONFIG.SHEETS.EQUIPAMENTOS, linha);
     registrarHistorico_(id, 'criação', '', 'Equipamento cadastrado', session.email);
+    registrarAuditoria_('createEquipamento', session.email, { id: id, unidade: unidade });
 
     return { ok: true, id: id };
   } finally {
@@ -646,25 +798,13 @@ function createEquipamento(token, dadosEquipamento) {
   }
 }
 
-/**
- * Atualiza campos de um equipamento existente. Grava um item de histórico
- * por campo alterado (não um log genérico), o que facilita auditoria fina.
- *
- * Filial só pode editar equipamento da própria unidade — checagem feita
- * server-side, nunca confiando que o client só mostrou os itens certos.
- *
- * @param {string} token
- * @param {string} id
- * @param {Object} camposAlterados apenas os campos que mudaram
- */
 function updateEquipamento(token, id, camposAlterados) {
   const session = requireSession_(token);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-    const data = sheet.getDataRange().getValues();
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = data[0];
     const idCol = headers.indexOf('id');
     const unidadeCol = headers.indexOf('unidade');
@@ -673,30 +813,44 @@ function updateEquipamento(token, id, camposAlterados) {
     if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
 
     const linhaAtual = data[rowIndex - 1];
-    if (session.nivel !== CONFIG.NIVEIS.MATRIZ && linhaAtual[unidadeCol] !== session.filial) {
+    if (!sessaoTemAcessoAUnidade_(session, linhaAtual[unidadeCol])) {
       throw new Error('Você não tem permissão para editar este equipamento.');
     }
 
-    // Status especiais exigem um campo de justificativa preenchido — ou já
-    // presente na linha, ou vindo junto no mesmo payload de alteração.
     validarStatusEspecial_(camposAlterados, linhaAtual, headers);
 
+    // Monta TODAS as alterações de célula e manda numa única chamada
+    // Values.batchUpdate, em vez de uma chamada por campo.
+    const cellUpdates = [];
+    const historicoParaRegistrar = [];
+
     Object.keys(camposAlterados).forEach(function (campo) {
-      const colIndex = headers.indexOf(campo);
       if (campo === 'id' || campo === 'dataCadastro' || campo === 'cadastradoPor') return;
-      if (colIndex === -1) return; // ignora campos desconhecidos, não quebra a escrita
+      const colIndex = headers.indexOf(campo);
+      if (colIndex === -1) return;
 
       const valorAntigo = linhaAtual[colIndex];
       const valorNovo = camposAlterados[campo];
-      if (String(valorAntigo) === String(valorNovo)) return; // sem mudança real, sem log
+      if (String(valorAntigo) === String(valorNovo)) return;
 
-      sheet.getRange(rowIndex, colIndex + 1).setValue(valorNovo);
-      registrarHistorico_(id, campo, valorAntigo, valorNovo, session.email);
+      cellUpdates.push({ row: rowIndex, col: colIndex + 1, value: valorNovo });
+      historicoParaRegistrar.push({ campo: campo, antigo: valorAntigo, novo: valorNovo });
     });
 
     const atualizadoCol = headers.indexOf('dataUltimaAtualizacao');
-    if (atualizadoCol !== -1) {
-      sheet.getRange(rowIndex, atualizadoCol + 1).setValue(new Date());
+    if (atualizadoCol !== -1 && cellUpdates.length > 0) {
+      cellUpdates.push({ row: rowIndex, col: atualizadoCol + 1, value: new Date() });
+    }
+
+    if (cellUpdates.length > 0) {
+      sheetsApiBatchUpdateCells_(CONFIG.SHEETS.EQUIPAMENTOS, cellUpdates);
+    }
+
+    historicoParaRegistrar.forEach(function (h) {
+      registrarHistorico_(id, h.campo, h.antigo, h.novo, session.email);
+    });
+    if (historicoParaRegistrar.length > 0) {
+      registrarAuditoria_('updateEquipamento', session.email, { id: id, campos: historicoParaRegistrar.map(function (h) { return h.campo; }) });
     }
 
     return { ok: true };
@@ -705,23 +859,13 @@ function updateEquipamento(token, id, camposAlterados) {
   }
 }
 
-/**
- * Clona um equipamento existente (mesmos dados, novo id, status resetado
- * para "Disponível", histórico próprio começando do zero). Útil para
- * cadastro em lote de itens idênticos (ex: 20 notebooks do mesmo modelo).
- *
- * @param {string} token
- * @param {string} idOrigem
- * @return {{ok:boolean, id:string}}
- */
 function cloneEquipamento(token, idOrigem) {
   const session = requireSession_(token);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-    const data = sheet.getDataRange().getValues();
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = data[0];
     const idCol = headers.indexOf('id');
     const unidadeCol = headers.indexOf('unidade');
@@ -731,7 +875,7 @@ function cloneEquipamento(token, idOrigem) {
     if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
 
     const linhaOrigem = data[rowIndex - 1];
-    if (session.nivel !== CONFIG.NIVEIS.MATRIZ && linhaOrigem[unidadeCol] !== session.filial) {
+    if (!sessaoTemAcessoAUnidade_(session, linhaOrigem[unidadeCol])) {
       throw new Error('Você não tem permissão para clonar este equipamento.');
     }
 
@@ -743,8 +887,10 @@ function cloneEquipamento(token, idOrigem) {
     setIfHeaderExists_(novaLinha, headers, 'dataCadastro', new Date());
     setIfHeaderExists_(novaLinha, headers, 'dataUltimaAtualizacao', new Date());
     setIfHeaderExists_(novaLinha, headers, 'cadastradoPor', session.email);
-    sheet.appendRow(novaLinha);
+
+    sheetsApiAppendRow_(CONFIG.SHEETS.EQUIPAMENTOS, novaLinha);
     registrarHistorico_(novoId, 'criação', '', 'Clonado a partir de ' + idOrigem, session.email);
+    registrarAuditoria_('cloneEquipamento', session.email, { idOrigem: idOrigem, novoId: novoId });
 
     return { ok: true, id: novoId };
   } finally {
@@ -752,22 +898,13 @@ function cloneEquipamento(token, idOrigem) {
   }
 }
 
-/**
- * Soft-delete de equipamento: nunca apaga a linha, apenas marca status
- * como "Removido". Mesmo padrão usado em removerUsuario. Restrito por
- * unidade para Filial; Matriz pode remover qualquer item.
- *
- * @param {string} token
- * @param {string} id
- */
 function removerEquipamento(token, id) {
   const session = requireSession_(token);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const sheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-    const data = sheet.getDataRange().getValues();
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = data[0];
     const idCol = headers.indexOf('id');
     const unidadeCol = headers.indexOf('unidade');
@@ -777,13 +914,14 @@ function removerEquipamento(token, id) {
     if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
 
     const linhaAtual = data[rowIndex - 1];
-    if (session.nivel !== CONFIG.NIVEIS.MATRIZ && linhaAtual[unidadeCol] !== session.filial) {
+    if (!sessaoTemAcessoAUnidade_(session, linhaAtual[unidadeCol])) {
       throw new Error('Você não tem permissão para remover este equipamento.');
     }
 
     const statusAntigo = linhaAtual[statusCol];
-    sheet.getRange(rowIndex, statusCol + 1).setValue('Removido');
+    sheetsApiUpdateCell_(CONFIG.SHEETS.EQUIPAMENTOS, rowIndex, statusCol + 1, 'Removido');
     registrarHistorico_(id, 'status', statusAntigo, 'Removido', session.email);
+    registrarAuditoria_('removerEquipamento', session.email, { id: id });
 
     return { ok: true, message: 'Equipamento removido (soft-delete).' };
   } finally {
@@ -791,18 +929,6 @@ function removerEquipamento(token, id) {
   }
 }
 
-/**
- * Regras de aprovação por status especial (do MVP original):
- *   Manutenção     -> exige numeroChamadoManutencao
- *   Extraviado     -> exige boletimOcorrencia
- *   Em verificação -> exige justificativaVerificacao
- *
- * Aceita o valor tanto se já existir na linha atual quanto se estiver
- * chegando junto no mesmo payload (permite setar status + justificativa
- * numa única chamada de updateEquipamento).
- *
- * @throws {Error} se o status exigir um campo que está ausente/vazio
- */
 function validarStatusEspecial_(camposAlterados, linhaAtual, headers) {
   if (!('status' in camposAlterados)) return;
 
@@ -822,18 +948,10 @@ function validarStatusEspecial_(camposAlterados, linhaAtual, headers) {
   const valorFinal = valorNoPayload !== undefined ? valorNoPayload : valorExistente;
 
   if (!valorFinal) {
-    throw new Error(
-      'Para alterar o status para "' + novoStatus + '", o campo "' +
-      campoObrigatorio + '" é obrigatório.'
-    );
+    throw new Error('Para alterar o status para "' + novoStatus + '", o campo "' + campoObrigatorio + '" é obrigatório.');
   }
 }
 
-/**
- * Localiza o índice de linha (1-based, considerando cabeçalho) de um
- * equipamento pelo id, a partir de uma matriz de dados já carregada.
- * Evita releitura da planilha quando quem chama já tem `data` em mãos.
- */
 function findRowIndexById_(data, idCol, id) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][idCol] === id) return i + 1;
@@ -842,71 +960,124 @@ function findRowIndexById_(data, idCol, id) {
 }
 
 // ============================================================================
-// HISTÓRICO (aba Historico_Itens)
+// HISTÓRICO (aba Historico_Itens, em SCE_Movimentacao)
+// ============================================================================
+
+function registrarHistorico_(equipamentoId, campo, valorAntigo, valorNovo, autor) {
+  try {
+    sheetsApiAppendRow_(CONFIG.SHEETS.HISTORICO, [equipamentoId, campo, valorAntigo, valorNovo, autor, new Date()]);
+  } catch (e) {
+    Logger.log('Erro ao registrar histórico: ' + e.message);
+  }
+}
+
+function getHistoricoEquipamento(token, equipamentoId) {
+  const session = requireSession_(token);
+
+  if (session.nivel !== CONFIG.NIVEIS.MATRIZ) {
+    const equipamentos = getAllEquipamentos_();
+    const item = equipamentos.filter(function (e) { return e.id === equipamentoId; })[0];
+    if (!item || !sessaoTemAcessoAUnidade_(session, item.unidade)) {
+      throw new Error('Você não tem permissão para ver este histórico.');
+    }
+  }
+
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.HISTORICO);
+  return data.slice(1)
+    .filter(function (row) { return row[0] === equipamentoId; })
+    .map(function (row) {
+      return { equipamentoId: row[0], campo: row[1], valorAntigo: row[2], valorNovo: row[3], autor: row[4], data: row[5] };
+    })
+    .reverse();
+}
+
+// ============================================================================
+// REGISTRO DE MANUTENÇÃO (aba Registros_Manutencao, em SCE_Movimentacao)
+// ----------------------------------------------------------------------------
+// Diferente do Historico_Itens (que registra "campo X mudou de Y para Z"
+// automaticamente a cada edição), isto é um diário técnico em texto livre:
+// o técnico (ou Filial/Matriz, se quiserem) registra o que foi feito numa
+// visita/manutenção específica. Fica atrelado ao equipamento, mais recente
+// primeiro, e não é editável depois de criado (só inserção).
 // ============================================================================
 
 /**
- * Registra uma linha de histórico por alteração. Estrutura esperada da
- * aba Historico_Itens: equipamentoId | campo | valorAntigo | valorNovo |
- * autor | data
+ * Registra uma entrada de manutenção para um equipamento. Qualquer perfil
+ * com acesso à unidade do equipamento pode registrar (Matriz, Filial da
+ * própria unidade, Técnico vinculado à unidade).
  *
- * Chamada internamente por create/update/clone/remover — não expor
- * diretamente via google.script.run, pois não deve ser gravável pelo client.
+ * @param {string} token
+ * @param {string} equipamentoId
+ * @param {string} descricao texto livre (o que foi feito/observado)
+ * @return {{ok:boolean, id:string}}
  */
-function registrarHistorico_(equipamentoId, campo, valorAntigo, valorNovo, autor) {
-  const sheet = getSheet_(CONFIG.SHEETS.HISTORICO);
-  sheet.appendRow([equipamentoId, campo, valorAntigo, valorNovo, autor, new Date()]);
+function registrarManutencao(token, equipamentoId, descricao) {
+  const session = requireSession_(token);
+
+  descricao = String(descricao || '').trim();
+  if (!descricao) throw new Error('Descreva o que foi feito antes de registrar.');
+
+  const equipamentos = getAllEquipamentos_();
+  const item = equipamentos.filter(function (e) { return e.id === equipamentoId; })[0];
+  if (!item) throw new Error('Equipamento não encontrado.');
+  if (!sessaoTemAcessoAUnidade_(session, item.unidade)) {
+    throw new Error('Você não tem permissão para registrar manutenção neste equipamento.');
+  }
+
+  ensureSheetExists_(CONFIG.SHEETS.REGISTROS_MANUTENCAO, REGISTROS_MANUTENCAO_HEADERS_);
+
+  const id = Utilities.getUuid();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    sheetsApiAppendRow_(CONFIG.SHEETS.REGISTROS_MANUTENCAO, [id, equipamentoId, session.email, new Date(), descricao]);
+  } finally {
+    lock.releaseLock();
+  }
+
+  registrarAuditoria_('registrarManutencao', session.email, { equipamentoId: equipamentoId, registroId: id });
+
+  return { ok: true, id: id };
 }
 
 /**
- * Retorna o histórico completo de um equipamento (mais recente primeiro).
- * Filial só pode consultar histórico de item da própria unidade.
+ * Retorna o diário de manutenção de um equipamento, mais recente primeiro.
+ * Mesma regra de acesso de registrarManutencao.
  *
  * @param {string} token
  * @param {string} equipamentoId
  * @return {Array<Object>}
  */
-function getHistoricoEquipamento(token, equipamentoId) {
-  const session = requireSession_(token);
+function getRegistrosManutencao(token, equipamentoId) {
+  try {
+    const session = requireSession_(token);
 
-  // Confirma que o equipamento pertence à unidade do solicitante (Filial)
-  if (session.nivel !== CONFIG.NIVEIS.MATRIZ) {
     const equipamentos = getAllEquipamentos_();
     const item = equipamentos.filter(function (e) { return e.id === equipamentoId; })[0];
-    if (!item || item.unidade !== session.filial) {
-      throw new Error('Você não tem permissão para ver este histórico.');
+    if (!item || !sessaoTemAcessoAUnidade_(session, item.unidade)) {
+      throw new Error('Você não tem permissão para ver os registros deste equipamento.');
     }
-  }
 
-  const sheet = getSheet_(CONFIG.SHEETS.HISTORICO);
-  const data = sheet.getDataRange().getValues();
-  return data.slice(1)
-    .filter(function (row) { return row[0] === equipamentoId; })
-    .map(function (row) {
-      return {
-        equipamentoId: row[0],
-        campo: row[1],
-        valorAntigo: row[2],
-        valorNovo: row[3],
-        autor: row[4],
-        data: row[5]
-      };
-    })
-    .reverse();
+    ensureSheetExists_(CONFIG.SHEETS.REGISTROS_MANUTENCAO, REGISTROS_MANUTENCAO_HEADERS_);
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.REGISTROS_MANUTENCAO);
+    if (!data || data.length === 0) return [];
+
+    return data.slice(1)
+      .filter(function (row) { return row[1] === equipamentoId; })
+      .map(function (row) {
+        return { id: row[0], equipamentoId: row[1], autor: row[2], data: row[3], descricao: row[4] };
+      })
+      .reverse();
+  } catch (e) {
+    Logger.log('Erro em getRegistrosManutencao: ' + e.message);
+    return [];
+  }
 }
 
-// TODO (próxima etapa): fluxo de empréstimo/devolução + geração de PDF via Docs template
-// TODO (próxima etapa): exportarEquipamentosCSV(token), exportarEquipamentosPDF(token)
-
 // ============================================================================
-// ACESSO A DADOS — GESTÃO DE USUÁRIOS (restrito à Matriz)
+// EMPRÉSTIMOS / DEVOLUÇÕES (aba Emprestimos, em SCE_Movimentacao)
 // ============================================================================
 
-/**
- * Lista usuários (visão administrativa). Restrito à Matriz.
- * @param {string} token
- * @return {Array<Object>}
- */
 function registrarEmprestimo(token, equipamentoIds, dadosEmprestimo) {
   const session = requireSession_(token);
   equipamentoIds = Array.isArray(equipamentoIds) ? equipamentoIds : [equipamentoIds];
@@ -919,8 +1090,9 @@ function registrarEmprestimo(token, equipamentoIds, dadosEmprestimo) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const eqSheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-    const eqData = eqSheet.getDataRange().getValues();
+    ensureSheetExists_(CONFIG.SHEETS.EMPRESTIMOS, EMPRESTIMOS_HEADERS_);
+
+    const eqData = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = eqData[0];
     const idCol = headers.indexOf('id');
     const unidadeCol = headers.indexOf('unidade');
@@ -933,7 +1105,7 @@ function registrarEmprestimo(token, equipamentoIds, dadosEmprestimo) {
       const rowIndex = findRowIndexById_(eqData, idCol, id);
       if (rowIndex === -1) throw new Error('Equipamento nao encontrado: ' + id);
       const row = eqData[rowIndex - 1];
-      if (session.nivel !== CONFIG.NIVEIS.MATRIZ && row[unidadeCol] !== session.filial) {
+      if (!sessaoTemAcessoAUnidade_(session, row[unidadeCol])) {
         throw new Error('Voce nao tem permissao para emprestar o equipamento ' + id + '.');
       }
       if (row[statusCol] === 'Removido') throw new Error('Equipamento removido nao pode ser emprestado.');
@@ -944,33 +1116,29 @@ function registrarEmprestimo(token, equipamentoIds, dadosEmprestimo) {
     const emprestimoId = Utilities.getUuid();
     const now = new Date();
     const termo = gerarTermoEmprestimoPdf_(emprestimoId, itens, headers, dadosEmprestimo);
-    const empSheet = getEmprestimosSheet_();
 
+    // Uma chamada de batchUpdate por item (status/responsavel/dataAtribuicao/
+    // dataUltimaAtualizacao), em vez de 4 chamadas separadas por item.
     itens.forEach(function (item) {
-      empSheet.appendRow([
-        emprestimoId,
-        item.id,
-        valueByHeader_(item.row, headers, 'patrimonio'),
-        valueByHeader_(item.row, headers, 'unidade'),
-        dadosEmprestimo.responsavel || '',
-        dadosEmprestimo.cpf || '',
-        dadosEmprestimo.emailResponsavel || '',
-        now,
-        dadosEmprestimo.dataPrevistaDevolucao || '',
-        '',
-        'Aberto',
-        termo.url || '',
-        session.email,
-        '',
-        dadosEmprestimo.observacoes || ''
+      sheetsApiAppendRow_(CONFIG.SHEETS.EMPRESTIMOS, [
+        emprestimoId, item.id, valueByHeader_(item.row, headers, 'patrimonio'),
+        valueByHeader_(item.row, headers, 'unidade'), dadosEmprestimo.responsavel || '',
+        dadosEmprestimo.cpf || '', dadosEmprestimo.emailResponsavel || '', now,
+        dadosEmprestimo.dataPrevistaDevolucao || '', '', 'Aberto', termo.url || '',
+        session.email, '', dadosEmprestimo.observacoes || ''
       ]);
 
-      if (statusCol !== -1) eqSheet.getRange(item.rowIndex, statusCol + 1).setValue('Emprestado');
-      if (responsavelCol !== -1) eqSheet.getRange(item.rowIndex, responsavelCol + 1).setValue(dadosEmprestimo.responsavel || '');
-      if (dataAtribCol !== -1) eqSheet.getRange(item.rowIndex, dataAtribCol + 1).setValue(now);
-      if (atualizadoCol !== -1) eqSheet.getRange(item.rowIndex, atualizadoCol + 1).setValue(now);
+      const cellUpdates = [];
+      if (statusCol !== -1) cellUpdates.push({ row: item.rowIndex, col: statusCol + 1, value: 'Emprestado' });
+      if (responsavelCol !== -1) cellUpdates.push({ row: item.rowIndex, col: responsavelCol + 1, value: dadosEmprestimo.responsavel || '' });
+      if (dataAtribCol !== -1) cellUpdates.push({ row: item.rowIndex, col: dataAtribCol + 1, value: now });
+      if (atualizadoCol !== -1) cellUpdates.push({ row: item.rowIndex, col: atualizadoCol + 1, value: now });
+      sheetsApiBatchUpdateCells_(CONFIG.SHEETS.EQUIPAMENTOS, cellUpdates);
+
       registrarHistorico_(item.id, 'status', valueByHeader_(item.row, headers, 'status'), 'Emprestado', session.email);
     });
+
+    registrarAuditoria_('registrarEmprestimo', session.email, { emprestimoId: emprestimoId, itens: equipamentoIds });
 
     if (dadosEmprestimo.emailResponsavel && termo.blob) {
       MailApp.sendEmail({
@@ -996,8 +1164,9 @@ function registrarDevolucao(token, equipamentoIds, observacoes) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const eqSheet = getSheet_(CONFIG.SHEETS.EQUIPAMENTOS);
-    const eqData = eqSheet.getDataRange().getValues();
+    ensureSheetExists_(CONFIG.SHEETS.EMPRESTIMOS, EMPRESTIMOS_HEADERS_);
+
+    const eqData = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = eqData[0];
     const idCol = headers.indexOf('id');
     const unidadeCol = headers.indexOf('unidade');
@@ -1011,21 +1180,87 @@ function registrarDevolucao(token, equipamentoIds, observacoes) {
       const rowIndex = findRowIndexById_(eqData, idCol, id);
       if (rowIndex === -1) throw new Error('Equipamento nao encontrado: ' + id);
       const row = eqData[rowIndex - 1];
-      if (session.nivel !== CONFIG.NIVEIS.MATRIZ && row[unidadeCol] !== session.filial) {
+      if (!sessaoTemAcessoAUnidade_(session, row[unidadeCol])) {
         throw new Error('Voce nao tem permissao para devolver o equipamento ' + id + '.');
       }
-      if (statusCol !== -1) eqSheet.getRange(rowIndex, statusCol + 1).setValue('Disponivel');
-      if (responsavelCol !== -1) eqSheet.getRange(rowIndex, responsavelCol + 1).setValue('');
-      if (dataAtribCol !== -1) eqSheet.getRange(rowIndex, dataAtribCol + 1).setValue('');
-      if (atualizadoCol !== -1) eqSheet.getRange(rowIndex, atualizadoCol + 1).setValue(now);
+
+      const cellUpdates = [];
+      if (statusCol !== -1) cellUpdates.push({ row: rowIndex, col: statusCol + 1, value: 'Disponivel' });
+      if (responsavelCol !== -1) cellUpdates.push({ row: rowIndex, col: responsavelCol + 1, value: '' });
+      if (dataAtribCol !== -1) cellUpdates.push({ row: rowIndex, col: dataAtribCol + 1, value: '' });
+      if (atualizadoCol !== -1) cellUpdates.push({ row: rowIndex, col: atualizadoCol + 1, value: now });
+      sheetsApiBatchUpdateCells_(CONFIG.SHEETS.EQUIPAMENTOS, cellUpdates);
+
       registrarHistorico_(id, 'status', valueByHeader_(row, headers, 'status'), 'Disponivel', session.email);
       fecharEmprestimoAberto_(id, session.email, now, observacoes || '');
     });
+
+    registrarAuditoria_('registrarDevolucao', session.email, { itens: equipamentoIds });
 
     return { ok: true, message: 'Devolucao registrada.' };
   } finally {
     lock.releaseLock();
   }
+}
+
+function fecharEmprestimoAberto_(equipamentoId, devolvidoPor, dataDevolucao, observacoes) {
+  ensureSheetExists_(CONFIG.SHEETS.EMPRESTIMOS, EMPRESTIMOS_HEADERS_);
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.EMPRESTIMOS);
+  const headers = data[0];
+  const equipamentoCol = headers.indexOf('equipamentoId');
+  const statusCol = headers.indexOf('status');
+  const dataDevCol = headers.indexOf('dataDevolucao');
+  const devolvidoPorCol = headers.indexOf('devolvidoPor');
+  const obsCol = headers.indexOf('observacoes');
+
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][equipamentoCol] === equipamentoId && data[i][statusCol] === 'Aberto') {
+      const rowIndex = i + 1;
+      const cellUpdates = [{ row: rowIndex, col: statusCol + 1, value: 'Devolvido' }];
+      if (dataDevCol !== -1) cellUpdates.push({ row: rowIndex, col: dataDevCol + 1, value: dataDevolucao });
+      if (devolvidoPorCol !== -1) cellUpdates.push({ row: rowIndex, col: devolvidoPorCol + 1, value: devolvidoPor });
+      if (obsCol !== -1 && observacoes) cellUpdates.push({ row: rowIndex, col: obsCol + 1, value: observacoes });
+      sheetsApiBatchUpdateCells_(CONFIG.SHEETS.EMPRESTIMOS, cellUpdates);
+      return;
+    }
+  }
+}
+
+// ============================================================================
+// EXPORTAÇÃO (CSV / PDF) — usa getEquipamentosGlobal, já migrado
+// ============================================================================
+
+function exportarCSV(token) {
+  const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  const equipamentos = getEquipamentosGlobal(token, false);
+  if (!equipamentos || equipamentos.length === 0) {
+    return { ok: false, message: 'Nenhum equipamento para exportar.' };
+  }
+
+  const headers = Object.keys(equipamentos[0]).filter(function (h) { return h !== '_rowIndex'; });
+  const linhas = [headers.join(',')];
+  equipamentos.forEach(function (item) {
+    linhas.push(headers.map(function (h) {
+      const v = item[h] === undefined || item[h] === null ? '' : String(item[h]);
+      return '"' + v.replace(/"/g, '""') + '"';
+    }).join(','));
+  });
+
+  const bom = '\uFEFF'; // BOM UTF-8 para compatibilidade com Excel
+  const csvContent = bom + linhas.join('\r\n');
+  const blob = Utilities.newBlob(csvContent, 'text/csv', 'sce-equipamentos.csv');
+  registrarAuditoria_('exportarCSV', session.email, { total: equipamentos.length });
+  return { ok: true, base64: Utilities.base64Encode(blob.getBytes()), fileName: 'sce-equipamentos.csv' };
+}
+
+function getResumoEquipamentos(token) {
+  const equipamentos = getEquipamentosDaFilial(token);
+  const resumo = { total: equipamentos.length, porStatus: {} };
+  equipamentos.forEach(function (item) {
+    const status = item.status || 'Sem status';
+    resumo.porStatus[status] = (resumo.porStatus[status] || 0) + 1;
+  });
+  return resumo;
 }
 
 function exportarEquipamentosPDF(token, filtros) {
@@ -1036,6 +1271,7 @@ function exportarEquipamentosPDF(token, filtros) {
     montarTabelaHtmlEquipamentos_(equipamentos);
   const blob = HtmlService.createHtmlOutput(html).getBlob().setName('sce-equipamentos.pdf').getAs(MimeType.PDF);
   const file = salvarBlobPdf_(blob, 'sce-equipamentos-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss') + '.pdf');
+  registrarAuditoria_('exportarEquipamentosPDF', session.email, { total: equipamentos.length });
   return { ok: true, url: file.getUrl(), name: file.getName() };
 }
 
@@ -1084,11 +1320,14 @@ function montarTabelaHtmlEquipamentos_(equipamentos) {
   return '<table border="1" cellspacing="0" cellpadding="5"><thead><tr><th>Unidade</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Patrimonio</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
+// ============================================================================
+// GESTÃO DE USUÁRIOS (aba Usuarios, em SCE_Autenticacao — restrito à Matriz)
+// ============================================================================
+
 function listarUsuarios(token) {
   requireSession_(token, CONFIG.NIVEIS.MATRIZ);
-
-  const sheet = getSheet_(CONFIG.SHEETS.USUARIOS);
-  const data = sheet.getDataRange().getValues();
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.USUARIOS);
+  if (!data || data.length === 0) return [];
   const headers = data[0];
   return data.slice(1).map(function (row) {
     const obj = {};
@@ -1097,15 +1336,8 @@ function listarUsuarios(token) {
   });
 }
 
-/**
- * Adiciona um novo usuário. Restrito à Matriz. Usa LockService pois múltiplas
- * unidades/admins podem estar cadastrando usuários ao mesmo tempo.
- *
- * @param {string} token
- * @param {{email:string, nome:string, nivel:string, filial:string}} novoUsuario
- */
 function adicionarUsuario(token, novoUsuario) {
-  requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
 
   const email = String(novoUsuario.email || '').trim().toLowerCase();
   if (!email) throw new Error('E-mail é obrigatório.');
@@ -1116,31 +1348,58 @@ function adicionarUsuario(token, novoUsuario) {
     if (findUsuarioByEmail_(email)) {
       throw new Error('Já existe um usuário com este e-mail.');
     }
-    const sheet = getSheet_(CONFIG.SHEETS.USUARIOS);
-    sheet.appendRow([
-      email,
-      novoUsuario.nome || '',
-      novoUsuario.nivel || CONFIG.NIVEIS.FILIAL,
-      novoUsuario.filial || '',
-      CONFIG.STATUS_USUARIO.ATIVO,
-      ''
+    sheetsApiAppendRow_(CONFIG.SHEETS.USUARIOS, [
+      email, novoUsuario.nome || '', novoUsuario.nivel || CONFIG.NIVEIS.FILIAL,
+      novoUsuario.filial || '', CONFIG.STATUS_USUARIO.ATIVO, ''
     ]);
   } finally {
     lock.releaseLock();
   }
 
+  registrarAuditoria_('adicionarUsuario', session.email, { email: email });
   return { ok: true, message: 'Usuário adicionado.' };
 }
 
 /**
- * Soft-delete de usuário: nunca apaga a linha, apenas marca status +
- * dataRemocao. Restrito à Matriz. Protegido por LockService.
- *
- * @param {string} token
- * @param {string} emailParaRemover
+ * Atualiza dados de um usuário existente. Restrito à Matriz. Faz checagem
+ * de colisão de e-mail se o e-mail estiver sendo alterado.
  */
+function atualizarUsuario(token, emailAtual, dadosAtualizados) {
+  const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  emailAtual = String(emailAtual || '').trim().toLowerCase();
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const usuario = findUsuarioByEmail_(emailAtual);
+    if (!usuario) throw new Error('Usuário não encontrado.');
+
+    const novoEmail = dadosAtualizados.email
+      ? String(dadosAtualizados.email).trim().toLowerCase()
+      : emailAtual;
+
+    if (novoEmail !== emailAtual) {
+      const colisao = findUsuarioByEmail_(novoEmail);
+      if (colisao) throw new Error('Já existe outro usuário com este e-mail.');
+    }
+
+    const cellUpdates = [
+      { row: usuario.rowIndex, col: 1, value: novoEmail },
+      { row: usuario.rowIndex, col: 2, value: dadosAtualizados.nome !== undefined ? dadosAtualizados.nome : usuario.nome },
+      { row: usuario.rowIndex, col: 3, value: dadosAtualizados.nivel !== undefined ? dadosAtualizados.nivel : usuario.nivel },
+      { row: usuario.rowIndex, col: 4, value: dadosAtualizados.filial !== undefined ? dadosAtualizados.filial : usuario.filial }
+    ];
+    sheetsApiBatchUpdateCells_(CONFIG.SHEETS.USUARIOS, cellUpdates);
+  } finally {
+    lock.releaseLock();
+  }
+
+  registrarAuditoria_('atualizarUsuario', session.email, { emailAtual: emailAtual, dados: dadosAtualizados });
+  return { ok: true, message: 'Usuário atualizado.' };
+}
+
 function removerUsuario(token, emailParaRemover) {
-  requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1148,72 +1407,21 @@ function removerUsuario(token, emailParaRemover) {
     const usuario = findUsuarioByEmail_(String(emailParaRemover).trim().toLowerCase());
     if (!usuario) throw new Error('Usuário não encontrado.');
 
-    const sheet = getSheet_(CONFIG.SHEETS.USUARIOS);
-    sheet.getRange(usuario.rowIndex, 5, 1, 2).setValues([
-      [CONFIG.STATUS_USUARIO.REMOVIDO, new Date()]
+    sheetsApiBatchUpdateCells_(CONFIG.SHEETS.USUARIOS, [
+      { row: usuario.rowIndex, col: 5, value: CONFIG.STATUS_USUARIO.REMOVIDO },
+      { row: usuario.rowIndex, col: 6, value: new Date() }
     ]);
   } finally {
     lock.releaseLock();
   }
 
+  registrarAuditoria_('removerUsuario', session.email, { email: emailParaRemover });
   return { ok: true, message: 'Usuário removido (soft-delete).' };
 }
 
 // ============================================================================
-// UTILITÁRIOS DE PLANILHA
+// UTILITÁRIOS GERAIS
 // ============================================================================
-
-function getSpreadsheet_() {
-  return CONFIG.SPREADSHEET_ID && CONFIG.SPREADSHEET_ID !== 'COLOQUE_O_ID_DA_PLANILHA_AQUI'
-    ? SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID)
-    : SpreadsheetApp.getActiveSpreadsheet();
-}
-
-function getSheet_(sheetName) {
-  const ss = getSpreadsheet_();
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    throw new Error('Aba "' + sheetName + '" não encontrada na planilha.');
-  }
-  return sheet;
-}
-
-function getEmprestimosSheet_() {
-  const headers = [
-    'id', 'equipamentoId', 'patrimonio', 'unidade', 'responsavel', 'cpf',
-    'emailResponsavel', 'dataEmprestimo', 'dataPrevistaDevolucao',
-    'dataDevolucao', 'status', 'termoPdfUrl', 'criadoPor', 'devolvidoPor',
-    'observacoes'
-  ];
-  const ss = getSpreadsheet_();
-  let sheet = ss.getSheetByName(CONFIG.SHEETS.EMPRESTIMOS);
-  if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.SHEETS.EMPRESTIMOS);
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-  }
-  return sheet;
-}
-
-function fecharEmprestimoAberto_(equipamentoId, devolvidoPor, dataDevolucao, observacoes) {
-  const sheet = getEmprestimosSheet_();
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const equipamentoCol = headers.indexOf('equipamentoId');
-  const statusCol = headers.indexOf('status');
-  const dataDevCol = headers.indexOf('dataDevolucao');
-  const devolvidoPorCol = headers.indexOf('devolvidoPor');
-  const obsCol = headers.indexOf('observacoes');
-
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][equipamentoCol] === equipamentoId && data[i][statusCol] === 'Aberto') {
-      sheet.getRange(i + 1, statusCol + 1).setValue('Devolvido');
-      if (dataDevCol !== -1) sheet.getRange(i + 1, dataDevCol + 1).setValue(dataDevolucao);
-      if (devolvidoPorCol !== -1) sheet.getRange(i + 1, devolvidoPorCol + 1).setValue(devolvidoPor);
-      if (obsCol !== -1 && observacoes) sheet.getRange(i + 1, obsCol + 1).setValue(observacoes);
-      return;
-    }
-  }
-}
 
 function salvarBlobPdf_(blob, name) {
   blob = blob.setName(name);

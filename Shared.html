@@ -1,6 +1,7 @@
 <!-- ============================================================================
      Shared.html — incluído via <?!= include('Shared') ?>
-     Contém: CSS global (Materialize + ajustes), header e função de logout.
+     Contém: CSS global (Materialize + ajustes), header, loading overlay,
+     CSS de impressão (Exportar PDF) e função de logout.
      ========================================================================== -->
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
@@ -9,6 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 <script src="https://www.gstatic.com/charts/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
   :root {
@@ -25,6 +27,8 @@
     --sce-shadow-md: 0 4px 12px rgba(16,24,40,.08), 0 2px 4px rgba(16,24,40,.06);
   }
 
+
+  
   * { box-sizing: border-box; }
 
   html, body {
@@ -146,6 +150,32 @@
     align-items: center;
     gap: 14px;
   }
+
+    /* Cores personalizadas para cada card KPI */
+  .kpi-total {
+    background-color: #E3F2FD !important;  /* azul bem claro */
+    border-left: 4px solid #1565C0;        /* detalhe lateral opcional */
+  }
+
+  .kpi-disponiveis {
+    background-color: #E8F5E9 !important;  /* verde bem claro */
+    border-left: 4px solid #2E7D32;
+  }
+
+  .kpi-manutencao {
+    background-color: #FFF9C4 !important;  /* amarelo pastel suave */
+    border-left: 4px solid #F9A825;
+    /* Se quiser um efeito de "desfocado" com backdrop-filter (se houver conteúdo atrás) */
+    /* background-color: rgba(255, 235, 59, 0.25) !important; 
+      backdrop-filter: blur(4px); */
+  }
+
+  .kpi-quebrados {
+    background-color: #FFEBEE !important;  /* vermelho bem claro */
+    border-left: 4px solid #C62828;
+  }
+
+  .sce-kpi 
   .sce-kpi .sce-kpi-icon {
     width: 44px; height: 44px;
     border-radius: 10px;
@@ -173,6 +203,11 @@
   .btn-small.waves-effect:hover { background-color: var(--sce-primary-light) !important; color: var(--sce-primary-dark) !important; }
   .btn-small.red { color: #d32f2f !important; }
   .btn-small.red:hover { background-color: #ffebee !important; }
+  .btn:disabled, .btn-small:disabled, .btn[disabled] {
+    background-color: #cbd5e1 !important;
+    color: #94a3b8 !important;
+    cursor: not-allowed;
+  }
 
   /* ---------- Tables ---------- */
   table.striped, table.highlight {
@@ -196,6 +231,82 @@
 
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+
+  /* ---------- Loading overlay ---------- */
+  #sce-loading-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(15,23,42,.45);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+  }
+  #sce-loading-overlay.active { display: flex; }
+  #sce-loading-overlay .sce-spinner-box {
+    background: white;
+    border-radius: var(--sce-radius);
+    padding: 22px 30px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: var(--sce-shadow-md);
+    font-weight: 500;
+    color: var(--sce-ink);
+  }
+
+  /* ---------- Impressão (Exportar PDF via window.print) ---------- */
+  #sce-print-header { display: none; }
+  @media print {
+    .sce-header, .sce-page-title, #sce-loading-overlay,
+    .modal, button, .btn, .btn-flat, .btn-small,
+    .no-print { display: none !important; }
+    #sce-print-header {
+      display: block !important;
+      margin-bottom: 16px;
+    }
+    #sce-print-header h4 { margin: 0 0 4px; }
+    #sce-print-header p { margin: 0; color: #555; font-size: .85rem; }
+    .sce-panel { box-shadow: none !important; border: none !important; padding: 0 !important; }
+    body { background: white !important; }
+    .sce-container { padding: 0 !important; }
+  }
+  /* ==============================================
+     ADICIONE OS 3 TEMAS AQUI NO FINAL (SÓ ISSO)
+     ============================================== */
+  .theme-matriz {
+    --sce-primary: #0B1E36;
+    --sce-primary-dark: #070f1f;
+    --sce-primary-light: #d6dce5;
+    --sce-accent: #C9A94E;
+    --sce-ink: #1c2733;
+    --sce-muted: #64748b;
+    --sce-border: #c9c9c9;
+    --sce-bg: #fafaf8;
+  }
+
+  .theme-filial {
+    --sce-primary: #1A5F7A;
+    --sce-primary-dark: #0f3d52;
+    --sce-primary-light: #d4e4ed;
+    --sce-accent: #F28C28;
+    --sce-ink: #1c2733;
+    --sce-muted: #64748b;
+    --sce-border: #c3d4de;
+    --sce-bg: #f5fafc;
+  }
+
+  .theme-tecnico {
+    --sce-primary: #2F3640;
+    --sce-primary-dark: #1a1e24;
+    --sce-primary-light: #d4d6d9;
+    --sce-accent: #E84118;
+    --sce-ink: #1c2733;
+    --sce-muted: #64748b;
+    --sce-border: #cccdcf;
+    --sce-bg: #eef0f2;
+  }
 </style>
 
 <div class="sce-header">
@@ -211,6 +322,26 @@
   </span>
 </div>
 
+<!-- Overlay de carregamento — controlado por sceShowLoading()/sceHideLoading() -->
+<div id="sce-loading-overlay">
+  <div class="sce-spinner-box">
+    <div class="preloader-wrapper small active">
+      <div class="spinner-layer spinner-blue-only">
+        <div class="circle-clipper left"><div class="circle"></div></div>
+        <div class="gap-patch"><div class="circle"></div></div>
+        <div class="circle-clipper right"><div class="circle"></div></div>
+      </div>
+    </div>
+    <span>Carregando...</span>
+  </div>
+</div>
+
+<!-- Cabeçalho exibido só na impressão/Exportar PDF -->
+<div id="sce-print-header">
+  <h4>SCE - Relatório de Equipamentos</h4>
+  <p id="sce-print-data"></p>
+</div>
+
 <script>
   // Limpa o token salvo localmente e volta para a tela de login (doGet sem token).
   function sceLogout() {
@@ -221,5 +352,35 @@
   // Reconstrói a URL base do Web App (sem query string) a partir da URL atual.
   function getScriptUrlBase_() {
     return window.location.href.split('?')[0];
+  }
+
+  // --- Loading overlay: usado por carregarEquipamentos/carregarEquipamentosGlobal ---
+  function sceShowLoading() {
+    const el = document.getElementById('sce-loading-overlay');
+    if (el) el.classList.add('active');
+  }
+  function sceHideLoading() {
+    const el = document.getElementById('sce-loading-overlay');
+    if (el) el.classList.remove('active');
+  }
+
+  // --- Exportação CSV: recebe o texto CSV do servidor e dispara o download ---
+  function sceBaixarCsv(csvContent, filename) {
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'sce-equipamentos.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // --- Exportação PDF: usa window.print() com CSS específico (ver @media print acima) ---
+  function sceExportarPDF() {
+    const el = document.getElementById('sce-print-data');
+    if (el) el.innerText = 'Gerado em ' + new Date().toLocaleString('pt-BR');
+    window.print();
   }
 </script>
