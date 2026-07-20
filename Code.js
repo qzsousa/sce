@@ -80,7 +80,8 @@ const CONFIG = {
     SESSOES: 'Sessoes',
     OTP: 'Otp_Codes'
   },
-  PDF_FOLDER_ID: '',
+  PDF_FOLDER_ID: '1P03gJm7JJ3ZIJnhBvRyhwghZEOI_pce_',
+  BO_FOLDER_ID: '1wuBUvgsfP7GorZ9-7J_6la-U0BPpj8SY',
   SESSION_DURATION_MS: 24 * 60 * 60 * 1000,   // 24h
   OTP_EXPIRATION_MS: 10 * 60 * 1000,          // 10min
   NIVEIS: {
@@ -229,6 +230,21 @@ function sheetsApiBatchUpdateCells_(sheetName, cellUpdates) {
     { valueInputOption: 'USER_ENTERED', data: data },
     spreadsheetId
   );
+}
+
+/**
+ * Salva o anexo do Boletim de Ocorrência no Drive (pasta CONFIG.BO_FOLDER_ID)
+ * e devolve a URL. Chamado só quando status = 'Extraviado' e um arquivo foi enviado.
+ * @param {string} base64 conteúdo do arquivo em base64 (sem o prefixo data:...)
+ * @param {string} mimeType
+ * @param {string} fileName
+ */
+function salvarAnexoBoletim_(base64, mimeType, fileName) {
+  const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
+  const pasta = CONFIG.BO_FOLDER_ID ? DriveApp.getFolderById(CONFIG.BO_FOLDER_ID) : null;
+  const file = pasta ? pasta.createFile(blob) : DriveApp.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return file.getUrl();
 }
 
 /** Cache simples em memória (por execução) do sheetId numérico de cada aba. */
@@ -860,6 +876,15 @@ function createEquipamento(token, dadosEquipamento) {
 function updateEquipamento(token, id, camposAlterados) {
   const session = requireSession_(token);
 
+  // Trata o anexo do B.O. separadamente (não é uma célula "simples")
+  let anexoUrl = null;
+  if (camposAlterados.status === 'Extraviado' && camposAlterados._anexoBoletim) {
+    const anexo = camposAlterados._anexoBoletim; // { base64, mimeType, fileName }
+    anexoUrl = salvarAnexoBoletim_(anexo.base64, anexo.mimeType, anexo.fileName);
+    camposAlterados.boletimOcorrenciaAnexoUrl = anexoUrl;
+    delete camposAlterados._anexoBoletim; // não é uma coluna, não deixa ir pro loop de células
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -1075,6 +1100,15 @@ function atualizarStatusManutencao(token, equipamentoId, novoStatus) {
 
 function validarStatusEspecial_(camposAlterados, linhaAtual, headers) {
   if (!('status' in camposAlterados)) return;
+
+  if (camposAlterados.status === 'Extraviado') {
+    const anexoNoPayload = camposAlterados._anexoBoletim;
+    const anexoColIdx = headers.indexOf('boletimOcorrenciaAnexoUrl');
+    const anexoExistente = anexoColIdx !== -1 ? linhaAtual[anexoColIdx] : '';
+    if (!anexoNoPayload && !anexoExistente) {
+      throw new Error('Para o status "Extraviado", anexe o Boletim de Ocorrência.');
+    }
+  }
 
   const REGRAS_STATUS_ESPECIAL = {
     'Manutenção': 'numeroChamadoManutencao',

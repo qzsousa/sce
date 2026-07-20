@@ -242,7 +242,12 @@
         </div>
         <div class="input-field col s12" id="campo-bo" style="display:none;">
           <input type="text" id="edit-boletimOcorrencia">
-          <label for="edit-boletimOcorrencia" class="active">Boletim de ocorrência</label>
+          <label for="edit-boletimOcorrencia" class="active">Nº do Boletim de Ocorrência</label>
+          <div style="margin-top:10px;">
+            <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="edit-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
+            <span id="anexo-bo-existente" style="font-size:.78rem;"></span>
+          </div>
         </div>
         <div class="input-field col s12" id="campo-justificativa" style="display:none;">
           <textarea id="edit-justificativaVerificacao" class="materialize-textarea"></textarea>
@@ -708,70 +713,115 @@
   }
 
   function atualizarCamposCondicionais() {
-    const status = document.getElementById('edit-status').value;
-    document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
-    document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
-    document.getElementById('campo-justificativa').style.display = (status === 'Em verificação') ? 'block' : 'none';
-  }
+  const status = document.getElementById('edit-status').value;
+  document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
+  document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
+  document.getElementById('campo-justificativa').style.display = (status === 'Em verificação') ? 'block' : 'none';
+
+  const fileInput = document.getElementById('edit-anexoBoletim');
+  if (fileInput && status !== 'Extraviado') fileInput.value = '';
+}
 
   function salvarEdicao() {
-    const btn = document.getElementById('btn-salvar-edicao');
-    if (btn.dataset.loading === '1') return;
+  const btn = document.getElementById('btn-salvar-edicao');
+  if (btn.dataset.loading === '1') return;
 
-    const id = document.getElementById('edit-id').value;
-    const camposAlterados = {};
+  const id = document.getElementById('edit-id').value;
+  const status = document.getElementById('edit-status').value;
+  const camposAlterados = {};
 
-    CAMPOS_EDITAVEIS.forEach(function (campo) {
-      const el = document.getElementById('edit-' + campo);
-      if (!el) return;
-      const valorNovo = el.value;
-      const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
-      if (String(valorNovo) !== String(valorAntigo)) {
-        camposAlterados[campo] = valorNovo;
-      }
-    });
-
-    const status = document.getElementById('edit-status').value;
-    const regrasStatus = {
-      'Manutenção': 'numeroChamadoManutencao',
-      'Extraviado': 'boletimOcorrencia',
-      'Em verificação': 'justificativaVerificacao'
-    };
-    const campoObrigatorio = regrasStatus[status];
-    if (campoObrigatorio) {
-      const valorFinal = camposAlterados[campoObrigatorio] !== undefined
-        ? camposAlterados[campoObrigatorio]
-        : (itemEmEdicaoOriginal[campoObrigatorio] || '');
-      if (!valorFinal) {
-        M.toast({ html: 'Preencha o campo obrigatório para o status "' + status + '".' });
-        return;
-      }
+  // Monta o diff normal (só campos realmente alterados)
+  CAMPOS_EDITAVEIS.forEach(function (campo) {
+    const el = document.getElementById('edit-' + campo);
+    if (!el) return;
+    const valorNovo = el.value;
+    const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
+    if (String(valorNovo) !== String(valorAntigo)) {
+      camposAlterados[campo] = valorNovo;
     }
+  });
 
-    if (Object.keys(camposAlterados).length === 0) {
-      M.toast({ html: 'Nada foi alterado.' });
-      modalEdicaoInstance.close();
+  // Validação dos campos obrigatórios por status especial
+  const regrasStatus = {
+    'Manutenção': 'numeroChamadoManutencao',
+    'Extraviado': 'boletimOcorrencia',
+    'Em verificação': 'justificativaVerificacao'
+  };
+  const campoObrigatorio = regrasStatus[status];
+  if (campoObrigatorio) {
+    const valorFinal = camposAlterados[campoObrigatorio] !== undefined
+      ? camposAlterados[campoObrigatorio]
+      : (itemEmEdicaoOriginal[campoObrigatorio] || '');
+    if (!valorFinal) {
+      M.toast({ html: 'Preencha o campo obrigatório para o status "' + status + '".' });
+      return;
+    }
+  }
+
+  // Validação específica do anexo do B.O. quando status = Extraviado
+  const fileInput = document.getElementById('edit-anexoBoletim');
+  const jaTemAnexo = itemEmEdicaoOriginal && itemEmEdicaoOriginal.boletimOcorrenciaAnexoUrl;
+  if (status === 'Extraviado' && (!fileInput || fileInput.files.length === 0) && !jaTemAnexo) {
+    M.toast({ html: 'Anexe o Boletim de Ocorrência antes de salvar.' });
+    return;
+  }
+
+  if (Object.keys(camposAlterados).length === 0 && !(fileInput && fileInput.files.length > 0)) {
+    M.toast({ html: 'Nada foi alterado.' });
+    modalEdicaoInstance.close();
+    return;
+  }
+
+  // Se há arquivo novo de B.O., converte pra base64 antes de enviar
+  if (status === 'Extraviado' && fileInput && fileInput.files.length > 0) {
+    const file = fileInput.files[0];
+
+    // Limite de 8MB pra não estourar o payload do google.script.run
+    if (file.size > 8 * 1024 * 1024) {
+      M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' });
       return;
     }
 
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-
-    google.script.run
-      .withSuccessHandler(function () {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Equipamento atualizado.' });
-        modalEdicaoInstance.close();
-        carregarEquipamentos();
-      })
-      .withFailureHandler(function (err) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Erro ao salvar: ' + err.message });
-      })
-      .updateEquipamento(SCE_TOKEN, id, camposAlterados);
+    const reader = new FileReader();
+    reader.onload = function () {
+      const base64 = reader.result.split(',')[1];
+      camposAlterados._anexoBoletim = {
+        base64: base64,
+        mimeType: file.type,
+        fileName: file.name
+      };
+      enviarAtualizacaoEquipamento_(id, camposAlterados, btn);
+    };
+    reader.onerror = function () {
+      M.toast({ html: 'Erro ao ler o arquivo do B.O.' });
+    };
+    reader.readAsDataURL(file);
+  } else {
+    enviarAtualizacaoEquipamento_(id, camposAlterados, btn);
   }
+}
+
+// Função auxiliar — centraliza a chamada ao servidor pra não duplicar
+// o bloco de sucesso/erro nos dois caminhos (com e sem anexo).
+function enviarAtualizacaoEquipamento_(id, camposAlterados, btn) {
+  btn.dataset.loading = '1';
+  btn.classList.add('disabled');
+
+  google.script.run
+    .withSuccessHandler(function () {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Equipamento atualizado.' });
+      modalEdicaoInstance.close();
+      carregarEquipamentos();
+    })
+    .withFailureHandler(function (err) {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Erro ao salvar: ' + err.message });
+    })
+    .updateEquipamento(SCE_TOKEN, id, camposAlterados);
+}
 
   // ================================================================
   // INICIALIZAÇÃO (executa imediatamente)
