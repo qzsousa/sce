@@ -875,19 +875,11 @@ function createEquipamento(token, dadosEquipamento) {
 
 function updateEquipamento(token, id, camposAlterados) {
   const session = requireSession_(token);
-
-  // Trata o anexo do B.O. separadamente (não é uma célula "simples")
-  let anexoUrl = null;
-  if (camposAlterados.status === 'Extraviado' && camposAlterados._anexoBoletim) {
-    const anexo = camposAlterados._anexoBoletim; // { base64, mimeType, fileName }
-    anexoUrl = salvarAnexoBoletim_(anexo.base64, anexo.mimeType, anexo.fileName);
-    camposAlterados.boletimOcorrenciaAnexoUrl = anexoUrl;
-    delete camposAlterados._anexoBoletim; // não é uma coluna, não deixa ir pro loop de células
-  }
-
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+      // Trata o anexo do B.O. separadamente (não é uma célula "simples")
+    
     const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = data[0];
     const idCol = headers.indexOf('id');
@@ -919,6 +911,14 @@ function updateEquipamento(token, id, camposAlterados) {
     }
 
     validarStatusEspecial_(camposAlterados, linhaAtual, headers);
+
+    let anexoUrl = null;
+    if (camposAlterados.status === 'Extraviado' && camposAlterados._anexoBoletim) {
+    const anexo = camposAlterados._anexoBoletim; // { base64, mimeType, fileName }
+    anexoUrl = salvarAnexoBoletim_(anexo.base64, anexo.mimeType, anexo.fileName);
+    camposAlterados.boletimOcorrenciaAnexoUrl = anexoUrl;
+    delete camposAlterados._anexoBoletim; // não é uma coluna, não deixa ir pro loop de células
+  }
 
     // Monta TODAS as alterações de célula e manda numa única chamada
     // Values.batchUpdate, em vez de uma chamada por campo.
@@ -1102,13 +1102,15 @@ function validarStatusEspecial_(camposAlterados, linhaAtual, headers) {
   if (!('status' in camposAlterados)) return;
 
   if (camposAlterados.status === 'Extraviado') {
-    const anexoNoPayload = camposAlterados._anexoBoletim;
-    const anexoColIdx = headers.indexOf('boletimOcorrenciaAnexoUrl');
-    const anexoExistente = anexoColIdx !== -1 ? linhaAtual[anexoColIdx] : '';
-    if (!anexoNoPayload && !anexoExistente) {
-      throw new Error('Para o status "Extraviado", anexe o Boletim de Ocorrência.');
-    }
+  // ✅ AGORA olha para o campo que foi criado, e não para o que foi deletado!
+  const anexoNoPayload = camposAlterados.boletimOcorrenciaAnexoUrl; 
+  const anexoColIdx = headers.indexOf('boletimOcorrenciaAnexoUrl');
+  const anexoExistente = anexoColIdx !== -1 ? linhaAtual[anexoColIdx] : '';
+  
+  if (!anexoNoPayload && !anexoExistente) {
+    throw new Error('Para o status "Extraviado", anexe o Boletim de Ocorrência.');
   }
+}
 
   const REGRAS_STATUS_ESPECIAL = {
     'Manutenção': 'numeroChamadoManutencao',
