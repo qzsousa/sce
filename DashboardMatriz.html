@@ -17,7 +17,7 @@
       <h5>Painel Estratégico — Matriz</h5>
     </div>
 
-    <div id="kpis-globais" class="row"></div>
+    <div id="kpis" class="row"><!-- KPIs preenchidos via JS --></div>
 
     <div class="sce-panel">
       <div class="row" style="margin-bottom:0;">
@@ -29,7 +29,7 @@
     <div class="sce-panel">
       <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações</div>
       <div class="row" style="margin-bottom:0;">
-        <button class="btn" onclick="abrirGestaoUsuarios()">
+        <button class="btn waves-effect" id="btn-abrir-gestao-usuarios">
           <i class="material-icons left">group</i>Gerenciar usuários
         </button>
         <button class="btn waves-effect" id="btn-abrir-cadastro">
@@ -38,10 +38,10 @@
         <button class="btn-flat waves-effect" id="btn-atualizar-lista">
           <i class="material-icons left">refresh</i>Atualizar
         </button>
-        <button class="btn" onclick="exportarCSV()">
+        <button class="btn" id="btn-exportar-csv">
           <i class="material-icons left">description</i>Exportar CSV
         </button>
-        <button class="btn" onclick="exportarPDF()">
+        <button class="btn" id="btn-exportar-pdf">
           <i class="material-icons left">picture_as_pdf</i>Exportar PDF
         </button>
       </div>
@@ -53,7 +53,8 @@
         <thead>
           <tr>
             <th>Unidade</th><th>Categoria</th><th>Marca</th>
-            <th>Patrimônio</th><th>Status</th><th>Ações</th>
+            <th>Patrimônio</th><th>Status</th><th>Status manutenção</th>
+            <th>Última alteração por</th><th>Ações</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -61,7 +62,7 @@
     </div>
   </div>
 
-  <!-- Modal de confirmação de remoção (soft-delete) — escopo global, qualquer unidade -->
+  <!-- Modal de cadastro -->
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
@@ -72,16 +73,16 @@
           <label for="new-unidade">Unidade</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="new-categoria">
-          <label for="new-categoria">Categoria</label>
+          <select id="new-categoria"><option value="" disabled selected>Selecione</option></select>
+          <label>Categoria</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="new-marca">
-          <label for="new-marca">Marca</label>
+          <select id="new-marca"><option value="" disabled selected>Selecione</option></select>
+          <label>Marca</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="new-modelo">
-          <label for="new-modelo">Modelo</label>
+          <select id="new-modelo"><option value="" disabled selected>Selecione</option></select>
+          <label>Modelo</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-patrimonio">
@@ -101,6 +102,13 @@
             <option value="Em verifica&#231;&#227;o">Em verifica&#231;&#227;o</option>
           </select>
           <label>Status</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="new-vinculadoBlueMonitor">
+            <option value="Não" selected>Não</option>
+            <option value="Sim">Sim</option>
+          </select>
+          <label>Vinculado no BlueMonitor?</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-sistemaOperacional">
@@ -155,12 +163,13 @@
           <select id="user-nivel">
             <option value="Filial" selected>Filial</option>
             <option value="Matriz">Matriz</option>
+            <option value="Tecnico">Tecnico</option>
           </select>
           <label>Nivel</label>
         </div>
         <div class="input-field col s3">
           <input type="text" id="user-filial">
-          <label for="user-filial">Filial</label>
+          <label for="user-filial">Filial(is) — separe por vírgula se for Técnico</label>
         </div>
         <div class="input-field col s1">
           <button class="btn waves-effect" id="btn-adicionar-usuario" title="Adicionar">
@@ -206,16 +215,16 @@
           <label for="edit-unidade" class="active">Unidade</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="edit-categoria">
-          <label for="edit-categoria" class="active">Categoria</label>
+          <select id="edit-categoria"><option value="" disabled selected>Selecione</option></select>
+          <label>Categoria</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="edit-marca">
-          <label for="edit-marca" class="active">Marca</label>
+          <select id="edit-marca"><option value="" disabled selected>Selecione</option></select>
+          <label>Marca</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="edit-modelo">
-          <label for="edit-modelo" class="active">Modelo</label>
+          <select id="edit-modelo"><option value="" disabled selected>Selecione</option></select>
+          <label>Modelo</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="edit-patrimonio">
@@ -235,6 +244,13 @@
             <option value="Em verificação">Em verificação</option>
           </select>
           <label>Status</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="edit-vinculadoBlueMonitor">
+            <option value="Não">Não</option>
+            <option value="Sim">Sim</option>
+          </select>
+          <label>Vinculado no BlueMonitor?</label>
         </div>
 
         <div class="input-field col s12" id="campo-chamado" style="display:none;">
@@ -285,9 +301,46 @@
       <a class="btn" id="btn-salvar-edicao">Salvar</a>
     </div>
   </div>
+
+  <!-- Modal de manutenção -->
+  <div id="modal-manutencao" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5>
+      <input type="hidden" id="manut-equipamento-id">
+
+      <div class="row">
+        <div class="input-field col s4">
+          <select id="manut-status">
+            <option value="Pendente">Pendente</option>
+            <option value="Em andamento">Em andamento</option>
+            <option value="Concluído">Concluído</option>
+          </select>
+          <label>Status</label>
+        </div>
+        <div class="input-field col s8">
+          <textarea id="manut-descricao" class="materialize-textarea"></textarea>
+          <label for="manut-descricao">O que foi feito / observado</label>
+        </div>
+      </div>
+
+      <a class="btn waves-effect" id="btn-registrar-manutencao">
+        <i class="material-icons left">add</i>Registrar
+      </a>
+
+      <table class="striped" style="margin-top:20px;">
+        <thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead>
+        <tbody id="tabela-manutencao-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Fechar</a>
+    </div>
+  </div>
 </body>
 
 <script>
+
+  
   const SCE_TOKEN = localStorage.getItem('sce_token');
 
   let equipamentosCache = [];
@@ -296,12 +349,16 @@
   let modalEdicaoInstance = null;
   let modalCadastroInstance = null;
   let modalUsuariosInstance = null;
+  let modalManutencaoInstance = null;
   let itemEmEdicaoOriginal = null;
+  let equipamentoIdManutencaoAtual = null;
 
   // Inclui "unidade" aqui — só a Matriz pode reatribuir um equipamento
-  // para outra unidade.
+  // para outra unidade. Inclui também "vinculadoBlueMonitor" — só existe
+  // aqui e no dashboard do Técnico, não existe na Filial.
   const CAMPOS_EDITAVEIS = [
     'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+    'vinculadoBlueMonitor',
     'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
     'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
     'tamanhoTela', 'responsavelAtual', 'observacoes'
@@ -309,15 +366,107 @@
 
   const CAMPOS_CADASTRO = [
     'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+    'vinculadoBlueMonitor',
     'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
     'tamanhoTela', 'responsavelAtual', 'observacoes'
   ];
+
+
+// --- KPIs + gráfico ---------------------------------------------------------
+
+  function kpiCard_(icone, valor, label, extraClass) {
+    return '<div class="col s12 m3">' +
+      '<div class="sce-kpi ' + (extraClass || '') + '">' +
+        '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
+        '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
+      '</div></div>';
+  }
+
+  function atualizarKpisEGrafico(equipamentos) {
+    const porStatus = {};
+    equipamentos.forEach(function (item) {
+      const s = item.status || 'Não definido';
+      porStatus[s] = (porStatus[s] || 0) + 1;
+    });
+
+    const total = equipamentos.length;
+    const disponiveis = porStatus['Disponível'] || 0;
+    const manutencao = porStatus['Manutenção'] || 0;
+    const quebrados = porStatus['Quebrado'] || 0;
+    const inserviveis = porStatus['Inservível'] || 0;
+    const extraviado = porStatus['Extraviado'] || 0;
+    const emVerificacao = porStatus ['Em verificação'] || 0;
+
+    document.getElementById('kpis').innerHTML =
+    kpiCard_('devices', total, 'Total de equipamentos', 'kpi-total') +
+    kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
+    kpiCard_('build', manutencao, 'Em manutenção', 'kpi-manutencao') +
+    kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados') +
+    kpiCard_('close', inserviveis, 'Inservíveis', 'kpi-inserviveis') +
+    kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado') +   // ícone ajustado
+    kpiCard_('search', emVerificacao, 'Em verificação', 'kpi-emVerificacao');
+    renderGraficosMatriz_(equipamentos);
+  }
+
+  function renderGraficosMatriz_(equipamentos) {
+  const porUnidade = {};
+  const porCategoria = {};
+  equipamentos.forEach(function (item) {
+    const u = item.unidade || 'Sem unidade';
+    const c = item.categoria || 'Sem categoria';
+    porUnidade[u] = (porUnidade[u] || 0) + 1;
+    porCategoria[c] = (porCategoria[c] || 0) + 1;
+  });
+
+  google.charts.load('current', { packages: ['corechart'] });
+  google.charts.setOnLoadCallback(function () {
+    desenharPizza_('chart-por-unidade', 'Por unidade', porUnidade);
+    desenharPizza_('chart-por-categoria', 'Por categoria', porCategoria);
+  });
+}
+
+function desenharPizza_(elementId, titulo, contagem) {
+  const data = [['Item', 'Qtd']];
+  Object.keys(contagem).forEach(function (k) { data.push([k, contagem[k]]); });
+  const chart = new google.visualization.PieChart(document.getElementById(elementId));
+  chart.draw(google.visualization.arrayToDataTable(data), {
+    title: titulo, width: '100%', height: 300
+  });
+}
+  // --- Listas de categoria/marca/modelo (aba Listas, SCE_Core) -----------
+
+  function carregarListasCadastro() {
+    google.script.run
+      .withSuccessHandler(function (listas) {
+        preencherSelectLista_('new-categoria', listas.categorias);
+        preencherSelectLista_('new-marca', listas.marcas);
+        preencherSelectLista_('new-modelo', listas.modelos);
+        preencherSelectLista_('edit-categoria', listas.categorias);
+        preencherSelectLista_('edit-marca', listas.marcas);
+        preencherSelectLista_('edit-modelo', listas.modelos);
+      })
+      .withFailureHandler(function (err) { console.error('Erro ao carregar listas:', err.message); })
+      .getListasCadastro(SCE_TOKEN);
+  }
+
+  function preencherSelectLista_(id, valores) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const valorAtual = el.value;
+    el.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+      (valores || []).map(function (v) { return '<option value="' + v + '">' + v + '</option>'; }).join('');
+    if (valorAtual) el.value = valorAtual;
+    M.FormSelect.init(el);
+  }
+
+  // --- Carregamento / tabela global ------------------------------------------
 
   function carregarEquipamentosGlobal() {
     google.script.run
       .withSuccessHandler(function (equipamentos) {
         equipamentosCache = equipamentos;
         renderTabelaGlobal(equipamentos);
+        atualizarKpisEGrafico(equipamentos); 
       })
       .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar: ' + err.message }); })
       .getEquipamentosGlobal(SCE_TOKEN, false);
@@ -334,10 +483,14 @@
         '<td>' + (item.marca || '') + '</td>' +
         '<td>' + (item.patrimonio || '') + '</td>' +
         '<td>' + (item.status || '') + '</td>' +
+        '<td>' + (item.statusManutencao || '-') + '</td>' +
+        '<td>' + (item.ultimaAlteracaoPor || '-') + '</td>' +
         '<td>' +
           '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar">' +
             '<i class="material-icons">edit</i></a> ' +
-          '<a class="btn-small waves-effect" onclick="clonarEquipamentoUI(\'' + item.id + '\')" title="Clonar">' +
+          '<a class="btn-small waves-effect" onclick="abrirManutencao(\'' + item.id + '\')" title="Manutenção">' +
+            '<i class="material-icons">build</i></a> ' +
+          '<a class="btn-small waves-effect" onclick="clonarEquipamentoUI(\'' + item.id + '\', this)" title="Clonar">' +
             '<i class="material-icons">content_copy</i></a> ' +
           '<a class="btn-small waves-effect red" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover">' +
             '<i class="material-icons">delete</i></a>' +
@@ -346,12 +499,18 @@
     });
   }
 
+  // --- Cadastro ----------------------------------------------------------------
+
   function abrirCadastroEquipamento() {
     CAMPOS_CADASTRO.forEach(function (campo) {
       const el = document.getElementById('new-' + campo);
-      if (el) el.value = campo === 'status' ? 'Disponível' : '';
+      if (!el) return;
+      if (campo === 'status') { el.value = 'Disponível'; return; }
+      if (campo === 'vinculadoBlueMonitor') { el.value = 'Não'; return; }
+      if (el.tagName === 'SELECT') { el.selectedIndex = 0; return; }
+      el.value = '';
     });
-    M.FormSelect.init(document.getElementById('new-status'));
+    M.FormSelect.init(document.querySelectorAll('#modal-cadastrar-equipamento select'));
     M.updateTextFields();
 
     if (!modalCadastroInstance) {
@@ -361,6 +520,9 @@
   }
 
   function salvarCadastro() {
+    const btn = document.getElementById('btn-salvar-cadastro');
+    if (btn.dataset.loading === '1') return;
+
     const dados = {};
     CAMPOS_CADASTRO.forEach(function (campo) {
       const el = document.getElementById('new-' + campo);
@@ -372,15 +534,27 @@
       return;
     }
 
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: 'Equipamento cadastrado.' });
         modalCadastroInstance.close();
         carregarEquipamentosGlobal();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao cadastrar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        // Mensagem de duplicidade (Série/Patrimônio) já vem pronta do backend.
+        M.toast({ html: 'Erro ao cadastrar: ' + err.message });
+      })
       .createEquipamento(SCE_TOKEN, dados);
   }
+
+  // --- Remoção -----------------------------------------------------------------
 
   function abrirModalRemocao(id) {
     idPendenteRemocao = id;
@@ -391,17 +565,26 @@
   }
 
   function confirmarRemocao() {
+    const btn = document.getElementById('btn-confirmar-remocao');
+    if (btn.dataset.loading === '1') return;
     if (!idPendenteRemocao) return;
     const id = idPendenteRemocao;
 
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: res.message });
         modalRemocaoInstance.close();
         idPendenteRemocao = null;
         carregarEquipamentosGlobal();
       })
       .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: 'Erro ao remover: ' + err.message });
         modalRemocaoInstance.close();
         idPendenteRemocao = null;
@@ -409,13 +592,22 @@
       .removerEquipamento(SCE_TOKEN, id);
   }
 
-  function clonarEquipamentoUI(id) {
+  // --- Clonagem --------------------------------------------------------------
+
+  function clonarEquipamentoUI(id, el) {
+    if (el && el.dataset.loading === '1') return;
+    if (el) { el.dataset.loading = '1'; el.classList.add('disabled'); }
+
     google.script.run
       .withSuccessHandler(function () {
+        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
         M.toast({ html: 'Equipamento clonado.' });
         carregarEquipamentosGlobal();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao clonar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
+        M.toast({ html: 'Erro ao clonar: ' + err.message });
+      })
       .cloneEquipamento(SCE_TOKEN, id);
   }
 
@@ -430,11 +622,11 @@
 
     CAMPOS_EDITAVEIS.forEach(function (campo) {
       const el = document.getElementById('edit-' + campo);
-      if (el) el.value = item[campo] || '';
+      if (el) el.value = item[campo] || (campo === 'vinculadoBlueMonitor' ? 'Não' : '');
     });
 
     atualizarCamposCondicionais();
-    M.FormSelect.init(document.getElementById('edit-status'));
+    M.FormSelect.init(document.querySelectorAll('#modal-editar-equipamento select'));
     M.updateTextFields();
 
     if (!modalEdicaoInstance) {
@@ -451,6 +643,9 @@
   }
 
   function salvarEdicao() {
+    const btn = document.getElementById('btn-salvar-edicao');
+    if (btn.dataset.loading === '1') return;
+
     const id = document.getElementById('edit-id').value;
     const camposAlterados = {};
 
@@ -487,24 +682,89 @@
       return;
     }
 
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: 'Equipamento atualizado.' });
         modalEdicaoInstance.close();
         carregarEquipamentosGlobal();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao salvar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao salvar: ' + err.message });
+      })
       .updateEquipamento(SCE_TOKEN, id, camposAlterados);
   }
 
-  function abrirGestaoUsuarios() {
-    google.script.run
-      .withSuccessHandler(function (usuarios) {
-        console.log(usuarios); // TODO: renderizar modal de gestão de usuários
-      })
-      .withFailureHandler(function (err) { console.error(err); })
-      .listarUsuarios(SCE_TOKEN);
+  // --- Manutenção ------------------------------------------------------------
+
+  function abrirManutencao(id) {
+    equipamentoIdManutencaoAtual = id;
+    document.getElementById('manut-equipamento-id').value = id;
+    document.getElementById('manut-descricao').value = '';
+    M.FormSelect.init(document.getElementById('manut-status'));
+    M.updateTextFields();
+    carregarLogManutencao(id);
+
+    if (!modalManutencaoInstance) {
+      modalManutencaoInstance = M.Modal.init(document.getElementById('modal-manutencao'));
+    }
+    modalManutencaoInstance.open();
   }
+
+  function carregarLogManutencao(id) {
+    google.script.run
+      .withSuccessHandler(function (registros) {
+        const tbody = document.getElementById('tabela-manutencao-body');
+        tbody.innerHTML = '';
+        registros.forEach(function (r) {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
+            '<td>' + r.autor + '</td>' +
+            '<td>' + (r.status || '-') + '</td>' +
+            '<td>' + r.descricao + '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar log: ' + err.message }); })
+      .getRegistrosManutencao(SCE_TOKEN, id);
+  }
+
+  function registrarManutencaoUI() {
+    const btn = document.getElementById('btn-registrar-manutencao');
+    if (btn.dataset.loading === '1') return;
+
+    const descricao = document.getElementById('manut-descricao').value.trim();
+    const status = document.getElementById('manut-status').value;
+    if (!descricao) { M.toast({ html: 'Descreva o que foi feito.' }); return; }
+
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        document.getElementById('manut-descricao').value = '';
+        M.toast({ html: 'Manutenção registrada.' });
+        carregarLogManutencao(equipamentoIdManutencaoAtual);
+        carregarEquipamentosGlobal();
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro: ' + err.message });
+      })
+      .registrarManutencao(SCE_TOKEN, equipamentoIdManutencaoAtual, descricao, status);
+  }
+
+  // --- Gestão de usuários ------------------------------------------------------
 
   function abrirGestaoUsuarios() {
     if (!modalUsuariosInstance) {
@@ -535,13 +795,16 @@
         '<td>' + (usuario.nivel || '') + '</td>' +
         '<td>' + (usuario.filial || '') + '</td>' +
         '<td>' + (usuario.status || '') + '</td>' +
-        '<td><a class="btn-small red waves-effect" onclick="removerUsuarioUI(\'' + email + '\')" title="Remover">' +
+        '<td><a class="btn-small red waves-effect" onclick="removerUsuarioUI(\'' + email + '\', this)" title="Remover">' +
           '<i class="material-icons">delete</i></a></td>';
       tbody.appendChild(tr);
     });
   }
 
   function adicionarUsuarioUI() {
+    const btn = document.getElementById('btn-adicionar-usuario');
+    if (btn.dataset.loading === '1') return;
+
     const novoUsuario = {
       email: document.getElementById('user-email').value.trim(),
       nome: document.getElementById('user-nome').value.trim(),
@@ -554,8 +817,13 @@
       return;
     }
 
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: res.message });
         document.getElementById('user-email').value = '';
         document.getElementById('user-nome').value = '';
@@ -563,41 +831,104 @@
         M.updateTextFields();
         carregarUsuarios();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao adicionar usuario: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao adicionar usuario: ' + err.message });
+      })
       .adicionarUsuario(SCE_TOKEN, novoUsuario);
   }
 
-  function removerUsuarioUI(email) {
+  function removerUsuarioUI(email, el) {
+    if (el && el.dataset.loading === '1') return;
     if (!confirm('Remover o usuario ' + email + '?')) return;
+    if (el) { el.dataset.loading = '1'; el.classList.add('disabled'); }
 
     google.script.run
       .withSuccessHandler(function (res) {
+        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
         M.toast({ html: res.message });
         carregarUsuarios();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao remover usuario: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
+        M.toast({ html: 'Erro ao remover usuario: ' + err.message });
+      })
       .removerUsuario(SCE_TOKEN, email);
   }
 
+  // --- Exportação --------------------------------------------------------------
+
   function exportarCSV() {
-    // TODO (próxima etapa): função server-side exportarEquipamentosCSV(token)
-    alert('Exportação CSV — a implementar');
+    const btn = document.getElementById('btn-exportar-csv');
+    if (btn.dataset.loading === '1') return;
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        if (!res.ok) { M.toast({ html: 'Erro ao exportar: ' + (res.message || '') }); return; }
+        const bytes = atob(res.base64);
+        const arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        const blob = new Blob([arr], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = res.fileName || 'sce-equipamentos.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao exportar: ' + err.message });
+      })
+      .exportarCSV(SCE_TOKEN);
   }
 
   function exportarPDF() {
-    // TODO (próxima etapa): função server-side exportarEquipamentosPDF(token)
-    alert('Exportação PDF — a implementar');
+    const btn = document.getElementById('btn-exportar-pdf');
+    if (btn.dataset.loading === '1') return;
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'PDF gerado.' });
+        window.open(res.url, '_blank');
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao exportar PDF: ' + err.message });
+      })
+      .exportarEquipamentosPDF(SCE_TOKEN, {});
   }
+
+  // --- Boot --------------------------------------------------------------
 
   document.addEventListener('DOMContentLoaded', function () {
     M.FormSelect.init(document.querySelectorAll('select'));
+    carregarListasCadastro();
     carregarEquipamentosGlobal();
+
     document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
     document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentosGlobal);
     document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
+    document.getElementById('btn-abrir-gestao-usuarios').addEventListener('click', abrirGestaoUsuarios);
     document.getElementById('btn-adicionar-usuario').addEventListener('click', adicionarUsuarioUI);
     document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
     document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
+    document.getElementById('btn-registrar-manutencao').addEventListener('click', registrarManutencaoUI);
+    document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSV);
+    document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDF);
   });
 </script>
 

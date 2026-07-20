@@ -6,8 +6,6 @@
   <?!= include('Shared') ?>
 </head>
 <body class="theme-filial">
-  </div>
-  <!-- resto do conteúdo -->
   <!--
     Este arquivo assume que só chega até aqui um usuário de nível "Filial"
     já autenticado — a checagem de role é feita inteiramente no doGet do
@@ -290,7 +288,38 @@
 </body>
 
 <script>
+  // ================================================================
+  // 0. PEGA O TOKEN DA URL E SALVA NO localStorage
+  // ================================================================
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    
+    if (tokenFromUrl) {
+      localStorage.setItem('sce_token', tokenFromUrl);
+      console.log('✅ Token salvo no localStorage a partir da URL:', tokenFromUrl);
+    } else {
+      console.warn('⚠️ Nenhum token encontrado na URL. Usando localStorage existente.');
+    }
+  })();
+
+  // ================================================================
+  // 1. LÊ O TOKEN DO localStorage
+  // ================================================================
   const SCE_TOKEN = localStorage.getItem('sce_token');
+  console.log('🔑 SCE_TOKEN:', SCE_TOKEN);
+
+  if (!SCE_TOKEN) {
+    console.error('❌ Nenhum token encontrado. Redirecionando para login...');
+    M.toast({ html: 'Sessão expirada. Faça login novamente.' });
+    setTimeout(function() {
+      window.location.href = window.location.href.split('?')[0];
+    }, 2000);
+  }
+
+  // ================================================================
+  // VARIÁVEIS GLOBAIS
+  // ================================================================
   const userLevel = 'Filial'; // este dashboard só é renderizado para Filial (ver doGet)
 
   // Cache local dos equipamentos carregados — usado pra popular o modal de
@@ -321,22 +350,48 @@
     'tamanhoTela', 'responsavelAtual', 'observacoes'
   ];
 
+  // ================================================================
+  // FUNÇÃO PRINCIPAL - CARREGAR EQUIPAMENTOS
+  // ================================================================
   function carregarEquipamentos() {
+    console.log('🟢 carregarEquipamentos() INICIADA');
+    console.log('🟢 SCE_TOKEN:', SCE_TOKEN);
+    
+    if (!SCE_TOKEN) {
+      console.error('❌ SCE_TOKEN é null. Não é possível carregar equipamentos.');
+      M.toast({ html: 'Token não encontrado. Faça login novamente.' });
+      return;
+    }
+    
     sceShowLoading();
+    
     google.script.run
       .withSuccessHandler(function (equipamentos) {
-        equipamentosCache = equipamentos;
-        atualizarFiltrosOpcoes(equipamentos);
+        console.log('✅ equipamentos recebidos do servidor:', equipamentos);
+        console.log('✅ Quantidade:', equipamentos ? equipamentos.length : 'null/undefined');
+        
+        // Se veio vazio, avisa no console
+        if (!equipamentos || equipamentos.length === 0) {
+          console.warn('⚠️ Nenhum equipamento retornado. Verifique se a unidade tem equipamentos cadastrados.');
+          M.toast({ html: 'Nenhum equipamento encontrado para esta unidade.' });
+        }
+        
+        equipamentosCache = equipamentos || [];
+        atualizarFiltrosOpcoes(equipamentosCache);
         aplicarFiltros();
         sceHideLoading();
       })
       .withFailureHandler(function (err) {
+        console.error('❌ Erro na chamada:', err);
         M.toast({ html: 'Erro ao carregar: ' + err.message });
         sceHideLoading();
       })
       .getEquipamentosDaFilial(SCE_TOKEN);
   }
 
+  // ================================================================
+  // FUNÇÕES DE RENDERIZAÇÃO
+  // ================================================================
   function renderTabelaEquipamentos(equipamentos) {
     const tbody = document.querySelector('#tabela-equipamentos tbody');
     tbody.innerHTML = '';
@@ -355,8 +410,8 @@
         '<td class="no-print">' +
           '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar">' +
             '<i class="material-icons">edit</i></a> ' +
-          '<a class="btn-small waves-effect" onclick="clonarEquipamentoUI(\'' + item.id + '\')" title="Clonar">' +
-            '<i class="material-icons">content_copy</i></a>' +
+          '<a class="btn-small waves-effect" onclick="clonarEquipamentoUI(\'' + item.id + '\', this)" title="Clonar">' +
+            '<i class="material-icons">content_copy</i></a>'
         '</td>';
       tbody.appendChild(tr);
     });
@@ -401,15 +456,15 @@
     });
   }
 
-  // --- KPIs + gráfico ---------------------------------------------------------
+ // --- KPIs + gráfico ---------------------------------------------------------
 
   function kpiCard_(icone, valor, label, extraClass) {
-  return '<div class="col s12 m3">' +
-    '<div class="sce-kpi ' + (extraClass || '') + '">' +
-      '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
-      '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
-    '</div></div>';
-}
+    return '<div class="col s12 m3">' +
+      '<div class="sce-kpi ' + (extraClass || '') + '">' +
+        '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
+        '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
+      '</div></div>';
+  }
 
   function atualizarKpisEGrafico(equipamentos) {
     const porStatus = {};
@@ -421,14 +476,19 @@
     const total = equipamentos.length;
     const disponiveis = porStatus['Disponível'] || 0;
     const manutencao = porStatus['Manutenção'] || 0;
-    const quebrados = porStatus['Quebrado'] || porStatus['Inservível'] || 0;
+    const quebrados = porStatus['Quebrado'] || 0;
+    const inserviveis = porStatus['Inservível'] || 0;
+    const extraviado = porStatus['Extraviado'] || 0;
+    const emVerificacao = porStatus ['Em verificação'] || 0;
 
     document.getElementById('kpis').innerHTML =
     kpiCard_('devices', total, 'Total de equipamentos', 'kpi-total') +
     kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
     kpiCard_('build', manutencao, 'Em manutenção', 'kpi-manutencao') +
-    kpiCard_('report', quebrados, 'Quebrados / inservíveis', 'kpi-quebrados');
-
+    kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados');
+    kpiCard_('', inserviveis, 'Inserviveis', 'kpi-inserviveis')
+    kpiCard_('', extraviado, 'Extraviado', 'kpi-extraviado')
+    kpiCard_(''. emVerificacao, 'Em verificação', 'kpi-emVerificacao')
     renderGraficoStatus_(porStatus);
   }
 
@@ -450,16 +510,26 @@
       options: { responsive: true, maintainAspectRatio: false }
     });
   }
-
   // --- Exportação CSV / PDF ---------------------------------------------------
 
   function exportarCSVUI() {
+    const btn = document.getElementById('btn-exportar-csv');
+    if (btn.dataset.loading === '1') return;
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         if (!res.ok) { M.toast({ html: 'Erro ao exportar: ' + (res.error || '') }); return; }
         sceBaixarCsv(res.csv, 'sce-equipamentos-' + Date.now() + '.csv');
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao exportar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao exportar: ' + err.message });
+      })
       .exportarCSV(SCE_TOKEN);
   }
 
@@ -482,6 +552,9 @@
   }
 
   function salvarCadastro() {
+    const btn = document.getElementById('btn-salvar-cadastro');
+    if (btn.dataset.loading === '1') return;
+
     const dados = {};
     CAMPOS_CADASTRO.forEach(function (campo) {
       const el = document.getElementById('new-' + campo);
@@ -493,13 +566,23 @@
       return;
     }
 
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: 'Equipamento cadastrado.' });
         modalCadastroInstance.close();
         carregarEquipamentos();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao cadastrar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        // Mensagem de duplicidade vem pronta do backend (Série/Patrimônio duplicado)
+        M.toast({ html: 'Erro ao cadastrar: ' + err.message });
+      })
       .createEquipamento(SCE_TOKEN, dados);
   }
 
@@ -516,6 +599,9 @@
   }
 
   function confirmarEmprestimo() {
+    const btn = document.getElementById('btn-confirmar-emprestimo');
+    if (btn.dataset.loading === '1') return;
+
     const ids = getIdsSelecionados();
     const dados = {
       responsavel: document.getElementById('emp-responsavel').value.trim(),
@@ -528,40 +614,70 @@
       M.toast({ html: 'Informe o responsavel.' });
       return;
     }
+
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: res.message });
         modalEmprestimoInstance.close();
         carregarEquipamentos();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro no emprestimo: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro no emprestimo: ' + err.message });
+      })
       .registrarEmprestimo(SCE_TOKEN, ids, dados);
   }
 
   function devolverSelecionados() {
+    const btn = document.getElementById('btn-devolver-selecionados');
+    if (btn.dataset.loading === '1') return;
+
     const ids = getIdsSelecionados();
     if (ids.length === 0) {
       M.toast({ html: 'Selecione pelo menos um equipamento.' });
       return;
     }
+
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: res.message });
         carregarEquipamentos();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro na devolucao: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro na devolucao: ' + err.message });
+      })
       .registrarDevolucao(SCE_TOKEN, ids, '');
   }
 
   // --- Clonagem --------------------------------------------------------------
 
-  function clonarEquipamentoUI(id) {
+  function clonarEquipamentoUI(id, el) {
+    if (el && el.dataset.loading === '1') return;
+    if (el) { el.dataset.loading = '1'; el.classList.add('disabled'); }
+
     google.script.run
-      .withSuccessHandler(function (res) {
+      .withSuccessHandler(function () {
+        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
         M.toast({ html: 'Equipamento clonado.' });
         carregarEquipamentos();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao clonar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
+        M.toast({ html: 'Erro ao clonar: ' + err.message });
+      })
       .cloneEquipamento(SCE_TOKEN, id);
   }
 
@@ -599,6 +715,9 @@
   }
 
   function salvarEdicao() {
+    const btn = document.getElementById('btn-salvar-edicao');
+    if (btn.dataset.loading === '1') return;
+
     const id = document.getElementById('edit-id').value;
     const camposAlterados = {};
 
@@ -635,48 +754,112 @@
       return;
     }
 
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
     google.script.run
       .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
         M.toast({ html: 'Equipamento atualizado.' });
         modalEdicaoInstance.close();
         carregarEquipamentos();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao salvar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao salvar: ' + err.message });
+      })
       .updateEquipamento(SCE_TOKEN, id, camposAlterados);
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    M.FormSelect.init(document.querySelectorAll('select'));
+  // ================================================================
+  // INICIALIZAÇÃO (executa imediatamente)
+  // ================================================================
+  (function init() {
+    console.log('🟢 Inicializando dashboard Filial...');
+    
+    // Inicializa selects do Materialize (se houver)
+    if (typeof M !== 'undefined' && M.FormSelect) {
+      M.FormSelect.init(document.querySelectorAll('select'));
+    }
+    
+    // Carrega equipamentos
     carregarEquipamentos();
-    document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
-    document.getElementById('btn-abrir-emprestimo').addEventListener('click', abrirEmprestimoSelecionados);
-    document.getElementById('btn-confirmar-emprestimo').addEventListener('click', confirmarEmprestimo);
-    document.getElementById('btn-devolver-selecionados').addEventListener('click', devolverSelecionados);
-    document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
-    document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
-    document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
-    document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
-    document.getElementById('btn-exportar-pdf').addEventListener('click', sceExportarPDF);
-    document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
-    document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
-    document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
-    document.getElementById('check-todos').addEventListener('change', function () {
-      const checked = this.checked;
-      document.querySelectorAll('.check-equipamento').forEach(function (el) { el.checked = checked; });
-    });
-    document.getElementById('btn-pagina-anterior').addEventListener('click', function () {
-      if (paginaAtual > 1) {
-        paginaAtual--;
-        renderTabelaEquipamentos(equipamentosFiltrados);
-      }
-    });
-    document.getElementById('btn-proxima-pagina').addEventListener('click', function () {
-      if (paginaAtual < Math.ceil(equipamentosFiltrados.length / ITENS_POR_PAGINA)) {
-        paginaAtual++;
-        renderTabelaEquipamentos(equipamentosFiltrados);
-      }
-    });
-  });
+    
+    // Adiciona event listeners após o DOM estar pronto
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', adicionarEventListeners);
+    } else {
+      adicionarEventListeners();
+    }
+  })();
+
+  // ================================================================
+  // FUNÇÃO PARA ADICIONAR OS EVENT LISTENERS
+  // ================================================================
+  function adicionarEventListeners() {
+    console.log('🟢 Adicionando event listeners...');
+    
+    const btnCadastro = document.getElementById('btn-abrir-cadastro');
+    const btnEmprestimo = document.getElementById('btn-abrir-emprestimo');
+    const btnDevolver = document.getElementById('btn-devolver-selecionados');
+    const btnAtualizar = document.getElementById('btn-atualizar-lista');
+    const btnExportarCSV = document.getElementById('btn-exportar-csv');
+    const btnExportarPDF = document.getElementById('btn-exportar-pdf');
+    const btnSalvarCadastro = document.getElementById('btn-salvar-cadastro');
+    const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
+    const btnConfirmarEmprestimo = document.getElementById('btn-confirmar-emprestimo');
+    
+    if (btnCadastro) btnCadastro.addEventListener('click', abrirCadastroEquipamento);
+    if (btnEmprestimo) btnEmprestimo.addEventListener('click', abrirEmprestimoSelecionados);
+    if (btnDevolver) btnDevolver.addEventListener('click', devolverSelecionados);
+    if (btnAtualizar) btnAtualizar.addEventListener('click', carregarEquipamentos);
+    if (btnExportarCSV) btnExportarCSV.addEventListener('click', exportarCSVUI);
+    if (btnExportarPDF) btnExportarPDF.addEventListener('click', sceExportarPDF);
+    if (btnSalvarCadastro) btnSalvarCadastro.addEventListener('click', salvarCadastro);
+    if (btnSalvarEdicao) btnSalvarEdicao.addEventListener('click', salvarEdicao);
+    if (btnConfirmarEmprestimo) btnConfirmarEmprestimo.addEventListener('click', confirmarEmprestimo);
+    
+    // Filtros
+    const filtroBusca = document.getElementById('filtro-busca');
+    const filtroStatus = document.getElementById('filtro-status');
+    const filtroCategoria = document.getElementById('filtro-categoria');
+    if (filtroBusca) filtroBusca.addEventListener('input', aplicarFiltros);
+    if (filtroStatus) filtroStatus.addEventListener('change', aplicarFiltros);
+    if (filtroCategoria) filtroCategoria.addEventListener('change', aplicarFiltros);
+    
+    // Check-all
+    const checkTodos = document.getElementById('check-todos');
+    if (checkTodos) {
+      checkTodos.addEventListener('change', function() {
+        const checked = this.checked;
+        document.querySelectorAll('.check-equipamento').forEach(function(el) { el.checked = checked; });
+      });
+    }
+    
+    // Paginação
+    const btnAnterior = document.getElementById('btn-pagina-anterior');
+    const btnProxima = document.getElementById('btn-proxima-pagina');
+    if (btnAnterior) {
+      btnAnterior.addEventListener('click', function() {
+        if (paginaAtual > 1) {
+          paginaAtual--;
+          renderTabelaEquipamentos(equipamentosFiltrados);
+        }
+      });
+    }
+    if (btnProxima) {
+      btnProxima.addEventListener('click', function() {
+        if (paginaAtual < Math.ceil(equipamentosFiltrados.length / ITENS_POR_PAGINA)) {
+          paginaAtual++;
+          renderTabelaEquipamentos(equipamentosFiltrados);
+        }
+      });
+    }
+    
+    console.log('✅ Event listeners adicionados!');
+  }
 </script>
 
 </html>

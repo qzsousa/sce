@@ -39,7 +39,7 @@
     }
     .sce-login-card h5 {
       font-size: 1.05rem;
-      margin: 0 0 18px;
+      margin: 0 0 6px;
       color: var(--sce-ink);
     }
     .sce-login-card .input-field { margin-bottom: 14px; }
@@ -54,106 +54,382 @@
       width: 100%;
       margin-top: 4px;
     }
+
+    /* Indicador de etapas */
+    .sce-login-steps {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .sce-login-step {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .78rem;
+      font-weight: 500;
+      color: var(--sce-muted);
+    }
+    .sce-login-step .num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--sce-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .72rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: white;
+    }
+    .sce-login-step.active { color: var(--sce-primary-dark); }
+    .sce-login-step.active .num {
+      border-color: var(--sce-primary);
+      background: var(--sce-primary);
+      color: white;
+    }
+    .sce-login-step.done { color: #2e7d32; }
+    .sce-login-step.done .num {
+      border-color: #43a047;
+      background: #43a047;
+      color: white;
+    }
+    .sce-login-step-sep {
+      width: 20px;
+      height: 2px;
+      background: var(--sce-border);
+      flex-shrink: 0;
+    }
+
+    /* Etapa do código — visual bem diferente do e-mail */
+    .sce-code-intro {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .sce-code-intro p {
+      margin: 0 0 10px;
+      color: var(--sce-muted);
+      font-size: .88rem;
+      line-height: 1.45;
+    }
+    .sce-email-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--sce-primary-light);
+      color: var(--sce-primary-dark);
+      font-size: .82rem;
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .sce-email-badge .material-icons { font-size: 16px; }
+
+    .sce-otp-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin: 22px 0 8px;
+    }
+    .sce-otp-digit {
+      width: 44px;
+      height: 52px;
+      border: 2px solid var(--sce-border);
+      border-radius: 10px;
+      text-align: center;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--sce-ink);
+      background: #fafbfc;
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+      -moz-appearance: textfield;
+    }
+    .sce-otp-digit::-webkit-outer-spin-button,
+    .sce-otp-digit::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .sce-otp-digit:focus {
+      border-color: var(--sce-primary);
+      background: white;
+      box-shadow: 0 0 0 3px rgba(21, 101, 192, .15);
+    }
+    .sce-otp-digit.filled {
+      border-color: var(--sce-primary);
+      background: white;
+    }
+    .sce-otp-hint {
+      text-align: center;
+      font-size: .78rem;
+      color: var(--sce-muted);
+      margin-bottom: 18px;
+    }
+
+    .sce-code-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sce-link-back {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin-top: 10px;
+      font-size: .82rem;
+      color: var(--sce-muted);
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      padding: 6px;
+    }
+    .sce-link-back:hover { color: var(--sce-primary-dark); }
+    .sce-link-back .material-icons { font-size: 16px; }
+
     #feedback {
       min-height: 20px;
       font-size: .88rem;
       text-align: center;
+      margin-top: 12px;
     }
-    #msg-code {
-      color: var(--sce-muted);
-      font-size: .85rem;
-      margin-bottom: 4px;
-    }
+    #feedback.is-error { color: #c62828; }
+    #feedback.is-success { color: #2e7d32; }
+    #feedback.is-info { color: var(--sce-muted); }
   </style>
 </head>
 <body>
   <div class="sce-login-wrap">
     <div class="sce-login-logo">
       <i class="material-icons">inventory_2</i>
-      <h5>SCE</h5>
+      <h5>SCE - Leste 3</h5>
       <p>Sistema de Controle de Equipamentos</p>
     </div>
 
     <div class="card sce-login-card">
+      <div class="sce-login-steps">
+        <div class="sce-login-step active" id="step-indicator-1">
+          <span class="num">1</span>
+          <span>E-mail</span>
+        </div>
+        <div class="sce-login-step-sep"></div>
+        <div class="sce-login-step" id="step-indicator-2">
+          <span class="num">2</span>
+          <span>Código</span>
+        </div>
+      </div>
+
       <div id="step-email">
         <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">mail_outline</i>Acesse sua conta</h5>
+        <p style="margin:0 0 16px;color:var(--sce-muted);font-size:.85rem;">
+          Informe seu e-mail institucional. Enviaremos um código de acesso.
+        </p>
         <div class="input-field">
           <i class="material-icons prefix" style="color:var(--sce-muted);">alternate_email</i>
-          <input type="email" id="email" autocomplete="email">
+          <input type="email" id="email" autocomplete="email" placeholder="seu.email@instituicao.org">
           <label for="email">E-mail institucional</label>
         </div>
-        <button class="btn waves-effect" onclick="enviarCodigo()">
+        <button class="btn waves-effect" id="btn-enviar-codigo" onclick="enviarCodigo()">
           <i class="material-icons">send</i>Enviar código
         </button>
       </div>
 
       <div id="step-code" style="display:none;">
-        <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">verified_user</i>Verificação</h5>
-        <p id="msg-code"></p>
-        <div class="input-field">
-          <i class="material-icons prefix" style="color:var(--sce-muted);">password</i>
-          <input type="text" id="code" maxlength="6" inputmode="numeric">
-          <label for="code">Código de 6 dígitos</label>
+        <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">mark_email_read</i>Confira seu e-mail</h5>
+
+        <div class="sce-code-intro">
+          <p>Enviamos um código de <strong>6 dígitos</strong> para:</p>
+          <span class="sce-email-badge" id="email-badge">
+            <i class="material-icons">alternate_email</i>
+            <span id="email-display"></span>
+          </span>
         </div>
-        <button class="btn waves-effect" onclick="validarCodigo()">
-          <i class="material-icons">check_circle</i>Validar
-        </button>
-        <button class="btn-flat waves-effect" onclick="enviarCodigo()">
-          <i class="material-icons left">refresh</i>Reenviar código
+
+        <div class="sce-otp-row" id="otp-row">
+          <input class="sce-otp-digit" type="text" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Dígito 1">
+          <input class="sce-otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 2">
+          <input class="sce-otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 3">
+          <input class="sce-otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 4">
+          <input class="sce-otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 5">
+          <input class="sce-otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 6">
+        </div>
+        <p class="sce-otp-hint">Digite o código recebido no e-mail</p>
+
+        <div class="sce-code-actions">
+          <button class="btn waves-effect" id="btn-validar-codigo" onclick="validarCodigo()">
+            <i class="material-icons">login</i>Entrar
+          </button>
+          <button class="btn-flat waves-effect" onclick="enviarCodigo()">
+            <i class="material-icons left">refresh</i>Reenviar código
+          </button>
+        </div>
+
+        <button type="button" class="sce-link-back" onclick="voltarParaEmail()">
+          <i class="material-icons">arrow_back</i>Usar outro e-mail
         </button>
       </div>
 
-      <div id="feedback" style="color:#c62828;margin-top:12px;"></div>
+      <div id="feedback"></div>
     </div>
   </div>
 
   <script>
     let emailAtual = '';
 
+    function getOtpInputs() {
+      return Array.prototype.slice.call(document.querySelectorAll('.sce-otp-digit'));
+    }
+
+    function getCodigoCompleto() {
+      return getOtpInputs().map(function (el) { return el.value; }).join('');
+    }
+
+    function limparOtp() {
+      getOtpInputs().forEach(function (el) {
+        el.value = '';
+        el.classList.remove('filled');
+      });
+    }
+
+    function focarPrimeiroOtp() {
+      const inputs = getOtpInputs();
+      if (inputs.length) inputs[0].focus();
+    }
+
+    function preencherOtp(digits) {
+      const inputs = getOtpInputs();
+      digits.split('').slice(0, inputs.length).forEach(function (d, i) {
+        inputs[i].value = d;
+        inputs[i].classList.toggle('filled', !!d);
+      });
+      const next = Math.min(digits.length, inputs.length - 1);
+      inputs[next].focus();
+    }
+
+    function initOtpInputs() {
+      const inputs = getOtpInputs();
+      inputs.forEach(function (input, index) {
+        input.addEventListener('input', function () {
+          const val = input.value.replace(/\D/g, '');
+          input.value = val.slice(-1);
+          input.classList.toggle('filled', !!input.value);
+
+          if (input.value && index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          }
+
+          if (getCodigoCompleto().length === 6) {
+            validarCodigo();
+          }
+        });
+
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Backspace' && !input.value && index > 0) {
+            inputs[index - 1].focus();
+            inputs[index - 1].value = '';
+            inputs[index - 1].classList.remove('filled');
+          }
+          if (e.key === 'Enter') {
+            validarCodigo();
+          }
+        });
+
+        input.addEventListener('paste', function (e) {
+          e.preventDefault();
+          const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+          if (!text) return;
+          limparOtp();
+          preencherOtp(text);
+          if (text.length >= 6) validarCodigo();
+        });
+      });
+    }
+
+    function irParaEtapaCodigo() {
+      document.getElementById('step-email').style.display = 'none';
+      document.getElementById('step-code').style.display = 'block';
+      document.getElementById('email-display').textContent = emailAtual;
+      document.getElementById('step-indicator-1').classList.remove('active');
+      document.getElementById('step-indicator-1').classList.add('done');
+      document.getElementById('step-indicator-2').classList.add('active');
+      limparOtp();
+      focarPrimeiroOtp();
+    }
+
+    function voltarParaEmail() {
+      document.getElementById('step-code').style.display = 'none';
+      document.getElementById('step-email').style.display = 'block';
+      document.getElementById('step-indicator-1').classList.add('active');
+      document.getElementById('step-indicator-1').classList.remove('done');
+      document.getElementById('step-indicator-2').classList.remove('active');
+      limparOtp();
+      setFeedback('');
+      document.getElementById('email').focus();
+    }
+
     function enviarCodigo() {
       const email = document.getElementById('email').value.trim();
-      if (!email) { setFeedback('Informe um e-mail.'); return; }
+      if (!email) { setFeedback('Informe um e-mail.', 'error'); return; }
       emailAtual = email;
-      setFeedback('Enviando...');
+      setFeedback('Enviando código...', 'info');
 
       google.script.run
         .withSuccessHandler(function (res) {
-          setFeedback(res.message);
+          setFeedback(res.message, res.ok ? 'success' : 'error');
           if (res.ok) {
-            document.getElementById('step-email').style.display = 'none';
-            document.getElementById('step-code').style.display = 'block';
+            irParaEtapaCodigo();
           }
         })
-        .withFailureHandler(function (err) { setFeedback('Erro: ' + err.message); })
+        .withFailureHandler(function (err) { setFeedback('Erro: ' + err.message, 'error'); })
         .requestOtp(email);
     }
 
     function validarCodigo() {
-      const code = document.getElementById('code').value.trim();
-      setFeedback('Validando...');
+      const code = getCodigoCompleto();
+      if (code.length < 6) {
+        setFeedback('Digite os 6 dígitos do código.', 'error');
+        focarPrimeiroOtp();
+        return;
+      }
+      setFeedback('Validando...', 'info');
 
       google.script.run
         .withSuccessHandler(function (res) {
           if (res.ok) {
-            // Sessão de 24h persistida no client; usada apenas como cache —
-            // a validação real acontece sempre no servidor via validateSession_.
             localStorage.setItem('sce_token', res.redirectUrl.split('token=')[1]);
             top.location.href = res.redirectUrl;
           } else {
-            setFeedback(res.message);
+            setFeedback(res.message, 'error');
+            limparOtp();
+            focarPrimeiroOtp();
           }
         })
-        .withFailureHandler(function (err) { setFeedback('Erro: ' + err.message); })
+        .withFailureHandler(function (err) {
+          setFeedback('Erro: ' + err.message, 'error');
+          limparOtp();
+          focarPrimeiroOtp();
+        })
         .validateOtp(emailAtual, code);
     }
 
-    function setFeedback(msg) {
-      document.getElementById('feedback').innerText = msg;
+    function setFeedback(msg, tipo) {
+      const el = document.getElementById('feedback');
+      el.innerText = msg || '';
+      el.className = tipo ? 'is-' + tipo : '';
     }
 
-    // Se já existe token salvo localmente, tenta reaproveitar a sessão
-    // (o servidor valida de novo no doGet; se expirado ou usuário removido,
-    // simplesmente cai de volta nesta tela de login).
+    document.addEventListener('DOMContentLoaded', function () {
+      initOtpInputs();
+      document.getElementById('email').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') enviarCodigo();
+      });
+    });
+
     (function tentarSessaoSalva() {
       const token = localStorage.getItem('sce_token');
       if (token) {

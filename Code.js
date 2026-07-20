@@ -10,7 +10,7 @@
  *   e as abas estão distribuídas em 3 planilhas separadas:
  *
  *     SCE_Core            -> Equipamentos, Listas, Filiais
- *     SCE_Movimentacao    -> Historico_Itens, Emprestimos, Auditoria
+ *     SCE_Movimentacao    -> Historico_Itens, Emprestimos, Auditoria, Registros_Manutencao
  *     SCE_Autenticacao    -> Usuarios, Sessoes, Otp_Codes
  *
  *   Por quê: Core é lido o tempo todo (dashboards); Movimentacao cresce
@@ -30,14 +30,29 @@
  *      forem do mesmo dono) e garanta que cada uma tenha as abas com os
  *      cabeçalhos exatos esperados (ver getAllEquipamentos_, Usuarios, etc).
  *
+ *   IMPORTANTE — COLUNAS NOVAS NECESSÁRIAS NA ABA "Equipamentos" (SCE_Core):
+ *     - statusManutencao       (texto: Pendente / Em andamento / Concluído)
+ *     - vinculadoBlueMonitor   (texto: Sim / Não — usado por Matriz e Técnico)
+ *     - ultimaAlteracaoPor     (texto: e-mail de quem fez a última edição)
+ *   Sem essas colunas no cabeçalho, os valores relacionados simplesmente não
+ *   são persistidos (o código verifica a existência da coluna antes de
+ *   escrever, então não quebra — só não salva nada).
+ *
+ *   IMPORTANTE — ABA "Listas" (SCE_Core) precisa ter as colunas:
+ *     - categoria | marca | modelo
+ *   (cada coluna pode ter quantidade de linhas diferente, o código lê cada
+ *   uma independentemente e ignora células vazias.)
+ *
  *   REGRA DE ROTEAMENTO (inalterada):
  *   Toda decisão de "qual dashboard mostrar" acontece SOMENTE no doGet.
- *   DashboardFilial.html e DashboardMatriz.html não têm lógica de role.
+ *   DashboardFilial.html, DashboardMatriz.html e DashboardTecnico.html não
+ *   têm lógica de role.
  *
  *   COMPATIBILIDADE COM O FRONTEND:
  *   Nenhuma função chamada via google.script.run mudou de nome ou de
- *   assinatura. Só a implementação interna (como os dados são lidos/
- *   escritos) mudou, de SpreadsheetApp para Sheets API.
+ *   assinatura anterior. Novas funções foram adicionadas; funções existentes
+ *   ganharam parâmetros opcionais (ex: registrarManutencao agora aceita um
+ *   4º parâmetro "status", mas continua funcionando se ele não for enviado).
  * ============================================================================
  */
 
@@ -76,8 +91,19 @@ const CONFIG = {
   STATUS_USUARIO: {
     ATIVO: 'Ativo',
     REMOVIDO: 'Removido'
+  },
+  STATUS_MANUTENCAO: {
+    PENDENTE: 'Pendente',
+    EM_ANDAMENTO: 'Em andamento',
+    CONCLUIDO: 'Concluído'
   }
 };
+
+const STATUS_MANUTENCAO_VALIDOS_ = [
+  CONFIG.STATUS_MANUTENCAO.PENDENTE,
+  CONFIG.STATUS_MANUTENCAO.EM_ANDAMENTO,
+  CONFIG.STATUS_MANUTENCAO.CONCLUIDO
+];
 
 // Mapeia cada nome de aba para a planilha (spreadsheetId) onde ela vive.
 // Isso é o que permite que o resto do código continue falando "a aba
@@ -251,7 +277,7 @@ function ensureSheetExists_(sheetName, headers) {
 }
 
 // ============================================================================
-// AUDITORIA
+// AUDITORIA / CABEÇALHOS DE ABAS AUXILIARES
 // ============================================================================
 
 const EMPRESTIMOS_HEADERS_ = [
@@ -263,7 +289,9 @@ const EMPRESTIMOS_HEADERS_ = [
 
 const AUDITORIA_HEADERS_ = ['data', 'usuario', 'acao', 'detalhes'];
 
-const REGISTROS_MANUTENCAO_HEADERS_ = ['id', 'equipamentoId', 'autor', 'data', 'descricao'];
+// Inclui "status" (Pendente/Em andamento/Concluído) por entrada do diário,
+// além de campo/descrição livre.
+const REGISTROS_MANUTENCAO_HEADERS_ = ['id', 'equipamentoId', 'autor', 'data', 'descricao', 'status'];
 
 // ============================================================================
 // SUPORTE A MULTI-UNIDADE (perfil Técnico)
@@ -426,7 +454,7 @@ function doGet(e) {
   try {
     const token = e && e.parameter ? e.parameter.token : null;
     const session = token ? validateSession_(token) : null;
-    
+
     // LOG PARA DIAGNÓSTICO
     console.log('SESSION:', session);
     console.log('NIVEL:', session ? session.nivel : 'null');
@@ -685,6 +713,30 @@ function getAllEquipamentos_() {
 }
 
 /**
+ * Verifica se já existe outro equipamento ATIVO (não removido) com o mesmo
+ * Número de Série ou Patrimônio. Comparação case-insensitive e com trim.
+ * @param {string} numeroSerie
+ * @param {string} patrimonio
+ * @param {string} [ignorarId] id do próprio equipamento, usado na edição
+ *   para não comparar o item consigo mesmo.
+ * @return {boolean}
+ */
+function equipamentoDuplicado_(numeroSerie, patrimonio, ignorarId) {
+  const serie = String(numeroSerie || '').trim().toUpperCase();
+  const patr = String(patrimonio || '').trim().toUpperCase();
+  if (!serie && !patr) return false;
+
+  const todos = getAllEquipamentos_();
+  return todos.some(function (e) {
+    if (ignorarId && e.id === ignorarId) return false;
+    if (e.status === 'Removido') return false;
+    const serieIgual = !!serie && String(e.numeroSerie || '').trim().toUpperCase() === serie;
+    const patrimonioIgual = !!patr && String(e.patrimonio || '').trim().toUpperCase() === patr;
+    return serieIgual || patrimonioIgual;
+  });
+}
+
+/**
  * Retorna os equipamentos visíveis para a sessão atual:
  *   - Matriz: todos.
  *   - Filial: só da própria unidade.
@@ -769,6 +821,12 @@ function createEquipamento(token, dadosEquipamento) {
   const session = requireSession_(token);
   const unidade = resolverUnidadeParaEscrita_(session, dadosEquipamento.unidade);
 
+  // Verificação de duplicidade (Série/Patrimônio) ANTES de gastar o lock
+  // com leitura/escrita — evita cadastro de item já existente.
+  if (equipamentoDuplicado_(dadosEquipamento.numeroSerie, dadosEquipamento.patrimonio)) {
+    throw new Error('Já existe um equipamento cadastrado com este Número de Série ou Patrimônio.');
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -784,6 +842,7 @@ function createEquipamento(token, dadosEquipamento) {
       if (header === 'dataCadastro') return now;
       if (header === 'dataUltimaAtualizacao') return now;
       if (header === 'cadastradoPor') return session.email;
+      if (header === 'ultimaAlteracaoPor') return session.email;
       if (header in dadosEquipamento) return dadosEquipamento[header];
       return '';
     });
@@ -817,6 +876,23 @@ function updateEquipamento(token, id, camposAlterados) {
       throw new Error('Você não tem permissão para editar este equipamento.');
     }
 
+    // Verificação de duplicidade — só reavalia se Série ou Patrimônio
+    // estão sendo alterados nesta edição.
+    if (camposAlterados.numeroSerie !== undefined || camposAlterados.patrimonio !== undefined) {
+      const serieNovaIdx = headers.indexOf('numeroSerie');
+      const patrimonioNovoIdx = headers.indexOf('patrimonio');
+      const serieNova = camposAlterados.numeroSerie !== undefined
+        ? camposAlterados.numeroSerie
+        : (serieNovaIdx !== -1 ? linhaAtual[serieNovaIdx] : '');
+      const patrimonioNovo = camposAlterados.patrimonio !== undefined
+        ? camposAlterados.patrimonio
+        : (patrimonioNovoIdx !== -1 ? linhaAtual[patrimonioNovoIdx] : '');
+
+      if (equipamentoDuplicado_(serieNova, patrimonioNovo, id)) {
+        throw new Error('Já existe outro equipamento com este Número de Série ou Patrimônio.');
+      }
+    }
+
     validarStatusEspecial_(camposAlterados, linhaAtual, headers);
 
     // Monta TODAS as alterações de célula e manda numa única chamada
@@ -840,6 +916,13 @@ function updateEquipamento(token, id, camposAlterados) {
     const atualizadoCol = headers.indexOf('dataUltimaAtualizacao');
     if (atualizadoCol !== -1 && cellUpdates.length > 0) {
       cellUpdates.push({ row: rowIndex, col: atualizadoCol + 1, value: new Date() });
+    }
+
+    // Registro de quem fez a última alteração — só aparece pro perfil
+    // Matriz no front, mas é sempre gravado independente de quem edita.
+    const ultimaAlteracaoCol = headers.indexOf('ultimaAlteracaoPor');
+    if (ultimaAlteracaoCol !== -1 && cellUpdates.length > 0) {
+      cellUpdates.push({ row: rowIndex, col: ultimaAlteracaoCol + 1, value: session.email });
     }
 
     if (cellUpdates.length > 0) {
@@ -884,9 +967,15 @@ function cloneEquipamento(token, idOrigem) {
     novaLinha[idCol] = novoId;
     novaLinha[statusCol] = 'Disponível';
 
+    // Clone nunca deve herdar número de série/patrimônio do original —
+    // isso causaria duplicidade instantânea. Zera esses campos e deixa
+    // quem clonou preencher manualmente depois via edição.
+    setIfHeaderExists_(novaLinha, headers, 'numeroSerie', '');
+    setIfHeaderExists_(novaLinha, headers, 'patrimonio', '');
     setIfHeaderExists_(novaLinha, headers, 'dataCadastro', new Date());
     setIfHeaderExists_(novaLinha, headers, 'dataUltimaAtualizacao', new Date());
     setIfHeaderExists_(novaLinha, headers, 'cadastradoPor', session.email);
+    setIfHeaderExists_(novaLinha, headers, 'ultimaAlteracaoPor', session.email);
 
     sheetsApiAppendRow_(CONFIG.SHEETS.EQUIPAMENTOS, novaLinha);
     registrarHistorico_(novoId, 'criação', '', 'Clonado a partir de ' + idOrigem, session.email);
@@ -929,6 +1018,61 @@ function removerEquipamento(token, id) {
   }
 }
 
+/**
+ * Atualiza somente o status de manutenção (Pendente/Em andamento/Concluído)
+ * de um equipamento, sem passar pelo fluxo completo de updateEquipamento.
+ * Usado pelo modal de manutenção nos dashboards de Matriz e Técnico.
+ * Também é chamada internamente por registrarManutencao() para manter a
+ * coluna do equipamento sincronizada com a última entrada do diário.
+ */
+function atualizarStatusManutencao(token, equipamentoId, novoStatus) {
+  const session = requireSession_(token);
+  if (STATUS_MANUTENCAO_VALIDOS_.indexOf(novoStatus) === -1) {
+    throw new Error('Status de manutenção inválido.');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
+    const headers = data[0];
+    const idCol = headers.indexOf('id');
+    const unidadeCol = headers.indexOf('unidade');
+    const statusManutCol = headers.indexOf('statusManutencao');
+    const ultimaAlteracaoCol = headers.indexOf('ultimaAlteracaoPor');
+
+    if (statusManutCol === -1) {
+      throw new Error('Coluna "statusManutencao" não existe na aba Equipamentos. Adicione-a no cabeçalho.');
+    }
+
+    const rowIndex = findRowIndexById_(data, idCol, equipamentoId);
+    if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
+
+    const linhaAtual = data[rowIndex - 1];
+    if (!sessaoTemAcessoAUnidade_(session, linhaAtual[unidadeCol])) {
+      throw new Error('Você não tem permissão para alterar este equipamento.');
+    }
+
+    const statusAntigo = linhaAtual[statusManutCol];
+    if (String(statusAntigo) === String(novoStatus)) {
+      return { ok: true }; // nada a fazer, evita histórico ruidoso
+    }
+
+    const cellUpdates = [{ row: rowIndex, col: statusManutCol + 1, value: novoStatus }];
+    if (ultimaAlteracaoCol !== -1) {
+      cellUpdates.push({ row: rowIndex, col: ultimaAlteracaoCol + 1, value: session.email });
+    }
+    sheetsApiBatchUpdateCells_(CONFIG.SHEETS.EQUIPAMENTOS, cellUpdates);
+
+    registrarHistorico_(equipamentoId, 'statusManutencao', statusAntigo, novoStatus, session.email);
+    registrarAuditoria_('atualizarStatusManutencao', session.email, { id: equipamentoId, novoStatus: novoStatus });
+
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function validarStatusEspecial_(camposAlterados, linhaAtual, headers) {
   if (!('status' in camposAlterados)) return;
 
@@ -957,6 +1101,45 @@ function findRowIndexById_(data, idCol, id) {
     if (data[i][idCol] === id) return i + 1;
   }
   return -1;
+}
+
+// ============================================================================
+// LISTAS AUXILIARES (aba Listas, em SCE_Core) — categoria / marca / modelo
+// ----------------------------------------------------------------------------
+// Usado para popular os <select> de cadastro/edição de equipamento nos
+// dashboards de Matriz e Técnico (e pode ser usado na Filial também, se
+// quiser padronizar por lá futuramente).
+// Estrutura esperada da aba: colunas "categoria" | "marca" | "modelo",
+// cada uma podendo ter uma quantidade diferente de linhas preenchidas.
+// ============================================================================
+
+function getListasCadastro(token) {
+  requireSession_(token);
+
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.LISTAS);
+  if (!data || data.length < 2) return { categorias: [], marcas: [], modelos: [] };
+
+  const headers = data[0];
+  const colCategoria = headers.indexOf('categoria');
+  const colMarca = headers.indexOf('marca');
+  const colModelo = headers.indexOf('modelo');
+
+  const categorias = [], marcas = [], modelos = [];
+  data.slice(1).forEach(function (row) {
+    if (colCategoria !== -1 && row[colCategoria]) categorias.push(row[colCategoria]);
+    if (colMarca !== -1 && row[colMarca]) marcas.push(row[colMarca]);
+    if (colModelo !== -1 && row[colModelo]) modelos.push(row[colModelo]);
+  });
+
+  function uniqOrdenado(arr) {
+    return arr.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort();
+  }
+
+  return {
+    categorias: uniqOrdenado(categorias),
+    marcas: uniqOrdenado(marcas),
+    modelos: uniqOrdenado(modelos)
+  };
 }
 
 // ============================================================================
@@ -999,6 +1182,10 @@ function getHistoricoEquipamento(token, equipamentoId) {
 // o técnico (ou Filial/Matriz, se quiserem) registra o que foi feito numa
 // visita/manutenção específica. Fica atrelado ao equipamento, mais recente
 // primeiro, e não é editável depois de criado (só inserção).
+//
+// Cada entrada carrega também um "status" (Pendente/Em andamento/Concluído)
+// que, ao ser registrado, sincroniza automaticamente a coluna
+// "statusManutencao" do equipamento (ver atualizarStatusManutencao).
 // ============================================================================
 
 /**
@@ -1009,13 +1196,15 @@ function getHistoricoEquipamento(token, equipamentoId) {
  * @param {string} token
  * @param {string} equipamentoId
  * @param {string} descricao texto livre (o que foi feito/observado)
+ * @param {string} [status] Pendente | Em andamento | Concluído (default: Pendente)
  * @return {{ok:boolean, id:string}}
  */
-function registrarManutencao(token, equipamentoId, descricao) {
+function registrarManutencao(token, equipamentoId, descricao, status) {
   const session = requireSession_(token);
 
   descricao = String(descricao || '').trim();
   if (!descricao) throw new Error('Descreva o que foi feito antes de registrar.');
+  status = STATUS_MANUTENCAO_VALIDOS_.indexOf(status) !== -1 ? status : CONFIG.STATUS_MANUTENCAO.PENDENTE;
 
   const equipamentos = getAllEquipamentos_();
   const item = equipamentos.filter(function (e) { return e.id === equipamentoId; })[0];
@@ -1030,12 +1219,21 @@ function registrarManutencao(token, equipamentoId, descricao) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    sheetsApiAppendRow_(CONFIG.SHEETS.REGISTROS_MANUTENCAO, [id, equipamentoId, session.email, new Date(), descricao]);
+    sheetsApiAppendRow_(CONFIG.SHEETS.REGISTROS_MANUTENCAO, [id, equipamentoId, session.email, new Date(), descricao, status]);
   } finally {
     lock.releaseLock();
   }
 
-  registrarAuditoria_('registrarManutencao', session.email, { equipamentoId: equipamentoId, registroId: id });
+  // Mantém a coluna statusManutencao do equipamento sincronizada com a
+  // última entrada do diário. Não deve derrubar o registro principal se
+  // a coluna ainda não existir na planilha — só loga o aviso.
+  try {
+    atualizarStatusManutencao(token, equipamentoId, status);
+  } catch (e) {
+    Logger.log('Aviso ao sincronizar statusManutencao: ' + e.message);
+  }
+
+  registrarAuditoria_('registrarManutencao', session.email, { equipamentoId: equipamentoId, registroId: id, status: status });
 
   return { ok: true, id: id };
 }
@@ -1065,7 +1263,7 @@ function getRegistrosManutencao(token, equipamentoId) {
     return data.slice(1)
       .filter(function (row) { return row[1] === equipamentoId; })
       .map(function (row) {
-        return { id: row[0], equipamentoId: row[1], autor: row[2], data: row[3], descricao: row[4] };
+        return { id: row[0], equipamentoId: row[1], autor: row[2], data: row[3], descricao: row[4], status: row[5] };
       })
       .reverse();
   } catch (e) {
@@ -1315,9 +1513,10 @@ function montarTabelaHtmlEquipamentos_(equipamentos) {
   const rows = equipamentos.map(function (item) {
     return '<tr><td>' + escapeHtml_(item.unidade) + '</td><td>' + escapeHtml_(item.categoria) +
       '</td><td>' + escapeHtml_(item.marca) + '</td><td>' + escapeHtml_(item.modelo) +
-      '</td><td>' + escapeHtml_(item.patrimonio) + '</td><td>' + escapeHtml_(item.status) + '</td></tr>';
+      '</td><td>' + escapeHtml_(item.patrimonio) + '</td><td>' + escapeHtml_(item.status) +
+      '</td><td>' + escapeHtml_(item.statusManutencao) + '</td><td>' + escapeHtml_(item.ultimaAlteracaoPor) + '</td></tr>';
   }).join('');
-  return '<table border="1" cellspacing="0" cellpadding="5"><thead><tr><th>Unidade</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Patrimonio</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  return '<table border="1" cellspacing="0" cellpadding="5"><thead><tr><th>Unidade</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Patrimonio</th><th>Status</th><th>Status manutenção</th><th>Última alteração por</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 // ============================================================================

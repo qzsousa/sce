@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Shared') ?>
+</head>
+<body class="theme-tecnico">
+  <!--
+    Este arquivo assume perfil Técnico já validado no doGet. A sessão traz
+    session.filial como string, podendo conter VÁRIAS unidades separadas
+    por vírgula (ex: "Unidade A, Unidade B") — ver parseFiliais_ no Code.gs.
+    Todo filtro de "quais unidades esse técnico atende" é feito aqui no
+    client só pra popular selects; a validação de verdade é sempre feita
+    no servidor (sessaoTemAcessoAUnidade_).
+  -->
+  <div class="sce-container">
+
+    <div class="sce-page-title">
+      <i class="material-icons">engineering</i>
+      <h5>Painel Técnico</h5>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">store</i>Suas unidades</div>
+      <div id="lista-unidades-tecnico" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações rápidas</div>
+      <div class="row" style="margin-bottom:0;">
+        <button class="btn waves-effect" id="btn-abrir-cadastro">
+          <i class="material-icons left">add</i>Adicionar equipamento
+        </button>
+        <button class="btn-flat waves-effect" id="btn-atualizar-lista">
+          <i class="material-icons left">refresh</i>Atualizar
+        </button>
+      </div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros</div>
+      <div class="row" style="margin-bottom:0;">
+        <div class="input-field col s6">
+          <i class="material-icons prefix" style="color:var(--sce-muted);">search</i>
+          <input type="text" id="filtro-busca">
+          <label for="filtro-busca">Buscar por patrimonio, serie ou modelo</label>
+        </div>
+        <div class="input-field col s3">
+          <select id="filtro-unidade"><option value="">Todas as suas unidades</option></select>
+          <label>Unidade</label>
+        </div>
+        <div class="input-field col s3">
+          <select id="filtro-status"><option value="">Todos os status</option></select>
+          <label>Status</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos</div>
+      <table class="striped" id="tabela-equipamentos">
+        <thead>
+          <tr>
+            <th>Unidade</th><th>Categoria</th><th>Marca</th><th>Modelo</th>
+            <th>Patrimônio</th><th>Status</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="row" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
+        <button class="btn-flat" id="btn-pagina-anterior"><i class="material-icons left">chevron_left</i>Anterior</button>
+        <span id="pagina-info" style="color:var(--sce-muted);font-size:.9rem;"></span>
+        <button class="btn-flat" id="btn-proxima-pagina">Proxima<i class="material-icons right">chevron_right</i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de cadastro — inclui seletor de unidade, já que o técnico pode
+       atender mais de uma. Se ele só tiver uma, o select vem travado nela. -->
+  <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
+
+      <div class="row">
+        <div class="input-field col s6">
+          <select id="new-unidade"></select>
+          <label>Unidade</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-categoria">
+          <label for="new-categoria">Categoria</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-marca">
+          <label for="new-marca">Marca</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-modelo">
+          <label for="new-modelo">Modelo</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-patrimonio">
+          <label for="new-patrimonio">Patrimonio</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-numeroSerie">
+          <label for="new-numeroSerie">Numero de serie</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="new-status">
+            <option value="Disponível" selected>Disponível</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Emprestado">Emprestado</option>
+            <option value="Extraviado">Extraviado</option>
+            <option value="Inservível">Inservível</option>
+            <option value="Em verificação">Em verificação</option>
+          </select>
+          <label>Status</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="new-vinculadoBlueMonitor">
+            <option value="Não" selected>Não</option>
+            <option value="Sim">Sim</option>
+          </select>
+          <label>Vinculado no BlueMonitor?</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-sistemaOperacional">
+          <label for="new-sistemaOperacional">Sistema operacional</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-processador">
+          <label for="new-processador">Processador</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-memoriaRAM">
+          <label for="new-memoriaRAM">Memoria RAM</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-armazenamento">
+          <label for="new-armazenamento">Armazenamento</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-tamanhoTela">
+          <label for="new-tamanhoTela">Tamanho da tela</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-responsavelAtual">
+          <label for="new-responsavelAtual">Responsavel atual</label>
+        </div>
+        <div class="input-field col s12">
+          <textarea id="new-observacoes" class="materialize-textarea"></textarea>
+          <label for="new-observacoes">Observacoes</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-salvar-cadastro">Salvar</a>
+    </div>
+  </div>
+
+  <div id="modal-confirmar-remocao" class="modal">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
+      <p>Esta ação marcará o item como removido. Deseja continuar?</p>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn red" id="btn-confirmar-remocao">Remover</a>
+    </div>
+  </div>
+
+  <!-- Modal de edição — mesmos campos do perfil Filial. A unidade do
+       equipamento não é editável aqui (mudar de unidade é decisão da
+       Matriz, não do técnico). -->
+  <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5>
+      <input type="hidden" id="edit-id">
+
+      <div class="row">
+        <div class="input-field col s6">
+          <input type="text" id="edit-categoria">
+          <label for="edit-categoria" class="active">Categoria</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-marca">
+          <label for="edit-marca" class="active">Marca</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-modelo">
+          <label for="edit-modelo" class="active">Modelo</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-patrimonio">
+          <label for="edit-patrimonio" class="active">Patrimônio</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-numeroSerie">
+          <label for="edit-numeroSerie" class="active">Número de série</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="edit-status" onchange="atualizarCamposCondicionais()">
+            <option value="Disponível">Disponível</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Emprestado">Emprestado</option>
+            <option value="Extraviado">Extraviado</option>
+            <option value="Inservível">Inservível</option>
+            <option value="Em verificação">Em verificação</option>
+          </select>
+          <label>Status</label>
+        </div>
+
+        <div class="input-field col s12" id="campo-chamado" style="display:none;">
+          <input type="text" id="edit-numeroChamadoManutencao">
+          <label for="edit-numeroChamadoManutencao" class="active">Nº do chamado de manutenção</label>
+        </div>
+        <div class="input-field col s12" id="campo-bo" style="display:none;">
+          <input type="text" id="edit-boletimOcorrencia">
+          <label for="edit-boletimOcorrencia" class="active">Boletim de ocorrência</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa" style="display:none;">
+          <textarea id="edit-justificativaVerificacao" class="materialize-textarea"></textarea>
+          <label for="edit-justificativaVerificacao" class="active">Justificativa da verificação</label>
+        </div>
+
+        <div class="input-field col s6">
+          <input type="text" id="edit-sistemaOperacional">
+          <label for="edit-sistemaOperacional" class="active">Sistema operacional</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-processador">
+          <label for="edit-processador" class="active">Processador</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-memoriaRAM">
+          <label for="edit-memoriaRAM" class="active">Memória RAM</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-armazenamento">
+          <label for="edit-armazenamento" class="active">Armazenamento</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-tamanhoTela">
+          <label for="edit-tamanhoTela" class="active">Tamanho da tela</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-responsavelAtual">
+          <label for="edit-responsavelAtual" class="active">Responsável atual</label>
+        </div>
+        <div class="input-field col s12">
+          <textarea id="edit-observacoes" class="materialize-textarea"></textarea>
+          <label for="edit-observacoes" class="active">Observações</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-salvar-edicao">Salvar</a>
+    </div>
+  </div>
+
+  <!-- Modal de manutenção -->
+  <div id="modal-manutencao" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5>
+      <input type="hidden" id="manut-equipamento-id">
+
+      <div class="row">
+        <div class="input-field col s4">
+          <select id="manut-status">
+            <option value="Pendente">Pendente</option>
+            <option value="Em andamento">Em andamento</option>
+            <option value="Concluído">Concluído</option>
+          </select>
+          <label>Status</label>
+        </div>
+        <div class="input-field col s8">
+          <textarea id="manut-descricao" class="materialize-textarea"></textarea>
+          <label for="manut-descricao">O que foi feito / observado</label>
+        </div>
+      </div>
+
+      <a class="btn waves-effect" id="btn-registrar-manutencao">
+        <i class="material-icons left">add</i>Registrar
+      </a>
+
+      <table class="striped" style="margin-top:20px;">
+        <thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead>
+        <tbody id="tabela-manutencao-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Fechar</a>
+    </div>
+  </div>
+
+</body>
+
+<script>
+// ================================================================
+// 1. CAPTURA O TOKEN DA URL E SALVA NO localStorage
+// ================================================================
+(function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenFromUrl = urlParams.get('token');
+  
+  if (tokenFromUrl) {
+    localStorage.setItem('sce_token', tokenFromUrl);
+    console.log('✅ Token salvo no localStorage a partir da URL:', tokenFromUrl);
+  } else {
+    console.warn('⚠️ Nenhum token encontrado na URL. Usando localStorage existente.');
+  }
+})();
+
+// ================================================================
+// 2. LÊ O TOKEN DO localStorage
+// ================================================================
+const SCE_TOKEN = localStorage.getItem('sce_token');
+console.log('🔑 SCE_TOKEN:', SCE_TOKEN);
+
+if (!SCE_TOKEN) {
+  console.error('❌ Nenhum token encontrado. Redirecionando para login...');
+  M.toast({ html: 'Sessão expirada. Faça login novamente.' });
+  setTimeout(function() {
+    window.location.href = window.location.href.split('?')[0];
+  }, 2000);
+}
+
+// ================================================================
+// 3. VARIÁVEIS GLOBAIS
+// ================================================================
+const UNIDADES_TECNICO = String(<?!= JSON.stringify(session.filial || '') ?>)
+  .split(',')
+  .map(function (u) { return u.trim(); })
+  .filter(function (u) { return u.length > 0; });
+
+let equipamentosCache = [];
+let equipamentosFiltrados = [];
+let paginaAtual = 1;
+const ITENS_POR_PAGINA = 25;
+
+let idPendenteRemocao = null;
+let equipamentoIdManutencaoAtual = null;
+let modalRemocaoInstance = null;
+let modalEdicaoInstance = null;
+let modalCadastroInstance = null;
+let modalManutencaoInstance = null;
+let itemEmEdicaoOriginal = null;
+
+const CAMPOS_EDITAVEIS = [
+  'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+  'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
+  'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+  'tamanhoTela', 'responsavelAtual', 'observacoes', 'vinculadoBlueMonitor'
+];
+
+const CAMPOS_CADASTRO = [
+  'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+  'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+  'tamanhoTela', 'responsavelAtual', 'observacoes', 'vinculadoBlueMonitor'
+];
+
+// ================================================================
+// 4. FUNÇÕES DE RENDERIZAÇÃO E FILTROS
+// ================================================================
+function renderUnidadesTecnico() {
+  const container = document.getElementById('lista-unidades-tecnico');
+  if (!container) return;
+  container.innerHTML = UNIDADES_TECNICO.map(function (u) {
+    return '<span class="chip" style="background:var(--sce-primary-light);color:var(--sce-primary-dark);font-weight:500;">' +
+      '<i class="material-icons left" style="font-size:16px;">store</i>' + u + '</span>';
+  }).join('');
+}
+
+function renderTabelaEquipamentos(equipamentos) {
+  console.log('🟠 renderTabelaEquipamentos() chamada com', equipamentos.length, 'itens');
+  const tbody = document.querySelector('#tabela-equipamentos tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+  const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
+  pagina.forEach(function (item) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + (item.unidade || '') + '</td>' +
+      '<td>' + (item.categoria || '') + '</td>' +
+      '<td>' + (item.marca || '') + '</td>' +
+      '<td>' + (item.modelo || '') + '</td>' +
+      '<td>' + (item.patrimonio || '') + '</td>' +
+      '<td>' + (item.status || '') + '</td>' +
+      '<td>' +
+        '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar">' +
+          '<i class="material-icons">edit</i></a> ' +
+        '<a class="btn-small waves-effect" onclick="abrirManutencao(\'' + item.id + '\')" title="Registrar manutenção">' +
+          '<i class="material-icons">build</i></a> ' +
+        '<a class="btn-small waves-effect red" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover">' +
+          '<i class="material-icons">delete</i></a>' +
+      '</td>';
+    tbody.appendChild(tr);
+  });
+  const totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));
+  const info = document.getElementById('pagina-info');
+  if (info) info.innerText = 'Pagina ' + paginaAtual + ' de ' + totalPaginas + ' - ' + equipamentos.length + ' itens';
+}
+
+function aplicarFiltros() {
+  const busca = document.getElementById('filtro-busca')?.value?.trim()?.toLowerCase() || '';
+  const status = document.getElementById('filtro-status')?.value || '';
+  const unidade = document.getElementById('filtro-unidade')?.value || '';
+  equipamentosFiltrados = equipamentosCache.filter(function (item) {
+    if (status && item.status !== status) return false;
+    if (unidade && item.unidade !== unidade) return false;
+    if (!busca) return true;
+    return [item.patrimonio, item.numeroSerie, item.modelo].join(' ').toLowerCase().indexOf(busca) !== -1;
+  });
+  paginaAtual = 1;
+  renderTabelaEquipamentos(equipamentosFiltrados);
+}
+
+function atualizarFiltrosOpcoes(equipamentos) {
+  preencherSelectFiltro('filtro-status', equipamentos.map(function (e) { return e.status; }), 'Todos os status');
+  // Unidade não deriva dos equipamentos carregados — usa as unidades do próprio técnico.
+  const select = document.getElementById('filtro-unidade');
+  if (select) {
+    const atual = select.value;
+    select.innerHTML = '<option value="">Todas as suas unidades</option>' +
+      UNIDADES_TECNICO.map(function (u) { return '<option value="' + u + '">' + u + '</option>'; }).join('');
+    select.value = atual;
+    M.FormSelect.init(select);
+  }
+}
+
+function preencherSelectFiltro(id, valores, label) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const atual = select.value;
+  const unicos = valores.filter(Boolean).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).sort();
+  select.innerHTML = '<option value="">' + label + '</option>' + unicos.map(function (v) {
+    return '<option value="' + v + '">' + v + '</option>';
+  }).join('');
+  select.value = atual;
+  M.FormSelect.init(select);
+}
+
+// ================================================================
+// 5. CARREGAR EQUIPAMENTOS (com logs)
+// ================================================================
+function carregarEquipamentos() {
+  console.log('🟢 carregarEquipamentos() INICIADA');
+  console.log('🟢 SCE_TOKEN:', SCE_TOKEN);
+  
+  if (!SCE_TOKEN) {
+    console.error('❌ Token não disponível');
+    M.toast({ html: 'Token não encontrado. Recarregue a página.' });
+    return;
+  }
+  
+  sceShowLoading();
+  google.script.run
+    .withSuccessHandler(function (equipamentos) {
+      console.log('✅ equipamentos recebidos do servidor:', equipamentos);
+      console.log('✅ Quantidade:', equipamentos ? equipamentos.length : 'null/undefined');
+      
+      if (!equipamentos || equipamentos.length === 0) {
+        console.warn('⚠️ Nenhum equipamento retornado. Verifique se o técnico tem unidades cadastradas.');
+        M.toast({ html: 'Nenhum equipamento encontrado para suas unidades.' });
+      }
+      
+      equipamentosCache = equipamentos || [];
+      atualizarFiltrosOpcoes(equipamentosCache);
+      aplicarFiltros();
+      sceHideLoading();
+    })
+    .withFailureHandler(function (err) {
+      console.error('❌ Erro na chamada:', err);
+      M.toast({ html: 'Erro ao carregar: ' + err.message });
+      sceHideLoading();
+    })
+    .getEquipamentosDaFilial(SCE_TOKEN);
+}
+
+// ================================================================
+// 6. CADASTRO
+// ================================================================
+function abrirCadastroEquipamento() {
+  CAMPOS_CADASTRO.forEach(function (campo) {
+    const el = document.getElementById('new-' + campo);
+    if (el && campo !== 'unidade') el.value = campo === 'status' ? 'Disponível' : '';
+  });
+
+  const selectUnidade = document.getElementById('new-unidade');
+  if (selectUnidade) {
+    selectUnidade.innerHTML = UNIDADES_TECNICO.map(function (u) { return '<option value="' + u + '">' + u + '</option>'; }).join('');
+    selectUnidade.disabled = UNIDADES_TECNICO.length <= 1;
+    M.FormSelect.init(selectUnidade);
+  }
+
+  M.FormSelect.init(document.getElementById('new-status'));
+  M.updateTextFields();
+
+  if (!modalCadastroInstance) {
+    modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
+  }
+  modalCadastroInstance.open();
+}
+
+function salvarCadastro() {
+  const btn = document.getElementById('btn-salvar-cadastro');
+  if (btn.dataset.loading === '1') return;
+
+  const dados = {};
+  CAMPOS_CADASTRO.forEach(function (campo) {
+    const el = document.getElementById('new-' + campo);
+    if (el && el.value) dados[campo] = el.value;
+  });
+
+  if (!dados.unidade || !dados.categoria || !dados.patrimonio) {
+    M.toast({ html: 'Preencha Unidade, Categoria e Patrimonio.' });
+    return;
+  }
+
+  btn.dataset.loading = '1';
+  btn.classList.add('disabled');
+
+  google.script.run
+    .withSuccessHandler(function () {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Equipamento cadastrado.' });
+      modalCadastroInstance.close();
+      carregarEquipamentos();
+    })
+    .withFailureHandler(function (err) {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Erro ao cadastrar: ' + err.message });
+    })
+    .createEquipamento(SCE_TOKEN, dados);
+}
+
+// ================================================================
+// 7. REMOÇÃO
+// ================================================================
+function abrirModalRemocao(id) {
+  idPendenteRemocao = id;
+  if (!modalRemocaoInstance) {
+    modalRemocaoInstance = M.Modal.init(document.getElementById('modal-confirmar-remocao'));
+  }
+  modalRemocaoInstance.open();
+}
+
+function confirmarRemocao() {
+  if (!idPendenteRemocao) return;
+  const id = idPendenteRemocao;
+  const btn = document.getElementById('btn-confirmar-remocao');
+  if (btn.dataset.loading === '1') return;
+  btn.dataset.loading = '1';
+  btn.classList.add('disabled');
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: res.message });
+      modalRemocaoInstance.close();
+      idPendenteRemocao = null;
+      carregarEquipamentos();
+    })
+    .withFailureHandler(function (err) {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Erro ao remover: ' + err.message });
+      modalRemocaoInstance.close();
+      idPendenteRemocao = null;
+    })
+    .removerEquipamento(SCE_TOKEN, id);
+}
+
+// ================================================================
+// 8. EDIÇÃO
+// ================================================================
+function editarEquipamento(id) {
+  const item = equipamentosCache.filter(function (e) { return e.id === id; })[0];
+  if (!item) { M.toast({ html: 'Item não encontrado no cache local.' }); return; }
+
+  itemEmEdicaoOriginal = item;
+  document.getElementById('edit-id').value = item.id;
+
+  CAMPOS_EDITAVEIS.forEach(function (campo) {
+    const el = document.getElementById('edit-' + campo);
+    if (el) el.value = item[campo] || '';
+  });
+
+  atualizarCamposCondicionais();
+  M.FormSelect.init(document.getElementById('edit-status'));
+  M.updateTextFields();
+
+  if (!modalEdicaoInstance) {
+    modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
+  }
+  modalEdicaoInstance.open();
+}
+
+function atualizarCamposCondicionais() {
+  const status = document.getElementById('edit-status')?.value || '';
+  const chamado = document.getElementById('campo-chamado');
+  const bo = document.getElementById('campo-bo');
+  const justificativa = document.getElementById('campo-justificativa');
+  if (chamado) chamado.style.display = (status === 'Manutenção') ? 'block' : 'none';
+  if (bo) bo.style.display = (status === 'Extraviado') ? 'block' : 'none';
+  if (justificativa) justificativa.style.display = (status === 'Em verificação') ? 'block' : 'none';
+}
+
+function salvarEdicao() {
+  const btn = document.getElementById('btn-salvar-edicao');
+  if (btn.dataset.loading === '1') return;
+
+  const id = document.getElementById('edit-id').value;
+  const camposAlterados = {};
+
+  CAMPOS_EDITAVEIS.forEach(function (campo) {
+    const el = document.getElementById('edit-' + campo);
+    if (!el) return;
+    const valorNovo = el.value;
+    const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
+    if (String(valorNovo) !== String(valorAntigo)) {
+      camposAlterados[campo] = valorNovo;
+    }
+  });
+
+  const status = document.getElementById('edit-status').value;
+  const regrasStatus = {
+    'Manutenção': 'numeroChamadoManutencao',
+    'Extraviado': 'boletimOcorrencia',
+    'Em verificação': 'justificativaVerificacao'
+  };
+  const campoObrigatorio = regrasStatus[status];
+  if (campoObrigatorio) {
+    const valorFinal = camposAlterados[campoObrigatorio] !== undefined
+      ? camposAlterados[campoObrigatorio]
+      : (itemEmEdicaoOriginal[campoObrigatorio] || '');
+    if (!valorFinal) {
+      M.toast({ html: 'Preencha o campo obrigatório para o status "' + status + '".' });
+      return;
+    }
+  }
+
+  if (Object.keys(camposAlterados).length === 0) {
+    M.toast({ html: 'Nada foi alterado.' });
+    modalEdicaoInstance.close();
+    return;
+  }
+
+  btn.dataset.loading = '1';
+  btn.classList.add('disabled');
+
+  google.script.run
+    .withSuccessHandler(function () {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Equipamento atualizado.' });
+      modalEdicaoInstance.close();
+      carregarEquipamentos();
+    })
+    .withFailureHandler(function (err) {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Erro ao salvar: ' + err.message });
+    })
+    .updateEquipamento(SCE_TOKEN, id, camposAlterados);
+}
+
+// ================================================================
+// 9. MANUTENÇÃO
+// ================================================================
+function abrirManutencao(id) {
+  equipamentoIdManutencaoAtual = id;
+  document.getElementById('manut-equipamento-id').value = id;
+  document.getElementById('manut-descricao').value = '';
+  M.FormSelect.init(document.getElementById('manut-status'));
+  M.updateTextFields();
+  carregarLogManutencao(id);
+
+  if (!modalManutencaoInstance) {
+    modalManutencaoInstance = M.Modal.init(document.getElementById('modal-manutencao'));
+  }
+  modalManutencaoInstance.open();
+}
+
+function carregarLogManutencao(id) {
+  const tbody = document.getElementById('tabela-manutencao-body');
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
+
+  google.script.run
+    .withSuccessHandler(function (registros) {
+      tbody.innerHTML = '';
+      if (!registros || registros.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--sce-muted);">Nenhum registro ainda.</td></tr>';
+        return;
+      }
+      registros.forEach(function (r) {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
+          '<td>' + (r.autor || '') + '</td>' +
+          '<td>' + (r.status || '') + '</td>' +
+          '<td>' + (r.descricao || '') + '</td>';
+        tbody.appendChild(tr);
+      });
+    })
+    .withFailureHandler(function (err) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:#d32f2f;">Erro: ' + err.message + '</td></tr>';
+    })
+    .getRegistrosManutencao(SCE_TOKEN, id);
+}
+
+function registrarManutencaoUI() {
+  const btn = document.getElementById('btn-registrar-manutencao');
+  if (btn.dataset.loading === '1') return;
+
+  const descricao = document.getElementById('manut-descricao').value.trim();
+  const status = document.getElementById('manut-status').value;
+  if (!descricao) { M.toast({ html: 'Descreva o que foi feito.' }); return; }
+
+  btn.dataset.loading = '1';
+  btn.classList.add('disabled');
+
+  google.script.run
+    .withSuccessHandler(function () {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      document.getElementById('manut-descricao').value = '';
+      M.toast({ html: 'Manutenção registrada.' });
+      carregarLogManutencao(equipamentoIdManutencaoAtual);
+      carregarEquipamentos();
+    })
+    .withFailureHandler(function (err) {
+      btn.dataset.loading = '0';
+      btn.classList.remove('disabled');
+      M.toast({ html: 'Erro: ' + err.message });
+    })
+    .registrarManutencao(SCE_TOKEN, equipamentoIdManutencaoAtual, descricao, status);
+}
+
+// ================================================================
+// 10. INICIALIZAÇÃO
+// ================================================================
+function adicionarEventListeners() {
+  console.log('🟢 Adicionando event listeners...');
+
+  const btnCadastro = document.getElementById('btn-abrir-cadastro');
+  const btnAtualizar = document.getElementById('btn-atualizar-lista');
+  const btnSalvarCadastro = document.getElementById('btn-salvar-cadastro');
+  const btnConfirmarRemocao = document.getElementById('btn-confirmar-remocao');
+  const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
+  const btnRegistrarManutencao = document.getElementById('btn-registrar-manutencao');
+
+  if (btnCadastro) btnCadastro.addEventListener('click', abrirCadastroEquipamento);
+  if (btnAtualizar) btnAtualizar.addEventListener('click', carregarEquipamentos);
+  if (btnSalvarCadastro) btnSalvarCadastro.addEventListener('click', salvarCadastro);
+  if (btnConfirmarRemocao) btnConfirmarRemocao.addEventListener('click', confirmarRemocao);
+  if (btnSalvarEdicao) btnSalvarEdicao.addEventListener('click', salvarEdicao);
+  if (btnRegistrarManutencao) btnRegistrarManutencao.addEventListener('click', registrarManutencaoUI);
+
+  // Filtros
+  const filtroBusca = document.getElementById('filtro-busca');
+  const filtroStatus = document.getElementById('filtro-status');
+  const filtroUnidade = document.getElementById('filtro-unidade');
+  if (filtroBusca) filtroBusca.addEventListener('input', aplicarFiltros);
+  if (filtroStatus) filtroStatus.addEventListener('change', aplicarFiltros);
+  if (filtroUnidade) filtroUnidade.addEventListener('change', aplicarFiltros);
+
+  // Paginação
+  const btnAnterior = document.getElementById('btn-pagina-anterior');
+  const btnProxima = document.getElementById('btn-proxima-pagina');
+  if (btnAnterior) {
+    btnAnterior.addEventListener('click', function () {
+      if (paginaAtual > 1) {
+        paginaAtual--;
+        renderTabelaEquipamentos(equipamentosFiltrados);
+      }
+    });
+  }
+  if (btnProxima) {
+    btnProxima.addEventListener('click', function () {
+      if (paginaAtual < Math.ceil(equipamentosFiltrados.length / ITENS_POR_PAGINA)) {
+        paginaAtual++;
+        renderTabelaEquipamentos(equipamentosFiltrados);
+      }
+    });
+  }
+
+  console.log('✅ Event listeners adicionados!');
+}
+
+// Inicialização imediata
+console.log('🟢 Inicializando dashboard técnico...');
+
+// Renderiza as unidades do técnico
+renderUnidadesTecnico();
+
+// Inicializa selects do Materialize
+if (typeof M !== 'undefined' && M.FormSelect) {
+  M.FormSelect.init(document.querySelectorAll('select'));
+}
+
+// Carrega equipamentos
+carregarEquipamentos();
+
+// Adiciona event listeners após o DOM estar pronto
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', adicionarEventListeners);
+} else {
+  adicionarEventListeners();
+}
+
+console.log('✅ Dashboard técnico inicializado!');
+
+</script>
+</html>
