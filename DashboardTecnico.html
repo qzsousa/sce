@@ -4,53 +4,97 @@
   <base target="_top">
   <meta charset="utf-8">
   <?!= include('Shared') ?>
+  <meta name="version" content="v2.1.0-tecnico-outro">
+  <style>
+    .campo-justificativa {
+      margin-top: 5px;
+      padding: 8px 0;
+    }
+    .campo-outro {
+      margin-top: 0;
+      padding: 0 0 10px 0;
+      display: none;
+    }
+    .campo-outro input {
+      width: 100%;
+    }
+  </style>
 </head>
 <body class="theme-tecnico">
-  <!--
-    Este arquivo assume perfil Técnico já validado no doGet. A sessão traz
-    session.filial como string, podendo conter VÁRIAS unidades separadas
-    por vírgula (ex: "Unidade A, Unidade B") — ver parseFiliais_ no Code.gs.
-    Todo filtro de "quais unidades esse técnico atende" é feito aqui no
-    client só pra popular selects; a validação de verdade é sempre feita
-    no servidor (sessaoTemAcessoAUnidade_).
-  -->
+
   <div class="sce-container">
 
     <div class="sce-page-title">
       <i class="material-icons">engineering</i>
-      <h5>Painel Técnico</h5>
+      <div>
+        <h5 style="margin:0;">Perfil de técnico: <span id="nome-tecnico">Carregando...</span></h5>
+        <span style="font-size:0.85rem;color:var(--sce-muted);">
+          Unidades atendidas: <span id="unidades-atendidas"></span>
+        </span>
+      </div>
     </div>
 
+    <div class="sce-panel" style="background:var(--sce-primary-light);border-color:var(--sce-primary);">
+      <div class="row" style="margin-bottom:0;align-items:center;">
+        <div class="col s12 m2" style="font-weight:600;color:var(--sce-primary-dark);">
+          <i class="material-icons left" style="vertical-align:middle;">filter_list</i> Unidade:
+        </div>
+        <div class="col s12 m4">
+          <select id="seletor-unidade" class="browser-default" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--sce-border);background:white;">
+            <option value="">Todas as unidades</option>
+          </select>
+        </div>
+        <div class="col s12 m6" style="text-align:right;font-size:0.85rem;color:var(--sce-muted);">
+          Equipamentos: <span id="contador-equipamentos">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="kpis" class="row"></div>
+
     <div class="sce-panel">
-      <div class="sce-panel-title"><i class="material-icons">store</i>Suas unidades</div>
-      <div id="lista-unidades-tecnico" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+      <div class="sce-panel-title"><i class="material-icons">pie_chart</i>Distribuição por status</div>
+      <div id="chart-status" style="width:100%;height:280px;position:relative;">
+        <canvas id="canvas-chart-status"></canvas>
+      </div>
     </div>
 
     <div class="sce-panel">
       <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações rápidas</div>
       <div class="row" style="margin-bottom:0;">
         <button class="btn waves-effect" id="btn-abrir-cadastro">
-          <i class="material-icons left">add</i>Adicionar equipamento
+          <i class="material-icons left">add</i>Adicionar
         </button>
         <button class="btn-flat waves-effect" id="btn-atualizar-lista">
           <i class="material-icons left">refresh</i>Atualizar
         </button>
+        <button class="btn" id="btn-exportar-csv">
+          <i class="material-icons left">description</i>CSV
+        </button>
+        <button class="btn" id="btn-exportar-pdf">
+          <i class="material-icons left">picture_as_pdf</i>PDF
+        </button>
       </div>
     </div>
 
-    <div class="sce-panel">
-      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros</div>
+    <div class="sce-panel no-print">
+      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros adicionais</div>
+      <div class="filtros-rapidos">
+        <button class="btn-filtro ativo" data-filtro="todos">Todos</button>
+        <button class="btn-filtro" data-filtro="Disponível">Disponíveis</button>
+        <button class="btn-filtro" data-filtro="Manutenção">Manutenção</button>
+        <button class="btn-filtro" data-filtro="Extraviado">Extraviados</button>
+        <button class="btn-filtro" data-filtro="Emprestado">Emprestados</button>
+        <button class="btn-filtro" data-filtro="Inservível">Inservíveis</button>
+        <button class="btn-filtro" data-filtro="Em verificação">Em verificação</button>
+      </div>
       <div class="row" style="margin-bottom:0;">
         <div class="input-field col s6">
           <i class="material-icons prefix" style="color:var(--sce-muted);">search</i>
           <input type="text" id="filtro-busca">
-          <label for="filtro-busca">Buscar por patrimonio, serie ou modelo</label>
+          <label for="filtro-busca">Buscar por patrimônio, série ou modelo</label>
         </div>
-        <div class="input-field col s3">
-          <select id="filtro-unidade"><option value="">Todas as suas unidades</option></select>
-          <label>Unidade</label>
-        </div>
-        <div class="input-field col s3">
+        <div class="input-field col s6">
           <select id="filtro-status"><option value="">Todos os status</option></select>
           <label>Status</label>
         </div>
@@ -62,22 +106,31 @@
       <table class="striped" id="tabela-equipamentos">
         <thead>
           <tr>
-            <th>Unidade</th><th>Categoria</th><th>Marca</th><th>Modelo</th>
-            <th>Patrimônio</th><th>Status</th><th>Ações</th>
+            <th data-sort="unidade" class="sortable" style="cursor:pointer;">Unidade <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th>Manutenção</th>
+            <th>Devolução</th>
+            <th>BlueMonitor</th>
+            <th class="no-print">Ações</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
-      <div class="row" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
+      <div class="row no-print" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
         <button class="btn-flat" id="btn-pagina-anterior"><i class="material-icons left">chevron_left</i>Anterior</button>
         <span id="pagina-info" style="color:var(--sce-muted);font-size:.9rem;"></span>
-        <button class="btn-flat" id="btn-proxima-pagina">Proxima<i class="material-icons right">chevron_right</i></button>
+        <button class="btn-flat" id="btn-proxima-pagina">Próxima<i class="material-icons right">chevron_right</i></button>
       </div>
     </div>
   </div>
 
-  <!-- Modal de cadastro — inclui seletor de unidade, já que o técnico pode
-       atender mais de uma. Se ele só tiver uma, o select vem travado nela. -->
+  <!-- ========================================================= -->
+  <!-- MODAL DE CADASTRO -->
+  <!-- ========================================================= -->
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
@@ -85,30 +138,50 @@
       <div class="row">
         <div class="input-field col s6">
           <select id="new-unidade"></select>
-          <label>Unidade</label>
+          <label>Unidade *</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="new-categoria">
-          <label for="new-categoria">Categoria</label>
+          <select id="new-categoria" onchange="onCategoriaChange('new')"><option value="" disabled selected>Selecione</option></select>
+          <label>Categoria *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-categoria-container">
+          <input type="text" id="new-outro-categoria" placeholder="Digite a categoria">
+          <label for="new-outro-categoria">Outra categoria</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="new-marca">
-          <label for="new-marca">Marca</label>
+          <select id="new-marca" onchange="onMarcaChange('new')"><option value="" disabled selected>Selecione</option></select>
+          <label>Marca *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-marca-container">
+          <input type="text" id="new-outro-marca" placeholder="Digite a marca">
+          <label for="new-outro-marca">Outra marca</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="new-modelo">
-          <label for="new-modelo">Modelo</label>
+          <select id="new-modelo"><option value="" disabled selected>Selecione</option></select>
+          <label>Modelo *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-modelo-container">
+          <input type="text" id="new-outro-modelo" placeholder="Digite o modelo">
+          <label for="new-outro-modelo">Outro modelo</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-patrimonio">
-          <label for="new-patrimonio">Patrimonio</label>
+          <label for="new-patrimonio">Patrimônio *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
+          <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea>
+          <label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio *</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-numeroSerie">
-          <label for="new-numeroSerie">Numero de serie</label>
+          <label for="new-numeroSerie">Número de série *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-serie" style="display:none;">
+          <textarea id="new-justificativaNumeroSerie" class="materialize-textarea"></textarea>
+          <label for="new-justificativaNumeroSerie">Justificativa para ausência de Número de Série *</label>
         </div>
         <div class="input-field col s6">
-          <select id="new-status">
+          <select id="new-status" onchange="atualizarCamposCondicionaisCadastro()">
             <option value="Disponível" selected>Disponível</option>
             <option value="Manutenção">Manutenção</option>
             <option value="Emprestado">Emprestado</option>
@@ -116,7 +189,7 @@
             <option value="Inservível">Inservível</option>
             <option value="Em verificação">Em verificação</option>
           </select>
-          <label>Status</label>
+          <label>Status *</label>
         </div>
         <div class="input-field col s6">
           <select id="new-vinculadoBlueMonitor">
@@ -124,6 +197,13 @@
             <option value="Sim">Sim</option>
           </select>
           <label>Vinculado no BlueMonitor?</label>
+        </div>
+        <!-- Anexo (Extraviado) -->
+        <div class="input-field col s12" id="campo-bo-cadastro" style="display:none;">
+          <div style="margin-top:10px;">
+            <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="new-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
+          </div>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-sistemaOperacional">
@@ -135,7 +215,7 @@
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-memoriaRAM">
-          <label for="new-memoriaRAM">Memoria RAM</label>
+          <label for="new-memoriaRAM">Memória RAM</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-armazenamento">
@@ -147,11 +227,11 @@
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-responsavelAtual">
-          <label for="new-responsavelAtual">Responsavel atual</label>
+          <label for="new-responsavelAtual">Responsável atual</label>
         </div>
         <div class="input-field col s12">
           <textarea id="new-observacoes" class="materialize-textarea"></textarea>
-          <label for="new-observacoes">Observacoes</label>
+          <label for="new-observacoes">Observações</label>
         </div>
       </div>
     </div>
@@ -161,20 +241,9 @@
     </div>
   </div>
 
-  <div id="modal-confirmar-remocao" class="modal">
-    <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
-      <p>Esta ação marcará o item como removido. Deseja continuar?</p>
-    </div>
-    <div class="modal-footer">
-      <a class="modal-close btn-flat">Cancelar</a>
-      <a class="btn red" id="btn-confirmar-remocao">Remover</a>
-    </div>
-  </div>
-
-  <!-- Modal de edição — mesmos campos do perfil Filial. A unidade do
-       equipamento não é editável aqui (mudar de unidade é decisão da
-       Matriz, não do técnico). -->
+  <!-- ========================================================= -->
+  <!-- MODAL DE EDIÇÃO -->
+  <!-- ========================================================= -->
   <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5>
@@ -182,24 +251,44 @@
 
       <div class="row">
         <div class="input-field col s6">
-          <input type="text" id="edit-categoria">
-          <label for="edit-categoria" class="active">Categoria</label>
+          <select id="edit-categoria" onchange="onCategoriaChange('edit')"><option value="" disabled selected>Selecione</option></select>
+          <label class="active">Categoria *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-categoria-container">
+          <input type="text" id="edit-outro-categoria" placeholder="Digite a categoria">
+          <label for="edit-outro-categoria">Outra categoria</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="edit-marca">
-          <label for="edit-marca" class="active">Marca</label>
+          <select id="edit-marca" onchange="onMarcaChange('edit')"><option value="" disabled selected>Selecione</option></select>
+          <label class="active">Marca *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-marca-container">
+          <input type="text" id="edit-outro-marca" placeholder="Digite a marca">
+          <label for="edit-outro-marca">Outra marca</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="edit-modelo">
-          <label for="edit-modelo" class="active">Modelo</label>
+          <select id="edit-modelo"><option value="" disabled selected>Selecione</option></select>
+          <label class="active">Modelo *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-modelo-container">
+          <input type="text" id="edit-outro-modelo" placeholder="Digite o modelo">
+          <label for="edit-outro-modelo">Outro modelo</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="edit-patrimonio">
-          <label for="edit-patrimonio" class="active">Patrimônio</label>
+          <label for="edit-patrimonio" class="active">Patrimônio *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
+          <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea>
+          <label for="edit-justificativaPatrimonio" class="active">Justificativa para ausência de Patrimônio *</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="edit-numeroSerie">
-          <label for="edit-numeroSerie" class="active">Número de série</label>
+          <label for="edit-numeroSerie" class="active">Número de série *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-serie-edit" style="display:none;">
+          <textarea id="edit-justificativaNumeroSerie" class="materialize-textarea"></textarea>
+          <label for="edit-justificativaNumeroSerie" class="active">Justificativa para ausência de Número de Série *</label>
         </div>
         <div class="input-field col s6">
           <select id="edit-status" onchange="atualizarCamposCondicionais()">
@@ -210,16 +299,29 @@
             <option value="Inservível">Inservível</option>
             <option value="Em verificação">Em verificação</option>
           </select>
-          <label>Status</label>
+          <label>Status *</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="edit-vinculadoBlueMonitor">
+            <option value="Não">Não</option>
+            <option value="Sim">Sim</option>
+          </select>
+          <label>Vinculado no BlueMonitor?</label>
         </div>
 
+        <!-- Campos condicionais -->
         <div class="input-field col s12" id="campo-chamado" style="display:none;">
           <input type="text" id="edit-numeroChamadoManutencao">
           <label for="edit-numeroChamadoManutencao" class="active">Nº do chamado de manutenção</label>
         </div>
         <div class="input-field col s12" id="campo-bo" style="display:none;">
           <input type="text" id="edit-boletimOcorrencia">
-          <label for="edit-boletimOcorrencia" class="active">Boletim de ocorrência</label>
+          <label for="edit-boletimOcorrencia" class="active">Nº do Boletim de Ocorrência</label>
+          <div style="margin-top:10px;">
+            <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="edit-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
+            <span id="anexo-bo-existente" style="font-size:.78rem;"></span>
+          </div>
         </div>
         <div class="input-field col s12" id="campo-justificativa" style="display:none;">
           <textarea id="edit-justificativaVerificacao" class="materialize-textarea"></textarea>
@@ -262,7 +364,9 @@
     </div>
   </div>
 
-  <!-- Modal de manutenção -->
+  <!-- ========================================================= -->
+  <!-- MODAL DE MANUTENÇÃO -->
+  <!-- ========================================================= -->
   <div id="modal-manutencao" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5>
@@ -297,527 +401,1205 @@
     </div>
   </div>
 
+  <footer class="sce-footer">
+    <div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;">
+      <span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span>
+      <a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a>
+      <a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a>
+      <a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a>
+      <span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.1.0</span>
+    </div>
+  </footer>
+
 </body>
 
 <script>
-// ================================================================
-// 1. CAPTURA O TOKEN DA URL E SALVA NO localStorage
-// ================================================================
-(function() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const tokenFromUrl = urlParams.get('token');
-  
-  if (tokenFromUrl) {
-    localStorage.setItem('sce_token', tokenFromUrl);
-    console.log('✅ Token salvo no localStorage a partir da URL:', tokenFromUrl);
-  } else {
-    console.warn('⚠️ Nenhum token encontrado na URL. Usando localStorage existente.');
+  // ================================================================
+  // VARIÁVEIS GLOBAIS
+  // ================================================================
+  let ordemAtual = 'asc';
+  let campoOrdenacao = null;
+  let listasCache = null;
+
+  // ================================================================
+  // TOKEN
+  // ================================================================
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    if (tokenFromUrl) {
+      localStorage.setItem('sce_token', tokenFromUrl);
+      console.log('✅ Token salvo no localStorage a partir da URL:', tokenFromUrl);
+    } else {
+      console.warn('⚠️ Nenhum token encontrado na URL. Usando localStorage existente.');
+    }
+  })();
+
+  const SCE_TOKEN = localStorage.getItem('sce_token');
+  console.log('🔑 SCE_TOKEN:', SCE_TOKEN);
+
+  if (!SCE_TOKEN) {
+    console.error('❌ Nenhum token encontrado. Redirecionando para login...');
+    M.toast({ html: 'Sessão expirada. Faça login novamente.' });
+    setTimeout(function() { window.location.href = window.location.href.split('?')[0]; }, 2000);
   }
-})();
 
-// ================================================================
-// 2. LÊ O TOKEN DO localStorage
-// ================================================================
-const SCE_TOKEN = localStorage.getItem('sce_token');
-console.log('🔑 SCE_TOKEN:', SCE_TOKEN);
+  // ================================================================
+  // UNIDADES DO TÉCNICO
+  // ================================================================
+  const UNIDADES_TECNICO = String(<?!= JSON.stringify(session.filial || '') ?>)
+    .split(',')
+    .map(function (u) { return u.trim(); })
+    .filter(function (u) { return u.length > 0; });
 
-if (!SCE_TOKEN) {
-  console.error('❌ Nenhum token encontrado. Redirecionando para login...');
-  M.toast({ html: 'Sessão expirada. Faça login novamente.' });
-  setTimeout(function() {
-    window.location.href = window.location.href.split('?')[0];
-  }, 2000);
-}
+  console.log('🏢 Unidades do técnico:', UNIDADES_TECNICO);
 
-// ================================================================
-// 3. VARIÁVEIS GLOBAIS
-// ================================================================
-const UNIDADES_TECNICO = String(<?!= JSON.stringify(session.filial || '') ?>)
-  .split(',')
-  .map(function (u) { return u.trim(); })
-  .filter(function (u) { return u.length > 0; });
+  let equipamentosCache = [];
+  let equipamentosFiltrados = [];
+  let paginaAtual = 1;
+  const ITENS_POR_PAGINA = 25;
+  let sceChartStatus = null;
 
-let equipamentosCache = [];
-let equipamentosFiltrados = [];
-let paginaAtual = 1;
-const ITENS_POR_PAGINA = 25;
+  let equipamentoIdManutencaoAtual = null;
+  let modalEdicaoInstance = null;
+  let modalCadastroInstance = null;
+  let modalManutencaoInstance = null;
+  let itemEmEdicaoOriginal = null;
 
-let idPendenteRemocao = null;
-let equipamentoIdManutencaoAtual = null;
-let modalRemocaoInstance = null;
-let modalEdicaoInstance = null;
-let modalCadastroInstance = null;
-let modalManutencaoInstance = null;
-let itemEmEdicaoOriginal = null;
+  const CAMPOS_EDITAVEIS = [
+    'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+    'vinculadoBlueMonitor',
+    'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
+    'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+    'tamanhoTela', 'responsavelAtual', 'observacoes',
+    'justificativaPatrimonio', 'justificativaNumeroSerie'
+  ];
 
-const CAMPOS_EDITAVEIS = [
-  'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
-  'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
-  'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
-  'tamanhoTela', 'responsavelAtual', 'observacoes', 'vinculadoBlueMonitor'
-];
+  const CAMPOS_CADASTRO = [
+    'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+    'vinculadoBlueMonitor',
+    'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+    'tamanhoTela', 'responsavelAtual', 'observacoes',
+    'justificativaPatrimonio', 'justificativaNumeroSerie'
+  ];
 
-const CAMPOS_CADASTRO = [
-  'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
-  'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
-  'tamanhoTela', 'responsavelAtual', 'observacoes', 'vinculadoBlueMonitor'
-];
+  // ================================================================
+  // OBTER NOME DO TÉCNICO
+  // ================================================================
+  function obterNomeTecnico() {
+    google.script.run
+      .withSuccessHandler(function (nome) {
+        document.getElementById('nome-tecnico').innerText = nome || 'Técnico';
+      })
+      .withFailureHandler(function () {
+        document.getElementById('nome-tecnico').innerText = 'Técnico';
+      })
+      .getNomeUsuario(SCE_TOKEN);
+  }
 
-// ================================================================
-// 4. FUNÇÕES DE RENDERIZAÇÃO E FILTROS
-// ================================================================
-function renderUnidadesTecnico() {
-  const container = document.getElementById('lista-unidades-tecnico');
-  if (!container) return;
-  container.innerHTML = UNIDADES_TECNICO.map(function (u) {
-    return '<span class="chip" style="background:var(--sce-primary-light);color:var(--sce-primary-dark);font-weight:500;">' +
-      '<i class="material-icons left" style="font-size:16px;">store</i>' + u + '</span>';
-  }).join('');
-}
+  // ================================================================
+  // INICIALIZAR SELETOR DE UNIDADE
+  // ================================================================
+  function inicializarSeletorUnidade() {
+    const select = document.getElementById('seletor-unidade');
+    if (!select) return;
 
-function renderTabelaEquipamentos(equipamentos) {
-  console.log('🟠 renderTabelaEquipamentos() chamada com', equipamentos.length, 'itens');
-  const tbody = document.querySelector('#tabela-equipamentos tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
-  const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
-  pagina.forEach(function (item) {
-    const tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td>' + (item.unidade || '') + '</td>' +
-      '<td>' + (item.categoria || '') + '</td>' +
-      '<td>' + (item.marca || '') + '</td>' +
-      '<td>' + (item.modelo || '') + '</td>' +
-      '<td>' + (item.patrimonio || '') + '</td>' +
-      '<td>' + (item.status || '') + '</td>' +
-      '<td>' +
-        '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar">' +
-          '<i class="material-icons">edit</i></a> ' +
-        '<a class="btn-small waves-effect" onclick="abrirManutencao(\'' + item.id + '\')" title="Registrar manutenção">' +
-          '<i class="material-icons">build</i></a> ' +
-        '<a class="btn-small waves-effect red" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover">' +
-          '<i class="material-icons">delete</i></a>' +
-      '</td>';
-    tbody.appendChild(tr);
-  });
-  const totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));
-  const info = document.getElementById('pagina-info');
-  if (info) info.innerText = 'Pagina ' + paginaAtual + ' de ' + totalPaginas + ' - ' + equipamentos.length + ' itens';
-}
+    select.innerHTML = '<option value="">Todas as unidades</option>' +
+      UNIDADES_TECNICO.map(function (u) {
+        return '<option value="' + u + '">' + u + '</option>';
+      }).join('');
 
-function aplicarFiltros() {
-  const busca = document.getElementById('filtro-busca')?.value?.trim()?.toLowerCase() || '';
-  const status = document.getElementById('filtro-status')?.value || '';
-  const unidade = document.getElementById('filtro-unidade')?.value || '';
-  equipamentosFiltrados = equipamentosCache.filter(function (item) {
-    if (status && item.status !== status) return false;
-    if (unidade && item.unidade !== unidade) return false;
-    if (!busca) return true;
-    return [item.patrimonio, item.numeroSerie, item.modelo].join(' ').toLowerCase().indexOf(busca) !== -1;
-  });
-  paginaAtual = 1;
-  renderTabelaEquipamentos(equipamentosFiltrados);
-}
+    if (UNIDADES_TECNICO.length === 1) {
+      select.value = UNIDADES_TECNICO[0];
+    }
 
-function atualizarFiltrosOpcoes(equipamentos) {
-  preencherSelectFiltro('filtro-status', equipamentos.map(function (e) { return e.status; }), 'Todos os status');
-  // Unidade não deriva dos equipamentos carregados — usa as unidades do próprio técnico.
-  const select = document.getElementById('filtro-unidade');
-  if (select) {
+    document.getElementById('unidades-atendidas').innerText = UNIDADES_TECNICO.join(', ') || 'Nenhuma';
+
+    select.addEventListener('change', function() {
+      aplicarFiltros();
+    });
+  }
+
+  // ================================================================
+  // CARREGAR LISTAS (CATEGORIA, MARCA, MODELO) - CASCATA + "OUTRO"
+  // ================================================================
+  function carregarListasCadastro() {
+    console.log('🟢 carregarListasCadastro() iniciado...');
+    google.script.run
+      .withSuccessHandler(function (dados) {
+        console.log('✅ Listas recebidas:', dados);
+        processarListas(dados);
+        preencherSelectCategoria('new');
+        preencherSelectCategoria('edit');
+      })
+      .withFailureHandler(function (err) {
+        console.error('❌ Erro ao carregar listas:', err.message);
+        M.toast({ html: 'Erro ao carregar listas. Recarregue a página.' });
+      })
+      .getListasCadastro(SCE_TOKEN);
+  }
+
+  function processarListas(combinacoes) {
+    const categorias = new Set();
+    const marcasPorCategoria = {};
+    const modelosPorCategoriaMarca = {};
+
+    combinacoes.forEach(item => {
+      const cat = item.categoria;
+      const marca = item.marca;
+      const modelo = item.modelo;
+      if (!cat || !marca || !modelo) return;
+      categorias.add(cat);
+      if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
+      marcasPorCategoria[cat].add(marca);
+      if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};
+      if (!modelosPorCategoriaMarca[cat][marca]) modelosPorCategoriaMarca[cat][marca] = new Set();
+      modelosPorCategoriaMarca[cat][marca].add(modelo);
+    });
+
+    listasCache = {
+      combinacoes: combinacoes,
+      categorias: Array.from(categorias).sort(),
+      marcasPorCategoria: marcasPorCategoria,
+      modelosPorCategoriaMarca: modelosPorCategoriaMarca
+    };
+  }
+
+  function preencherSelectCategoria(prefixo) {
+    const select = document.getElementById(prefixo + '-categoria');
+    if (!select || !listasCache) return;
+    const valorAtual = select.value;
+    select.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+      listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
+      '<option value="__outro__">Outro (digitar)</option>';
+    if (valorAtual && listasCache.categorias.includes(valorAtual)) {
+      select.value = valorAtual;
+    } else if (valorAtual && valorAtual !== '__outro__') {
+      select.value = '__outro__';
+      const input = document.getElementById(prefixo + '-outro-categoria');
+      if (input) input.value = valorAtual;
+      toggleOutroCampo(prefixo, 'categoria');
+    } else {
+      select.value = valorAtual;
+      toggleOutroCampo(prefixo, 'categoria');
+    }
+    M.FormSelect.init(select);
+    if (select.value && select.value !== '__outro__') {
+      popularMarcas(prefixo, select.value);
+      limparModelo(prefixo);
+    } else {
+      limparMarcaModelo(prefixo);
+    }
+  }
+
+  function popularMarcas(prefixo, categoria) {
+    const selectMarca = document.getElementById(prefixo + '-marca');
+    if (!selectMarca || !listasCache) return;
+    const marcasSet = listasCache.marcasPorCategoria[categoria] || new Set();
+    const marcas = Array.from(marcasSet).sort();
+    const valorAtual = selectMarca.value;
+    selectMarca.innerHTML = '<option value="" disabled selected>Selecione uma marca</option>' +
+      marcas.map(m => `<option value="${m}">${m}</option>`).join('') +
+      '<option value="__outro__">Outro (digitar)</option>';
+    if (valorAtual && marcas.includes(valorAtual)) {
+      selectMarca.value = valorAtual;
+    } else if (valorAtual && valorAtual !== '__outro__') {
+      selectMarca.value = '__outro__';
+      const input = document.getElementById(prefixo + '-outro-marca');
+      if (input) input.value = valorAtual;
+      toggleOutroCampo(prefixo, 'marca');
+    } else {
+      selectMarca.value = valorAtual;
+      toggleOutroCampo(prefixo, 'marca');
+    }
+    M.FormSelect.init(selectMarca);
+    if (selectMarca.value && selectMarca.value !== '__outro__') {
+      popularModelos(prefixo, categoria, selectMarca.value);
+    } else {
+      limparModelo(prefixo);
+    }
+  }
+
+  function popularModelos(prefixo, categoria, marca) {
+    const selectModelo = document.getElementById(prefixo + '-modelo');
+    if (!selectModelo || !listasCache) return;
+    const modelosSet = listasCache.modelosPorCategoriaMarca[categoria]?.[marca] || new Set();
+    const modelos = Array.from(modelosSet).sort();
+    const valorAtual = selectModelo.value;
+    selectModelo.innerHTML = '<option value="" disabled selected>Selecione um modelo</option>' +
+      modelos.map(m => `<option value="${m}">${m}</option>`).join('') +
+      '<option value="__outro__">Outro (digitar)</option>';
+    if (valorAtual && modelos.includes(valorAtual)) {
+      selectModelo.value = valorAtual;
+    } else if (valorAtual && valorAtual !== '__outro__') {
+      selectModelo.value = '__outro__';
+      const input = document.getElementById(prefixo + '-outro-modelo');
+      if (input) input.value = valorAtual;
+      toggleOutroCampo(prefixo, 'modelo');
+    } else {
+      selectModelo.value = valorAtual;
+      toggleOutroCampo(prefixo, 'modelo');
+    }
+    M.FormSelect.init(selectModelo);
+  }
+
+  function limparMarcaModelo(prefixo) {
+    const selectMarca = document.getElementById(prefixo + '-marca');
+    if (selectMarca) {
+      selectMarca.innerHTML = '<option value="" disabled selected>Selecione a categoria</option>';
+      M.FormSelect.init(selectMarca);
+    }
+    limparModelo(prefixo);
+  }
+
+  function limparModelo(prefixo) {
+    const selectModelo = document.getElementById(prefixo + '-modelo');
+    if (selectModelo) {
+      selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
+      M.FormSelect.init(selectModelo);
+    }
+  }
+
+  function toggleOutroCampo(prefixo, tipo) {
+    const select = document.getElementById(prefixo + '-' + tipo);
+    const container = document.getElementById(prefixo + '-outro-' + tipo + '-container');
+    const input = document.getElementById(prefixo + '-outro-' + tipo);
+    if (!select || !container || !input) return;
+    if (select.value === '__outro__') {
+      container.style.display = 'block';
+      input.focus();
+    } else {
+      container.style.display = 'none';
+      input.value = '';
+    }
+  }
+
+  // Eventos de cascata
+  function onCategoriaChange(prefixo) {
+    const select = document.getElementById(prefixo + '-categoria');
+    toggleOutroCampo(prefixo, 'categoria');
+    if (select && select.value && select.value !== '__outro__') {
+      popularMarcas(prefixo, select.value);
+      limparModelo(prefixo);
+    } else {
+      limparMarcaModelo(prefixo);
+    }
+  }
+
+  function onMarcaChange(prefixo) {
+    const selectMarca = document.getElementById(prefixo + '-marca');
+    const selectCategoria = document.getElementById(prefixo + '-categoria');
+    toggleOutroCampo(prefixo, 'marca');
+    if (selectMarca && selectCategoria && selectMarca.value && selectMarca.value !== '__outro__' && selectCategoria.value && selectCategoria.value !== '__outro__') {
+      popularModelos(prefixo, selectCategoria.value, selectMarca.value);
+    } else {
+      limparModelo(prefixo);
+    }
+  }
+
+  // ================================================================
+  // FUNÇÕES DE JUSTIFICATIVA (Patrimônio e Série)
+  // ================================================================
+  function configurarJustificativas(prefixo) {
+    const campoPat = document.getElementById(prefixo + '-patrimonio');
+    const campoSerie = document.getElementById(prefixo + '-numeroSerie');
+    const justPatContainer = document.getElementById('campo-justificativa-patrimonio' + (prefixo === 'edit' ? '-edit' : ''));
+    const justSerieContainer = document.getElementById('campo-justificativa-serie' + (prefixo === 'edit' ? '-edit' : ''));
+    const justPatInput = document.getElementById(prefixo + '-justificativaPatrimonio');
+    const justSerieInput = document.getElementById(prefixo + '-justificativaNumeroSerie');
+
+    if (!campoPat || !campoSerie || !justPatContainer || !justSerieContainer) return;
+
+    function verificarPatrimonio() {
+      if (campoPat.value.trim() === '') {
+        justPatContainer.style.display = 'block';
+        if (justPatInput) justPatInput.required = true;
+      } else {
+        justPatContainer.style.display = 'none';
+        if (justPatInput) { justPatInput.value = ''; justPatInput.required = false; }
+      }
+    }
+
+    function verificarSerie() {
+      if (campoSerie.value.trim() === '') {
+        justSerieContainer.style.display = 'block';
+        if (justSerieInput) justSerieInput.required = true;
+      } else {
+        justSerieContainer.style.display = 'none';
+        if (justSerieInput) { justSerieInput.value = ''; justSerieInput.required = false; }
+      }
+    }
+
+    campoPat.addEventListener('input', verificarPatrimonio);
+    campoSerie.addEventListener('input', verificarSerie);
+
+    verificarPatrimonio();
+    verificarSerie();
+  }
+
+  // ================================================================
+  // KPIs
+  // ================================================================
+  function kpiCard_(icone, valor, label, extraClass) {
+    return '<div class="col s12 m3">' +
+      '<div class="sce-kpi ' + (extraClass || '') + '">' +
+        '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
+        '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
+      '</div></div>';
+  }
+
+  function atualizarKpis(equipamentos) {
+    const porStatus = {};
+    equipamentos.forEach(function (item) {
+      const s = item.status || 'Não definido';
+      porStatus[s] = (porStatus[s] || 0) + 1;
+    });
+
+    const total = equipamentos.length;
+    const disponiveis = porStatus['Disponível'] || 0;
+    const manutencao = porStatus['Manutenção'] || 0;
+    const quebrados = porStatus['Quebrado'] || 0;
+    const inserviveis = porStatus['Inservível'] || 0;
+    const extraviado = porStatus['Extraviado'] || 0;
+    const emVerificacao = porStatus['Em verificação'] || 0;
+
+    document.getElementById('kpis').innerHTML =
+      kpiCard_('devices', total, 'Total', 'kpi-total') +
+      kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
+      kpiCard_('build', manutencao, 'Manutenção', 'kpi-manutencao') +
+      kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados') +
+      kpiCard_('close', inserviveis, 'Inservíveis', 'kpi-inserviveis') +
+      kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado') +
+      kpiCard_('search', emVerificacao, 'Em verificação', 'kpi-emVerificacao');
+  }
+
+  // ================================================================
+  // GRÁFICO
+  // ================================================================
+  function renderGraficoStatus(equipamentos) {
+    const porStatus = {};
+    equipamentos.forEach(function (item) {
+      const s = item.status || 'Não definido';
+      porStatus[s] = (porStatus[s] || 0) + 1;
+    });
+    const canvas = document.getElementById('canvas-chart-status');
+    const labels = Object.keys(porStatus);
+    const valores = labels.map(function (l) { return porStatus[l]; });
+    const cores = ['#1565c0', '#43a047', '#ef6c00', '#d32f2f', '#8e24aa', '#00838f', '#795548', '#607d8b'];
+
+    if (sceChartStatus) sceChartStatus.destroy();
+    sceChartStatus = new Chart(canvas.getContext('2d'), {
+      type: 'pie',
+      data: {
+        labels: labels,
+        datasets: [{ data: valores, backgroundColor: cores }]
+      },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  }
+
+  // ================================================================
+  // CARREGAR EQUIPAMENTOS
+  // ================================================================
+  function carregarEquipamentos() {
+    console.log('🟢 carregarEquipamentos() INICIADA');
+    if (!SCE_TOKEN) {
+      console.error('❌ Token não disponível');
+      M.toast({ html: 'Token não encontrado. Recarregue a página.' });
+      return;
+    }
+
+    sceShowLoading();
+    google.script.run
+      .withSuccessHandler(function (equipamentos) {
+        console.log('✅ equipamentos recebidos:', equipamentos ? equipamentos.length : 0);
+        equipamentosCache = equipamentos || [];
+        equipamentosCache.forEach(function(item) {
+          if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+            const hoje = new Date();
+            const prevista = new Date(item.dataPrevistaDevolucao);
+            item.emAtraso = prevista < hoje;
+          } else {
+            item.emAtraso = false;
+          }
+        });
+        atualizarFiltrosOpcoes(equipamentosCache);
+        aplicarFiltros();
+        sceHideLoading();
+      })
+      .withFailureHandler(function (err) {
+        console.error('❌ Erro na chamada:', err);
+        M.toast({ html: 'Erro ao carregar: ' + err.message });
+        sceHideLoading();
+      })
+      .getEquipamentosDaFilial(SCE_TOKEN);
+  }
+
+  // ================================================================
+  // FILTROS
+  // ================================================================
+  function inicializarFiltrosRapidos() {
+    const botoes = document.querySelectorAll('.btn-filtro');
+    botoes.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        botoes.forEach(function(b) { b.classList.remove('ativo'); });
+        this.classList.add('ativo');
+        const filtro = this.dataset.filtro;
+        const selectStatus = document.getElementById('filtro-status');
+        if (filtro === 'todos') {
+          selectStatus.value = '';
+        } else {
+          selectStatus.value = filtro;
+        }
+        M.FormSelect.init(selectStatus);
+        aplicarFiltros();
+      });
+    });
+  }
+
+  function ordenarTabela(campo) {
+    if (campoOrdenacao === campo) {
+      ordemAtual = ordemAtual === 'asc' ? 'desc' : 'asc';
+    } else {
+      campoOrdenacao = campo;
+      ordemAtual = 'asc';
+    }
+
+    equipamentosFiltrados.sort(function (a, b) {
+      const valA = (a[campo] || '').toString().toLowerCase();
+      const valB = (b[campo] || '').toString().toLowerCase();
+      if (valA < valB) return ordemAtual === 'asc' ? -1 : 1;
+      if (valA > valB) return ordemAtual === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    document.querySelectorAll('.sortable').forEach(function(th) {
+      const icon = th.querySelector('.material-icons');
+      if (icon) icon.textContent = 'unfold_more';
+    });
+    const thAtual = document.querySelector('[data-sort="' + campo + '"]');
+    if (thAtual) {
+      const icon = thAtual.querySelector('.material-icons');
+      if (icon) icon.textContent = ordemAtual === 'asc' ? 'arrow_upward' : 'arrow_downward';
+    }
+
+    paginaAtual = 1;
+    renderTabelaEquipamentos(equipamentosFiltrados);
+  }
+
+  function aplicarFiltros() {
+    const busca = document.getElementById('filtro-busca')?.value?.trim()?.toLowerCase() || '';
+    const status = document.getElementById('filtro-status')?.value || '';
+    const unidadeSelecionada = document.getElementById('seletor-unidade')?.value || '';
+
+    equipamentosFiltrados = equipamentosCache.filter(function (item) {
+      if (status && item.status !== status) return false;
+      if (unidadeSelecionada && item.unidade !== unidadeSelecionada) return false;
+      if (!busca) return true;
+      return [item.patrimonio, item.numeroSerie, item.modelo].join(' ').toLowerCase().indexOf(busca) !== -1;
+    });
+    paginaAtual = 1;
+    renderTabelaEquipamentos(equipamentosFiltrados);
+    atualizarKpis(equipamentosFiltrados);
+    renderGraficoStatus(equipamentosFiltrados);
+    document.getElementById('contador-equipamentos').innerText = equipamentosFiltrados.length;
+  }
+
+  function atualizarFiltrosOpcoes(equipamentos) {
+    preencherSelectFiltro('filtro-status', equipamentos.map(function (e) { return e.status; }), 'Todos os status');
+  }
+
+  function preencherSelectFiltro(id, valores, label) {
+    const select = document.getElementById(id);
+    if (!select) return;
     const atual = select.value;
-    select.innerHTML = '<option value="">Todas as suas unidades</option>' +
-      UNIDADES_TECNICO.map(function (u) { return '<option value="' + u + '">' + u + '</option>'; }).join('');
+    const unicos = valores.filter(Boolean).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).sort();
+    select.innerHTML = '<option value="">' + label + '</option>' + unicos.map(function (v) {
+      return '<option value="' + v + '">' + v + '</option>';
+    }).join('');
     select.value = atual;
     M.FormSelect.init(select);
   }
-}
 
-function preencherSelectFiltro(id, valores, label) {
-  const select = document.getElementById(id);
-  if (!select) return;
-  const atual = select.value;
-  const unicos = valores.filter(Boolean).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).sort();
-  select.innerHTML = '<option value="">' + label + '</option>' + unicos.map(function (v) {
-    return '<option value="' + v + '">' + v + '</option>';
-  }).join('');
-  select.value = atual;
-  M.FormSelect.init(select);
-}
-
-// ================================================================
-// 5. CARREGAR EQUIPAMENTOS (com logs)
-// ================================================================
-function carregarEquipamentos() {
-  console.log('🟢 carregarEquipamentos() INICIADA');
-  console.log('🟢 SCE_TOKEN:', SCE_TOKEN);
-  
-  if (!SCE_TOKEN) {
-    console.error('❌ Token não disponível');
-    M.toast({ html: 'Token não encontrado. Recarregue a página.' });
-    return;
-  }
-  
-  sceShowLoading();
-  google.script.run
-    .withSuccessHandler(function (equipamentos) {
-      console.log('✅ equipamentos recebidos do servidor:', equipamentos);
-      console.log('✅ Quantidade:', equipamentos ? equipamentos.length : 'null/undefined');
-      
-      if (!equipamentos || equipamentos.length === 0) {
-        console.warn('⚠️ Nenhum equipamento retornado. Verifique se o técnico tem unidades cadastradas.');
-        M.toast({ html: 'Nenhum equipamento encontrado para suas unidades.' });
-      }
-      
-      equipamentosCache = equipamentos || [];
-      atualizarFiltrosOpcoes(equipamentosCache);
-      aplicarFiltros();
-      sceHideLoading();
-    })
-    .withFailureHandler(function (err) {
-      console.error('❌ Erro na chamada:', err);
-      M.toast({ html: 'Erro ao carregar: ' + err.message });
-      sceHideLoading();
-    })
-    .getEquipamentosDaFilial(SCE_TOKEN);
-}
-
-// ================================================================
-// 6. CADASTRO
-// ================================================================
-function abrirCadastroEquipamento() {
-  CAMPOS_CADASTRO.forEach(function (campo) {
-    const el = document.getElementById('new-' + campo);
-    if (el && campo !== 'unidade') el.value = campo === 'status' ? 'Disponível' : '';
-  });
-
-  const selectUnidade = document.getElementById('new-unidade');
-  if (selectUnidade) {
-    selectUnidade.innerHTML = UNIDADES_TECNICO.map(function (u) { return '<option value="' + u + '">' + u + '</option>'; }).join('');
-    selectUnidade.disabled = UNIDADES_TECNICO.length <= 1;
-    M.FormSelect.init(selectUnidade);
-  }
-
-  M.FormSelect.init(document.getElementById('new-status'));
-  M.updateTextFields();
-
-  if (!modalCadastroInstance) {
-    modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
-  }
-  modalCadastroInstance.open();
-}
-
-function salvarCadastro() {
-  const btn = document.getElementById('btn-salvar-cadastro');
-  if (btn.dataset.loading === '1') return;
-
-  const dados = {};
-  CAMPOS_CADASTRO.forEach(function (campo) {
-    const el = document.getElementById('new-' + campo);
-    if (el && el.value) dados[campo] = el.value;
-  });
-
-  if (!dados.unidade || !dados.categoria || !dados.patrimonio) {
-    M.toast({ html: 'Preencha Unidade, Categoria e Patrimonio.' });
-    return;
-  }
-
-  btn.dataset.loading = '1';
-  btn.classList.add('disabled');
-
-  google.script.run
-    .withSuccessHandler(function () {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      M.toast({ html: 'Equipamento cadastrado.' });
-      modalCadastroInstance.close();
-      carregarEquipamentos();
-    })
-    .withFailureHandler(function (err) {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      M.toast({ html: 'Erro ao cadastrar: ' + err.message });
-    })
-    .createEquipamento(SCE_TOKEN, dados);
-}
-
-// ================================================================
-// 7. REMOÇÃO
-// ================================================================
-function abrirModalRemocao(id) {
-  idPendenteRemocao = id;
-  if (!modalRemocaoInstance) {
-    modalRemocaoInstance = M.Modal.init(document.getElementById('modal-confirmar-remocao'));
-  }
-  modalRemocaoInstance.open();
-}
-
-function confirmarRemocao() {
-  if (!idPendenteRemocao) return;
-  const id = idPendenteRemocao;
-  const btn = document.getElementById('btn-confirmar-remocao');
-  if (btn.dataset.loading === '1') return;
-  btn.dataset.loading = '1';
-  btn.classList.add('disabled');
-
-  google.script.run
-    .withSuccessHandler(function (res) {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      M.toast({ html: res.message });
-      modalRemocaoInstance.close();
-      idPendenteRemocao = null;
-      carregarEquipamentos();
-    })
-    .withFailureHandler(function (err) {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      M.toast({ html: 'Erro ao remover: ' + err.message });
-      modalRemocaoInstance.close();
-      idPendenteRemocao = null;
-    })
-    .removerEquipamento(SCE_TOKEN, id);
-}
-
-// ================================================================
-// 8. EDIÇÃO
-// ================================================================
-function editarEquipamento(id) {
-  const item = equipamentosCache.filter(function (e) { return e.id === id; })[0];
-  if (!item) { M.toast({ html: 'Item não encontrado no cache local.' }); return; }
-
-  itemEmEdicaoOriginal = item;
-  document.getElementById('edit-id').value = item.id;
-
-  CAMPOS_EDITAVEIS.forEach(function (campo) {
-    const el = document.getElementById('edit-' + campo);
-    if (el) el.value = item[campo] || '';
-  });
-
-  atualizarCamposCondicionais();
-  M.FormSelect.init(document.getElementById('edit-status'));
-  M.updateTextFields();
-
-  if (!modalEdicaoInstance) {
-    modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
-  }
-  modalEdicaoInstance.open();
-}
-
-function atualizarCamposCondicionais() {
-  const status = document.getElementById('edit-status')?.value || '';
-  const chamado = document.getElementById('campo-chamado');
-  const bo = document.getElementById('campo-bo');
-  const justificativa = document.getElementById('campo-justificativa');
-  if (chamado) chamado.style.display = (status === 'Manutenção') ? 'block' : 'none';
-  if (bo) bo.style.display = (status === 'Extraviado') ? 'block' : 'none';
-  if (justificativa) justificativa.style.display = (status === 'Em verificação') ? 'block' : 'none';
-}
-
-function salvarEdicao() {
-  const btn = document.getElementById('btn-salvar-edicao');
-  if (btn.dataset.loading === '1') return;
-
-  const id = document.getElementById('edit-id').value;
-  const camposAlterados = {};
-
-  CAMPOS_EDITAVEIS.forEach(function (campo) {
-    const el = document.getElementById('edit-' + campo);
-    if (!el) return;
-    const valorNovo = el.value;
-    const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
-    if (String(valorNovo) !== String(valorAntigo)) {
-      camposAlterados[campo] = valorNovo;
+  // ================================================================
+  // FUNÇÃO PARA OBTER VALOR DO SELECT OU "OUTRO"
+  // ================================================================
+  function obterValorSelectOuOutro(prefixo, tipo) {
+    const select = document.getElementById(prefixo + '-' + tipo);
+    if (!select) return '';
+    if (select.value === '__outro__') {
+      const input = document.getElementById(prefixo + '-outro-' + tipo);
+      return input ? input.value.trim() : '';
     }
-  });
+    return select.value;
+  }
 
-  const status = document.getElementById('edit-status').value;
-  const regrasStatus = {
-    'Manutenção': 'numeroChamadoManutencao',
-    'Extraviado': 'boletimOcorrencia',
-    'Em verificação': 'justificativaVerificacao'
-  };
-  const campoObrigatorio = regrasStatus[status];
-  if (campoObrigatorio) {
-    const valorFinal = camposAlterados[campoObrigatorio] !== undefined
-      ? camposAlterados[campoObrigatorio]
-      : (itemEmEdicaoOriginal[campoObrigatorio] || '');
-    if (!valorFinal) {
-      M.toast({ html: 'Preencha o campo obrigatório para o status "' + status + '".' });
+  // ================================================================
+  // TABELA
+  // ================================================================
+  function renderTabelaEquipamentos(equipamentos) {
+    const tbody = document.querySelector('#tabela-equipamentos tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!equipamentos || equipamentos.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
+      document.getElementById('pagina-info').innerText = 'Página 0 de 0 - 0 itens';
       return;
     }
-  }
 
-  if (Object.keys(camposAlterados).length === 0) {
-    M.toast({ html: 'Nada foi alterado.' });
-    modalEdicaoInstance.close();
-    return;
-  }
+    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+    const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
+    pagina.forEach(function (item) {
+      const tr = document.createElement('tr');
+      const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
+      tr.className = statusClass;
 
-  btn.dataset.loading = '1';
-  btn.classList.add('disabled');
-
-  google.script.run
-    .withSuccessHandler(function () {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      M.toast({ html: 'Equipamento atualizado.' });
-      modalEdicaoInstance.close();
-      carregarEquipamentos();
-    })
-    .withFailureHandler(function (err) {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      M.toast({ html: 'Erro ao salvar: ' + err.message });
-    })
-    .updateEquipamento(SCE_TOKEN, id, camposAlterados);
-}
-
-// ================================================================
-// 9. MANUTENÇÃO
-// ================================================================
-function abrirManutencao(id) {
-  equipamentoIdManutencaoAtual = id;
-  document.getElementById('manut-equipamento-id').value = id;
-  document.getElementById('manut-descricao').value = '';
-  M.FormSelect.init(document.getElementById('manut-status'));
-  M.updateTextFields();
-  carregarLogManutencao(id);
-
-  if (!modalManutencaoInstance) {
-    modalManutencaoInstance = M.Modal.init(document.getElementById('modal-manutencao'));
-  }
-  modalManutencaoInstance.open();
-}
-
-function carregarLogManutencao(id) {
-  const tbody = document.getElementById('tabela-manutencao-body');
-  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
-
-  google.script.run
-    .withSuccessHandler(function (registros) {
-      tbody.innerHTML = '';
-      if (!registros || registros.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--sce-muted);">Nenhum registro ainda.</td></tr>';
-        return;
+      let badgeManutencao = '-';
+      if (item.statusManutencao) {
+        const statusManut = item.statusManutencao.toLowerCase().replace(/ /g, '-');
+        let badgeClass = 'badge-manutencao ';
+        if (statusManut === 'pendente') badgeClass += 'badge-pendente';
+        else if (statusManut === 'em-andamento') badgeClass += 'badge-em-andamento';
+        else if (statusManut === 'concluído') badgeClass += 'badge-concluído';
+        badgeManutencao = `<span class="${badgeClass}">${item.statusManutencao}</span>`;
       }
-      registros.forEach(function (r) {
-        const tr = document.createElement('tr');
-        tr.innerHTML =
-          '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
-          '<td>' + (r.autor || '') + '</td>' +
-          '<td>' + (r.status || '') + '</td>' +
-          '<td>' + (r.descricao || '') + '</td>';
-        tbody.appendChild(tr);
-      });
-    })
-    .withFailureHandler(function (err) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:#d32f2f;">Erro: ' + err.message + '</td></tr>';
-    })
-    .getRegistrosManutencao(SCE_TOKEN, id);
-}
 
-function registrarManutencaoUI() {
-  const btn = document.getElementById('btn-registrar-manutencao');
-  if (btn.dataset.loading === '1') return;
+      let indicadorAtraso = '-';
+      if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+        const hoje = new Date();
+        const prevista = new Date(item.dataPrevistaDevolucao);
+        const atrasado = prevista < hoje;
+        const label = atrasado ? 'Atrasado' : 'Em dia';
+        const cls = atrasado ? 'badge-atrasado' : 'badge-em-dia';
+        indicadorAtraso = `<span class="badge-atraso ${cls}">${label}</span>`;
+      }
 
-  const descricao = document.getElementById('manut-descricao').value.trim();
-  const status = document.getElementById('manut-status').value;
-  if (!descricao) { M.toast({ html: 'Descreva o que foi feito.' }); return; }
+      const blueBadge = item.vinculadoBlueMonitor === 'Sim'
+        ? '<span class="badge-blue sim">Sim</span>'
+        : '<span class="badge-blue nao">Não</span>';
 
-  btn.dataset.loading = '1';
-  btn.classList.add('disabled');
+      tr.innerHTML =
+        '<td>' + (item.unidade || '') + '</td>' +
+        '<td>' + (item.categoria || '') + '</td>' +
+        '<td>' + (item.marca || '') + '</td>' +
+        '<td>' + (item.modelo || '') + '</td>' +
+        '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
+        '<td><strong>' + (item.status || '') + '</strong></td>' +
+        '<td>' + badgeManutencao + '</td>' +
+        '<td>' + indicadorAtraso + '</td>' +
+        '<td>' + blueBadge + '</td>' +
+        '<td class="no-print">' +
+          '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
+          '<a class="btn-small waves-effect" onclick="abrirManutencao(\'' + item.id + '\')" title="Manutenção"><i class="material-icons">build</i></a>' +
+        '</td>';
+      tbody.appendChild(tr);
+    });
 
-  google.script.run
-    .withSuccessHandler(function () {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      document.getElementById('manut-descricao').value = '';
-      M.toast({ html: 'Manutenção registrada.' });
-      carregarLogManutencao(equipamentoIdManutencaoAtual);
-      carregarEquipamentos();
-    })
-    .withFailureHandler(function (err) {
-      btn.dataset.loading = '0';
-      btn.classList.remove('disabled');
-      M.toast({ html: 'Erro: ' + err.message });
-    })
-    .registrarManutencao(SCE_TOKEN, equipamentoIdManutencaoAtual, descricao, status);
-}
+    const totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));
+    const info = document.getElementById('pagina-info');
+    if (info) info.innerText = 'Página ' + paginaAtual + ' de ' + totalPaginas + ' - ' + equipamentos.length + ' itens';
+  }
 
-// ================================================================
-// 10. INICIALIZAÇÃO
-// ================================================================
-function adicionarEventListeners() {
-  console.log('🟢 Adicionando event listeners...');
-
-  const btnCadastro = document.getElementById('btn-abrir-cadastro');
-  const btnAtualizar = document.getElementById('btn-atualizar-lista');
-  const btnSalvarCadastro = document.getElementById('btn-salvar-cadastro');
-  const btnConfirmarRemocao = document.getElementById('btn-confirmar-remocao');
-  const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
-  const btnRegistrarManutencao = document.getElementById('btn-registrar-manutencao');
-
-  if (btnCadastro) btnCadastro.addEventListener('click', abrirCadastroEquipamento);
-  if (btnAtualizar) btnAtualizar.addEventListener('click', carregarEquipamentos);
-  if (btnSalvarCadastro) btnSalvarCadastro.addEventListener('click', salvarCadastro);
-  if (btnConfirmarRemocao) btnConfirmarRemocao.addEventListener('click', confirmarRemocao);
-  if (btnSalvarEdicao) btnSalvarEdicao.addEventListener('click', salvarEdicao);
-  if (btnRegistrarManutencao) btnRegistrarManutencao.addEventListener('click', registrarManutencaoUI);
-
-  // Filtros
-  const filtroBusca = document.getElementById('filtro-busca');
-  const filtroStatus = document.getElementById('filtro-status');
-  const filtroUnidade = document.getElementById('filtro-unidade');
-  if (filtroBusca) filtroBusca.addEventListener('input', aplicarFiltros);
-  if (filtroStatus) filtroStatus.addEventListener('change', aplicarFiltros);
-  if (filtroUnidade) filtroUnidade.addEventListener('change', aplicarFiltros);
-
-  // Paginação
-  const btnAnterior = document.getElementById('btn-pagina-anterior');
-  const btnProxima = document.getElementById('btn-proxima-pagina');
-  if (btnAnterior) {
-    btnAnterior.addEventListener('click', function () {
-      if (paginaAtual > 1) {
-        paginaAtual--;
-        renderTabelaEquipamentos(equipamentosFiltrados);
+  // ================================================================
+  // CADASTRO
+  // ================================================================
+  function abrirCadastroEquipamento() {
+    CAMPOS_CADASTRO.forEach(function (campo) {
+      const el = document.getElementById('new-' + campo);
+      if (el && campo !== 'unidade') {
+        if (campo === 'status') { el.value = 'Disponível'; return; }
+        if (campo === 'vinculadoBlueMonitor') { el.value = 'Não'; return; }
+        el.value = '';
       }
     });
+
+    // Limpar campos "Outro"
+    ['categoria', 'marca', 'modelo'].forEach(tipo => {
+      const input = document.getElementById('new-outro-' + tipo);
+      if (input) input.value = '';
+      const container = document.getElementById('new-outro-' + tipo + '-container');
+      if (container) container.style.display = 'none';
+    });
+
+    const selectUnidade = document.getElementById('new-unidade');
+    if (selectUnidade) {
+      selectUnidade.innerHTML = UNIDADES_TECNICO.map(function (u) {
+        return '<option value="' + u + '">' + u + '</option>';
+      }).join('');
+      if (UNIDADES_TECNICO.length === 1) {
+        selectUnidade.value = UNIDADES_TECNICO[0];
+        selectUnidade.disabled = true;
+      } else {
+        selectUnidade.disabled = false;
+      }
+      M.FormSelect.init(selectUnidade);
+    }
+
+    document.getElementById('new-anexoBoletim').value = '';
+    document.getElementById('campo-justificativa-patrimonio').style.display = 'none';
+    document.getElementById('campo-justificativa-serie').style.display = 'none';
+    configurarJustificativas('new');
+
+    if (listasCache) {
+      preencherSelectCategoria('new');
+    } else {
+      carregarListasCadastro();
+      setTimeout(function() { preencherSelectCategoria('new'); }, 500);
+    }
+
+    atualizarCamposCondicionaisCadastro();
+    M.FormSelect.init(document.querySelectorAll('#modal-cadastrar-equipamento select'));
+    M.updateTextFields();
+
+    if (!modalCadastroInstance) {
+      modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
+    }
+    modalCadastroInstance.open();
   }
-  if (btnProxima) {
-    btnProxima.addEventListener('click', function () {
+
+  function atualizarCamposCondicionaisCadastro() {
+    const status = document.getElementById('new-status').value;
+    const campoBo = document.getElementById('campo-bo-cadastro');
+    if (status === 'Extraviado') {
+      campoBo.style.display = 'block';
+    } else {
+      campoBo.style.display = 'none';
+      document.getElementById('new-anexoBoletim').value = '';
+    }
+  }
+
+  function salvarCadastro() {
+    const btn = document.getElementById('btn-salvar-cadastro');
+    if (btn.dataset.loading === '1') return;
+
+    const dados = {};
+    CAMPOS_CADASTRO.forEach(function (campo) {
+      if (campo === 'categoria' || campo === 'marca' || campo === 'modelo') {
+        const valor = obterValorSelectOuOutro('new', campo);
+        if (valor) dados[campo] = valor;
+        return;
+      }
+      const el = document.getElementById('new-' + campo);
+      if (el && el.value) dados[campo] = el.value;
+    });
+
+    if (!dados.unidade || !dados.categoria || !dados.marca || !dados.modelo) {
+      M.toast({ html: 'Preencha Unidade, Categoria, Marca e Modelo.' });
+      return;
+    }
+
+    const patrimonio = dados.patrimonio || '';
+    const justifPat = dados.justificativaPatrimonio || '';
+    if (!patrimonio && !justifPat) {
+      M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
+      return;
+    }
+
+    const serie = dados.numeroSerie || '';
+    const justifSerie = dados.justificativaNumeroSerie || '';
+    if (!serie && !justifSerie) {
+      M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
+      return;
+    }
+
+    if (!dados.status) {
+      M.toast({ html: 'Selecione um status.' });
+      return;
+    }
+
+    const status = dados.status;
+    const fileInput = document.getElementById('new-anexoBoletim');
+
+    if (status === 'Manutenção') {
+      const chamado = document.getElementById('new-numeroChamadoManutencao');
+      if (chamado && !chamado.value.trim()) {
+        M.toast({ html: 'Preencha o Nº do chamado de manutenção.' });
+        return;
+      }
+    }
+    if (status === 'Extraviado') {
+      const bo = document.getElementById('new-boletimOcorrencia');
+      if (bo && !bo.value.trim() && (!fileInput || fileInput.files.length === 0)) {
+        M.toast({ html: 'Preencha o Nº do Boletim de Ocorrência e anexe o arquivo.' });
+        return;
+      }
+      if (!fileInput || fileInput.files.length === 0) {
+        M.toast({ html: 'Para o status "Extraviado", anexe o Boletim de Ocorrência.' });
+        return;
+      }
+    }
+    if (status === 'Em verificação') {
+      const justif = document.getElementById('new-justificativaVerificacao');
+      if (justif && !justif.value.trim()) {
+        M.toast({ html: 'Preencha a justificativa da verificação.' });
+        return;
+      }
+    }
+
+    if (patrimonio) delete dados.justificativaPatrimonio;
+    if (serie) delete dados.justificativaNumeroSerie;
+
+    if (status === 'Extraviado') {
+      if (!fileInput || fileInput.files.length === 0) {
+        M.toast({ html: 'Para o status "Extraviado", anexe o Boletim de Ocorrência.' });
+        return;
+      }
+      const file = fileInput.files[0];
+      if (file.size > 8 * 1024 * 1024) {
+        M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function () {
+        const base64 = reader.result.split(',')[1];
+        dados._anexoBoletim = { base64: base64, mimeType: file.type, fileName: file.name };
+        enviarCadastro(dados, btn);
+      };
+      reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
+      reader.readAsDataURL(file);
+    } else {
+      enviarCadastro(dados, btn);
+    }
+  }
+
+  function enviarCadastro(dados, btn) {
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Equipamento cadastrado.' });
+        modalCadastroInstance.close();
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao cadastrar: ' + err.message });
+      })
+      .createEquipamento(SCE_TOKEN, dados);
+  }
+
+  // ================================================================
+  // EDIÇÃO
+  // ================================================================
+  function editarEquipamento(id) {
+    const item = equipamentosCache.filter(function (e) { return e.id === id; })[0];
+    if (!item) { M.toast({ html: 'Item não encontrado.' }); return; }
+
+    itemEmEdicaoOriginal = item;
+    document.getElementById('edit-id').value = item.id;
+
+    CAMPOS_EDITAVEIS.forEach(function (campo) {
+      const el = document.getElementById('edit-' + campo);
+      if (el) el.value = item[campo] || (campo === 'vinculadoBlueMonitor' ? 'Não' : '');
+    });
+
+    // Limpar campos "Outro" antes de preencher
+    ['categoria', 'marca', 'modelo'].forEach(tipo => {
+      const input = document.getElementById('edit-outro-' + tipo);
+      if (input) input.value = '';
+      const container = document.getElementById('edit-outro-' + tipo + '-container');
+      if (container) container.style.display = 'none';
+    });
+
+    configurarJustificativas('edit');
+    if (!item.patrimonio) {
+      document.getElementById('campo-justificativa-patrimonio-edit').style.display = 'block';
+    }
+    if (!item.numeroSerie) {
+      document.getElementById('campo-justificativa-serie-edit').style.display = 'block';
+    }
+
+    const anexoExistente = document.getElementById('anexo-bo-existente');
+    if (item.boletimOcorrenciaAnexoUrl) {
+      anexoExistente.innerText = '📎 Anexo atual: ' + item.boletimOcorrenciaAnexoUrl;
+    } else {
+      anexoExistente.innerText = '';
+    }
+
+    // Preencher selects com cascata e suporte a "Outro"
+    if (listasCache) {
+      const selectCat = document.getElementById('edit-categoria');
+      selectCat.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+        listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
+        '<option value="__outro__">Outro (digitar)</option>';
+      if (item.categoria && listasCache.categorias.includes(item.categoria)) {
+        selectCat.value = item.categoria;
+      } else if (item.categoria) {
+        selectCat.value = '__outro__';
+        const input = document.getElementById('edit-outro-categoria');
+        if (input) input.value = item.categoria;
+        document.getElementById('edit-outro-categoria-container').style.display = 'block';
+      } else {
+        selectCat.value = '';
+      }
+      M.FormSelect.init(selectCat);
+
+      if (selectCat.value && selectCat.value !== '__outro__') {
+        popularMarcas('edit', selectCat.value);
+        setTimeout(() => {
+          const selectMarca = document.getElementById('edit-marca');
+          if (selectMarca) {
+            const marcasSet = listasCache.marcasPorCategoria[selectCat.value] || new Set();
+            if (item.marca && marcasSet.has(item.marca)) {
+              selectMarca.value = item.marca;
+            } else if (item.marca) {
+              selectMarca.value = '__outro__';
+              const input = document.getElementById('edit-outro-marca');
+              if (input) input.value = item.marca;
+              document.getElementById('edit-outro-marca-container').style.display = 'block';
+            } else {
+              selectMarca.value = '';
+            }
+            M.FormSelect.init(selectMarca);
+            if (selectMarca.value && selectMarca.value !== '__outro__') {
+              popularModelos('edit', selectCat.value, selectMarca.value);
+              setTimeout(() => {
+                const selectModelo = document.getElementById('edit-modelo');
+                if (selectModelo) {
+                  const modelosSet = listasCache.modelosPorCategoriaMarca[selectCat.value]?.[selectMarca.value] || new Set();
+                  if (item.modelo && modelosSet.has(item.modelo)) {
+                    selectModelo.value = item.modelo;
+                  } else if (item.modelo) {
+                    selectModelo.value = '__outro__';
+                    const input = document.getElementById('edit-outro-modelo');
+                    if (input) input.value = item.modelo;
+                    document.getElementById('edit-outro-modelo-container').style.display = 'block';
+                  } else {
+                    selectModelo.value = '';
+                  }
+                  M.FormSelect.init(selectModelo);
+                }
+              }, 50);
+            } else {
+              limparModelo('edit');
+            }
+          }
+        }, 50);
+      } else {
+        limparMarcaModelo('edit');
+      }
+    } else {
+      // Se listasCache ainda não carregou, carrega e tenta novamente
+      carregarListasCadastro();
+      setTimeout(function() { editarEquipamento(id); }, 500);
+      return;
+    }
+
+    atualizarCamposCondicionais();
+    M.FormSelect.init(document.querySelectorAll('#modal-editar-equipamento select'));
+    M.updateTextFields();
+
+    if (!modalEdicaoInstance) {
+      modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
+    }
+    modalEdicaoInstance.open();
+  }
+
+  function atualizarCamposCondicionais() {
+    const status = document.getElementById('edit-status').value;
+    document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
+    document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
+    document.getElementById('campo-justificativa').style.display = (status === 'Em verificação') ? 'block' : 'none';
+
+    const fileInput = document.getElementById('edit-anexoBoletim');
+    if (fileInput && status !== 'Extraviado') fileInput.value = '';
+  }
+
+  function salvarEdicao() {
+    const btn = document.getElementById('btn-salvar-edicao');
+    if (btn.dataset.loading === '1') return;
+
+    const id = document.getElementById('edit-id').value;
+    const status = document.getElementById('edit-status').value;
+    const camposAlterados = {};
+
+    const patrimonio = document.getElementById('edit-patrimonio').value.trim();
+    const justifPat = document.getElementById('edit-justificativaPatrimonio').value.trim();
+    if (!patrimonio && !justifPat) {
+      M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
+      return;
+    }
+
+    const serie = document.getElementById('edit-numeroSerie').value.trim();
+    const justifSerie = document.getElementById('edit-justificativaNumeroSerie').value.trim();
+    if (!serie && !justifSerie) {
+      M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
+      return;
+    }
+
+    CAMPOS_EDITAVEIS.forEach(function (campo) {
+      if (campo === 'categoria' || campo === 'marca' || campo === 'modelo') {
+        const valor = obterValorSelectOuOutro('edit', campo);
+        const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
+        if (String(valor) !== String(valorAntigo)) {
+          camposAlterados[campo] = valor;
+        }
+        return;
+      }
+      const el = document.getElementById('edit-' + campo);
+      if (!el) return;
+      const valorNovo = el.value;
+      const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
+      if (String(valorNovo) !== String(valorAntigo)) {
+        camposAlterados[campo] = valorNovo;
+      }
+    });
+
+    // Verifica se categoria, marca e modelo estão preenchidos
+    const catFinal = camposAlterados.categoria !== undefined ? camposAlterados.categoria : (itemEmEdicaoOriginal.categoria || '');
+    const marcaFinal = camposAlterados.marca !== undefined ? camposAlterados.marca : (itemEmEdicaoOriginal.marca || '');
+    const modeloFinal = camposAlterados.modelo !== undefined ? camposAlterados.modelo : (itemEmEdicaoOriginal.modelo || '');
+    if (!catFinal || !marcaFinal || !modeloFinal) {
+      M.toast({ html: 'Preencha Categoria, Marca e Modelo.' });
+      return;
+    }
+
+    if (patrimonio) delete camposAlterados.justificativaPatrimonio;
+    if (serie) delete camposAlterados.justificativaNumeroSerie;
+
+    const regrasStatus = {
+      'Manutenção': 'numeroChamadoManutencao',
+      'Extraviado': 'boletimOcorrencia',
+      'Em verificação': 'justificativaVerificacao'
+    };
+    const campoObrigatorio = regrasStatus[status];
+    if (campoObrigatorio) {
+      const valorFinal = camposAlterados[campoObrigatorio] !== undefined
+        ? camposAlterados[campoObrigatorio]
+        : (itemEmEdicaoOriginal[campoObrigatorio] || '');
+      if (!valorFinal) {
+        M.toast({ html: 'Preencha o campo obrigatório para o status "' + status + '".' });
+        return;
+      }
+    }
+
+    const fileInput = document.getElementById('edit-anexoBoletim');
+    const jaTemAnexo = itemEmEdicaoOriginal && itemEmEdicaoOriginal.boletimOcorrenciaAnexoUrl;
+    if (status === 'Extraviado' && (!fileInput || fileInput.files.length === 0) && !jaTemAnexo) {
+      M.toast({ html: 'Anexe o Boletim de Ocorrência antes de salvar.' });
+      return;
+    }
+
+    if (Object.keys(camposAlterados).length === 0 && !(fileInput && fileInput.files.length > 0)) {
+      M.toast({ html: 'Nada foi alterado.' });
+      modalEdicaoInstance.close();
+      return;
+    }
+
+    if (status === 'Extraviado' && fileInput && fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      if (file.size > 8 * 1024 * 1024) {
+        M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function () {
+        const base64 = reader.result.split(',')[1];
+        camposAlterados._anexoBoletim = { base64: base64, mimeType: file.type, fileName: file.name };
+        enviarAtualizacaoEquipamento(id, camposAlterados, btn);
+      };
+      reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
+      reader.readAsDataURL(file);
+    } else {
+      enviarAtualizacaoEquipamento(id, camposAlterados, btn);
+    }
+  }
+
+  function enviarAtualizacaoEquipamento(id, camposAlterados, btn) {
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Equipamento atualizado.' });
+        modalEdicaoInstance.close();
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao salvar: ' + err.message });
+      })
+      .updateEquipamento(SCE_TOKEN, id, camposAlterados);
+  }
+
+  // ================================================================
+  // MANUTENÇÃO
+  // ================================================================
+  function abrirManutencao(id) {
+    equipamentoIdManutencaoAtual = id;
+    document.getElementById('manut-equipamento-id').value = id;
+    document.getElementById('manut-descricao').value = '';
+    M.FormSelect.init(document.getElementById('manut-status'));
+    M.updateTextFields();
+    carregarLogManutencao(id);
+
+    if (!modalManutencaoInstance) {
+      modalManutencaoInstance = M.Modal.init(document.getElementById('modal-manutencao'));
+    }
+    modalManutencaoInstance.open();
+  }
+
+  function carregarLogManutencao(id) {
+    const tbody = document.getElementById('tabela-manutencao-body');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
+
+    google.script.run
+      .withSuccessHandler(function (registros) {
+        tbody.innerHTML = '';
+        if (!registros || registros.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--sce-muted);">Nenhum registro ainda.</td></tr>';
+          return;
+        }
+        registros.forEach(function (r) {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
+            '<td>' + (r.autor || '') + '</td>' +
+            '<td>' + (r.status || '') + '</td>' +
+            '<td>' + (r.descricao || '') + '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .withFailureHandler(function (err) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:#d32f2f;">Erro: ' + err.message + '</td></tr>';
+      })
+      .getRegistrosManutencao(SCE_TOKEN, id);
+  }
+
+  function registrarManutencaoUI() {
+    const btn = document.getElementById('btn-registrar-manutencao');
+    if (btn.dataset.loading === '1') return;
+
+    const descricao = document.getElementById('manut-descricao').value.trim();
+    const status = document.getElementById('manut-status').value;
+    if (!descricao) { M.toast({ html: 'Descreva o que foi feito.' }); return; }
+
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function () {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        document.getElementById('manut-descricao').value = '';
+        M.toast({ html: 'Manutenção registrada.' });
+        carregarLogManutencao(equipamentoIdManutencaoAtual);
+        carregarEquipamentos();
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro: ' + err.message });
+      })
+      .registrarManutencao(SCE_TOKEN, equipamentoIdManutencaoAtual, descricao, status);
+  }
+
+  // ================================================================
+  // EXPORTAÇÃO
+  // ================================================================
+  function exportarCSVUI() {
+    const btn = document.getElementById('btn-exportar-csv');
+    if (btn.dataset.loading === '1') return;
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        if (!res.ok) { M.toast({ html: 'Erro ao exportar: ' + (res.error || '') }); return; }
+        sceBaixarCsv(res.csv, 'sce-equipamentos-tecnico-' + Date.now() + '.csv');
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao exportar: ' + err.message });
+      })
+      .exportarCSV(SCE_TOKEN);
+  }
+
+  function exportarPDF() {
+    const btn = document.getElementById('btn-exportar-pdf');
+    if (btn.dataset.loading === '1') return;
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'PDF gerado.' });
+        window.open(res.url, '_blank');
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao exportar PDF: ' + err.message });
+      })
+      .exportarEquipamentosPDF(SCE_TOKEN, {});
+  }
+
+  function sceBaixarCsv(csv, nome) {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ================================================================
+  // INICIALIZAÇÃO
+  // ================================================================
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('🟢 Inicializando dashboard Técnico...');
+    M.FormSelect.init(document.querySelectorAll('select'));
+    inicializarFiltrosRapidos();
+    inicializarSeletorUnidade();
+    obterNomeTecnico();
+    carregarListasCadastro();
+    carregarEquipamentos();
+
+    document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
+    document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
+    document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
+    document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
+    document.getElementById('btn-registrar-manutencao').addEventListener('click', registrarManutencaoUI);
+    document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
+    document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDF);
+
+    document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
+    document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+
+    document.querySelectorAll('.sortable').forEach(function(th) {
+      th.addEventListener('click', function() {
+        const campo = this.dataset.sort;
+        if (campo) ordenarTabela(campo);
+      });
+    });
+
+    document.getElementById('btn-pagina-anterior').addEventListener('click', function() {
+      if (paginaAtual > 1) { paginaAtual--; renderTabelaEquipamentos(equipamentosFiltrados); }
+    });
+    document.getElementById('btn-proxima-pagina').addEventListener('click', function() {
       if (paginaAtual < Math.ceil(equipamentosFiltrados.length / ITENS_POR_PAGINA)) {
         paginaAtual++;
         renderTabelaEquipamentos(equipamentosFiltrados);
       }
     });
-  }
 
-  console.log('✅ Event listeners adicionados!');
-}
-
-// Inicialização imediata
-console.log('🟢 Inicializando dashboard técnico...');
-
-// Renderiza as unidades do técnico
-renderUnidadesTecnico();
-
-// Inicializa selects do Materialize
-if (typeof M !== 'undefined' && M.FormSelect) {
-  M.FormSelect.init(document.querySelectorAll('select'));
-}
-
-// Carrega equipamentos
-carregarEquipamentos();
-
-// Adiciona event listeners após o DOM estar pronto
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', adicionarEventListeners);
-} else {
-  adicionarEventListeners();
-}
-
-console.log('✅ Dashboard técnico inicializado!');
-
+    console.log('✅ Dashboard técnico inicializado!');
+  });
 </script>
 </html>

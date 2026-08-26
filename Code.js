@@ -2,57 +2,6 @@
  * ============================================================================
  * SCE - Sistema de Controle de Equipamentos
  * Code.gs — núcleo do servidor: roteamento, autenticação e acesso a dados
- * ----------------------------------------------------------------------------
- * ARQUITETURA (v2 - Sheets API v4 + 3 planilhas):
- *
- *   Este projeto NÃO é mais "bound" a uma única planilha via SpreadsheetApp.
- *   Todo acesso a dados passa pelo serviço avançado "Sheets API" (Sheets.*),
- *   e as abas estão distribuídas em 3 planilhas separadas:
- *
- *     SCE_Core            -> Equipamentos, Listas, Filiais
- *     SCE_Movimentacao    -> Historico_Itens, Emprestimos, Auditoria, Registros_Manutencao
- *     SCE_Autenticacao    -> Usuarios, Sessoes, Otp_Codes
- *
- *   Por quê: Core é lido o tempo todo (dashboards); Movimentacao cresce
- *   rápido e não deveria "pesar" a leitura de Core; Autenticacao guarda
- *   dado sensível (sessão, e-mail, OTP) separado do resto.
- *
- *   IMPORTANTE — ATIVAÇÃO OBRIGATÓRIA ANTES DE RODAR:
- *   1. No editor do Apps Script: Serviços (ícone "+") > adicionar
- *      "Google Sheets API" (serviço avançado). Isso expõe o objeto global
- *      `Sheets` usado neste arquivo.
- *   2. No Google Cloud Console do projeto associado ao script (Configurações
- *      do projeto > Projeto do Google Cloud), ative a API "Google Sheets API"
- *      em "APIs e serviços > Biblioteca".
- *   3. Preencha CONFIG.SPREADSHEETS.CORE / MOVIMENTACAO / AUTENTICACAO com
- *      os IDs reais das 3 planilhas (retire da URL de cada uma).
- *   4. Compartilhe as 3 planilhas com a conta que executa o script (se não
- *      forem do mesmo dono) e garanta que cada uma tenha as abas com os
- *      cabeçalhos exatos esperados (ver getAllEquipamentos_, Usuarios, etc).
- *
- *   IMPORTANTE — COLUNAS NOVAS NECESSÁRIAS NA ABA "Equipamentos" (SCE_Core):
- *     - statusManutencao       (texto: Pendente / Em andamento / Concluído)
- *     - vinculadoBlueMonitor   (texto: Sim / Não — usado por Matriz e Técnico)
- *     - ultimaAlteracaoPor     (texto: e-mail de quem fez a última edição)
- *   Sem essas colunas no cabeçalho, os valores relacionados simplesmente não
- *   são persistidos (o código verifica a existência da coluna antes de
- *   escrever, então não quebra — só não salva nada).
- *
- *   IMPORTANTE — ABA "Listas" (SCE_Core) precisa ter as colunas:
- *     - categoria | marca | modelo
- *   (cada coluna pode ter quantidade de linhas diferente, o código lê cada
- *   uma independentemente e ignora células vazias.)
- *
- *   REGRA DE ROTEAMENTO (inalterada):
- *   Toda decisão de "qual dashboard mostrar" acontece SOMENTE no doGet.
- *   DashboardFilial.html, DashboardMatriz.html e DashboardTecnico.html não
- *   têm lógica de role.
- *
- *   COMPATIBILIDADE COM O FRONTEND:
- *   Nenhuma função chamada via google.script.run mudou de nome ou de
- *   assinatura anterior. Novas funções foram adicionadas; funções existentes
- *   ganharam parâmetros opcionais (ex: registrarManutencao agora aceita um
- *   4º parâmetro "status", mas continua funcionando se ele não for enviado).
  * ============================================================================
  */
 
@@ -61,8 +10,6 @@
 // ============================================================================
 
 const CONFIG = {
-  // Cada planilha é um arquivo do Google Sheets diferente agora.
-  // Preencha com o ID real (parte da URL entre /d/ e /edit).
   SPREADSHEETS: {
     CORE: '12_mPXKeEZJMpj2ZEpzI3HOYwqShJWDjD7787elXVxXk',
     MOVIMENTACAO: '1BhGd2zUMkD1u1NfgzPO3xJx8s_8oLt22X3VX9jvwA6A',
@@ -82,10 +29,11 @@ const CONFIG = {
   },
   PDF_FOLDER_ID: '1P03gJm7JJ3ZIJnhBvRyhwghZEOI_pce_',
   BO_FOLDER_ID: '1wuBUvgsfP7GorZ9-7J_6la-U0BPpj8SY',
-  SESSION_DURATION_MS: 24 * 60 * 60 * 1000,   // 24h
-  OTP_EXPIRATION_MS: 10 * 60 * 1000,          // 10min
+  SESSION_DURATION_MS: 24 * 60 * 60 * 1000,
+  OTP_EXPIRATION_MS: 10 * 60 * 1000,
   NIVEIS: {
     MATRIZ: 'Matriz',
+    ADMIN_FILIAL: 'AdminFilial',
     FILIAL: 'Filial',
     TECNICO: 'Tecnico'
   },
@@ -106,9 +54,10 @@ const STATUS_MANUTENCAO_VALIDOS_ = [
   CONFIG.STATUS_MANUTENCAO.CONCLUIDO
 ];
 
-// Mapeia cada nome de aba para a planilha (spreadsheetId) onde ela vive.
-// Isso é o que permite que o resto do código continue falando "a aba
-// Equipamentos" sem se importar em qual arquivo físico ela está.
+// ============================================================================
+// MAPEAMENTO DE ABAS PARA PLANILHAS
+// ============================================================================
+
 function getSpreadsheetIdFor_(sheetName) {
   const mapa = {};
   mapa[CONFIG.SHEETS.EQUIPAMENTOS] = CONFIG.SPREADSHEETS.CORE;
@@ -123,29 +72,19 @@ function getSpreadsheetIdFor_(sheetName) {
   mapa[CONFIG.SHEETS.OTP] = CONFIG.SPREADSHEETS.AUTENTICACAO;
 
   const id = mapa[sheetName];
-  if (!id) {
-    throw new Error('Nenhuma planilha mapeada para a aba "' + sheetName + '". Verifique getSpreadsheetIdFor_.');
-  }
-  if (id.indexOf('COLOQUE_AQUI') === 0) {
-    throw new Error('CONFIG.SPREADSHEETS não foi preenchido com IDs reais ainda (aba "' + sheetName + '").');
-  }
+  if (!id) throw new Error('Nenhuma planilha mapeada para a aba "' + sheetName + '".');
+  if (id.indexOf('COLOQUE_AQUI') === 0) throw new Error('CONFIG.SPREADSHEETS não foi preenchido com IDs reais ainda.');
   return id;
 }
 
-// Atalhos usados em código legado / clareza de leitura.
 function getCoreSheetId_() { return CONFIG.SPREADSHEETS.CORE; }
 function getMovimentacaoSheetId_() { return CONFIG.SPREADSHEETS.MOVIMENTACAO; }
 function getAutenticacaoSheetId_() { return CONFIG.SPREADSHEETS.AUTENTICACAO; }
 
 // ============================================================================
-// CAMADA DE ACESSO — Sheets API v4 (substitui SpreadsheetApp em todo o projeto)
+// CAMADA DE ACESSO — SHEETS API
 // ============================================================================
 
-/**
- * Lê todos os valores de uma aba inteira (equivalente a getDataRange().getValues()).
- * Usa Values.get, que é uma única chamada de API.
- * @return {Array<Array>} matriz de valores, ou [] se a aba estiver vazia.
- */
 function sheetsApiGetValues_(sheetName) {
   const spreadsheetId = getSpreadsheetIdFor_(sheetName);
   try {
@@ -156,20 +95,13 @@ function sheetsApiGetValues_(sheetName) {
   }
 }
 
-/**
- * Lê múltiplas abas de uma vez (mesma planilha ou não) minimizando chamadas.
- * Abas da mesma planilha são agrupadas num único batchGet.
- * @param {Array<string>} sheetNames
- * @return {Object} map sheetName -> Array<Array>
- */
 function sheetsApiBatchGetValues_(sheetNames) {
-  const porPlanilha = {}; // spreadsheetId -> [sheetName,...]
+  const porPlanilha = {};
   sheetNames.forEach(function (nome) {
     const id = getSpreadsheetIdFor_(nome);
     if (!porPlanilha[id]) porPlanilha[id] = [];
     porPlanilha[id].push(nome);
   });
-
   const resultado = {};
   Object.keys(porPlanilha).forEach(function (spreadsheetId) {
     const ranges = porPlanilha[spreadsheetId];
@@ -181,9 +113,6 @@ function sheetsApiBatchGetValues_(sheetNames) {
   return resultado;
 }
 
-/**
- * Adiciona uma linha ao final de uma aba (equivalente a sheet.appendRow(...)).
- */
 function sheetsApiAppendRow_(sheetName, rowValues) {
   const spreadsheetId = getSpreadsheetIdFor_(sheetName);
   const resource = { values: [rowValues] };
@@ -193,7 +122,6 @@ function sheetsApiAppendRow_(sheetName, rowValues) {
   );
 }
 
-/** Converte índice de coluna 1-based em letra (1 -> A, 27 -> AA). */
 function columnToLetter_(col) {
   let letra = '';
   while (col > 0) {
@@ -204,19 +132,10 @@ function columnToLetter_(col) {
   return letra;
 }
 
-/**
- * Atualiza uma única célula (equivalente a sheet.getRange(row, col).setValue(v)).
- */
 function sheetsApiUpdateCell_(sheetName, row, col, value) {
   sheetsApiBatchUpdateCells_(sheetName, [{ row: row, col: col, value: value }]);
 }
 
-/**
- * Atualiza várias células de uma aba EM UMA ÚNICA chamada de API
- * (Values.batchUpdate), mesmo que sejam linhas/colunas diferentes.
- * Isso é o que evita "1 chamada por campo alterado" no updateEquipamento.
- * @param {Array<{row:number, col:number, value:*}>} cellUpdates
- */
 function sheetsApiBatchUpdateCells_(sheetName, cellUpdates) {
   if (!cellUpdates || cellUpdates.length === 0) return;
   const spreadsheetId = getSpreadsheetIdFor_(sheetName);
@@ -232,22 +151,6 @@ function sheetsApiBatchUpdateCells_(sheetName, cellUpdates) {
   );
 }
 
-/**
- * Salva o anexo do Boletim de Ocorrência no Drive (pasta CONFIG.BO_FOLDER_ID)
- * e devolve a URL. Chamado só quando status = 'Extraviado' e um arquivo foi enviado.
- * @param {string} base64 conteúdo do arquivo em base64 (sem o prefixo data:...)
- * @param {string} mimeType
- * @param {string} fileName
- */
-function salvarAnexoBoletim_(base64, mimeType, fileName) {
-  const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
-  const pasta = CONFIG.BO_FOLDER_ID ? DriveApp.getFolderById(CONFIG.BO_FOLDER_ID) : null;
-  const file = pasta ? pasta.createFile(blob) : DriveApp.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return file.getUrl();
-}
-
-/** Cache simples em memória (por execução) do sheetId numérico de cada aba. */
 const _sheetIdCache_ = {};
 
 function getNumericSheetId_(sheetName) {
@@ -260,11 +163,6 @@ function getNumericSheetId_(sheetName) {
   return encontrada.properties.sheetId;
 }
 
-/**
- * Remove fisicamente uma linha (equivalente a sheet.deleteRow(n)).
- * Usado apenas onde já era usado antes (ex: Otp_Codes) — o restante do
- * sistema usa soft-delete (marcar status) e não precisa disso.
- */
 function sheetsApiDeleteRow_(sheetName, rowIndex1Based) {
   const spreadsheetId = getSpreadsheetIdFor_(sheetName);
   const sheetId = getNumericSheetId_(sheetName);
@@ -277,10 +175,6 @@ function sheetsApiDeleteRow_(sheetName, rowIndex1Based) {
   }, spreadsheetId);
 }
 
-/**
- * Garante que uma aba existe numa planilha, criando com cabeçalho se não
- * existir ainda (equivalente ao antigo getEmprestimosSheet_ "create if missing").
- */
 function ensureSheetExists_(sheetName, headers) {
   const spreadsheetId = getSpreadsheetIdFor_(sheetName);
   const meta = Sheets.Spreadsheets.get(spreadsheetId, { fields: 'sheets(properties(title))' });
@@ -293,7 +187,7 @@ function ensureSheetExists_(sheetName, headers) {
 }
 
 // ============================================================================
-// AUDITORIA / CABEÇALHOS DE ABAS AUXILIARES
+// AUDITORIA / CABEÇALHOS
 // ============================================================================
 
 const EMPRESTIMOS_HEADERS_ = [
@@ -304,20 +198,12 @@ const EMPRESTIMOS_HEADERS_ = [
 ];
 
 const AUDITORIA_HEADERS_ = ['data', 'usuario', 'acao', 'detalhes'];
-
-// Inclui "status" (Pendente/Em andamento/Concluído) por entrada do diário,
-// além de campo/descrição livre.
 const REGISTROS_MANUTENCAO_HEADERS_ = ['id', 'equipamentoId', 'autor', 'data', 'descricao', 'status'];
 
 // ============================================================================
-// SUPORTE A MULTI-UNIDADE (perfil Técnico)
-// ----------------------------------------------------------------------------
-// Filial tem 1 unidade (session.filial, string). Técnico pode ter várias,
-// guardadas na MESMA coluna "filial" da aba Usuarios, separadas por vírgula
-// (ex: "Unidade A, Unidade B"). Isso evita criar uma aba nova só para isso.
+// SUPORTE A MULTI-UNIDADE (Técnico)
 // ============================================================================
 
-/** Transforma "Unidade A, Unidade B" em ['Unidade A', 'Unidade B']. */
 function parseFiliais_(filialRaw) {
   return String(filialRaw || '')
     .split(',')
@@ -325,31 +211,29 @@ function parseFiliais_(filialRaw) {
     .filter(function (f) { return f.length > 0; });
 }
 
-/**
- * Verifica se a sessão (Matriz/Filial/Técnico) tem permissão sobre uma
- * determinada unidade. Ponto único de checagem — usado em todo lugar que
- * antes comparava "session.filial !== linha.unidade" diretamente.
- */
 function sessaoTemAcessoAUnidade_(session, unidade) {
   if (session.nivel === CONFIG.NIVEIS.MATRIZ) return true;
-
-  const unidadeNormalizada = String(unidade || '').trim().toUpperCase();
-  const unidadesDaSessao = parseFiliais_(session.filial).map(function (f) { return f.toUpperCase(); });
-  return unidadesDaSessao.indexOf(unidadeNormalizada) !== -1;
+  if (session.nivel === CONFIG.NIVEIS.ADMIN_FILIAL) {
+    return String(unidade).trim().toUpperCase() === String(session.filial).trim().toUpperCase();
+  }
+  if (session.nivel === CONFIG.NIVEIS.TECNICO) {
+    const unidadeNormalizada = String(unidade || '').trim().toUpperCase();
+    const unidadesDaSessao = parseFiliais_(session.filial).map(function (f) { return f.toUpperCase(); });
+    return unidadesDaSessao.indexOf(unidadeNormalizada) !== -1;
+  }
+  return String(unidade).trim().toUpperCase() === String(session.filial).trim().toUpperCase();
 }
 
-/**
- * Decide qual unidade gravar num equipamento novo:
- *   - Matriz: usa a unidade informada no payload (ou a própria, se não vier).
- *   - Filial: sempre a própria unidade (nunca confia no payload do client).
- *   - Técnico: exige que a unidade informada no payload esteja entre as
- *     unidades vinculadas a ele. Se ele só atende 1 unidade, usa por padrão.
- */
 function resolverUnidadeParaEscrita_(session, unidadeInformada) {
   if (session.nivel === CONFIG.NIVEIS.MATRIZ) {
     return unidadeInformada || session.filial;
   }
-
+  if (session.nivel === CONFIG.NIVEIS.ADMIN_FILIAL) {
+    if (unidadeInformada && unidadeInformada.trim().toUpperCase() !== session.filial.trim().toUpperCase()) {
+      throw new Error('Você só pode cadastrar equipamentos na sua própria unidade.');
+    }
+    return session.filial;
+  }
   if (session.nivel === CONFIG.NIVEIS.TECNICO) {
     const unidadesTecnico = parseFiliais_(session.filial);
     if (unidadeInformada) {
@@ -361,16 +245,9 @@ function resolverUnidadeParaEscrita_(session, unidadeInformada) {
     if (unidadesTecnico.length === 1) return unidadesTecnico[0];
     throw new Error('Informe para qual unidade este equipamento deve ser cadastrado.');
   }
-
-  // Filial
   return session.filial;
 }
 
-/**
- * Registra uma linha de auditoria para QUALQUER operação de escrita
- * (create/update/clone/remover equipamento, empréstimo/devolução, usuários).
- * Não lança erro se falhar — auditoria não pode derrubar a operação principal.
- */
 function registrarAuditoria_(acao, usuarioEmail, detalhes) {
   try {
     ensureSheetExists_(CONFIG.SHEETS.AUDITORIA, AUDITORIA_HEADERS_);
@@ -382,7 +259,7 @@ function registrarAuditoria_(acao, usuarioEmail, detalhes) {
 }
 
 // ============================================================================
-// FUNÇÕES DE DIAGNÓSTICO (mantidas, adaptadas para a nova camada de acesso)
+// FUNÇÕES DE DIAGNÓSTICO
 // ============================================================================
 
 function testarEmail() {
@@ -395,75 +272,40 @@ function testarEmail() {
 }
 
 function testarPlanilhaUI() {
-  Logger.log('[testarPlanilhaUI] INÍCIO');
-  let resultado;
   try {
     const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
-    Logger.log('[testarPlanilhaUI] total linhas: ' + data.length);
-    resultado = {
-      ok: true,
-      totalLinhas: data.length,
-      cabecalho: data[0] || [],
-      primeiraLinha: data[1] || null
-    };
+    return { ok: true, totalLinhas: data.length, cabecalho: data[0] || [], primeiraLinha: data[1] || null };
   } catch (err) {
-    Logger.log('[testarPlanilhaUI] ERRO: ' + err.message);
-    resultado = { ok: false, motivo: 'Erro ao ler planilha: ' + err.message };
+    return { ok: false, motivo: 'Erro ao ler planilha: ' + err.message };
   }
-  Logger.log('[testarPlanilhaUI] retornando: ' + JSON.stringify(resultado));
-  return resultado;
 }
 
 function testarLeituraEquipamentos() {
   try {
     const todos = getAllEquipamentos_();
-    return {
-      total: todos.length,
-      primeiros: todos.slice(0, 3),
-      colunas: todos.length > 0 ? Object.keys(todos[0]) : []
-    };
+    return { total: todos.length, primeiros: todos.slice(0, 3), colunas: todos.length > 0 ? Object.keys(todos[0]) : [] };
   } catch (e) {
     return { erro: e.message };
   }
 }
 
-function testarRetorno() {
-  return [
-    { id: 'teste1', categoria: 'Notebook', marca: 'Lenovo', modelo: 'Ultra', patrimonio: '123', status: 'Disponível', unidade: 'PABLO FILIAL' },
-    { id: 'teste2', categoria: 'Desktop', marca: 'Dell', modelo: 'OptiPlex', patrimonio: '456', status: 'Disponível', unidade: 'PABLO FILIAL' }
-  ];
-}
-
-// Função temporária para testar a sessão (mantida por compatibilidade com
-// chamadas manuais de diagnóstico já usadas anteriormente).
-function getSessionByToken_(token) {
+function testDriveAccess() {
   try {
-    const data = sheetsApiGetValues_(CONFIG.SHEETS.SESSOES);
-    const rows = data.slice(1);
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (row[0] === token) {
-        const sessionObj = {
-          token: row[0], email: row[1], nivel: row[2], filial: row[3],
-          criadoEm: row[4], expiraEm: row[5]
-        };
-        if (sessionObj.expiraEm && sessionObj.expiraEm < Date.now()) {
-          Logger.log('Token expirado: ' + token);
-          return null;
-        }
-        return sessionObj;
-      }
-    }
-    Logger.log('Token não encontrado: ' + token);
-    return null;
+    var folder = DriveApp.getFolderById(CONFIG.BO_FOLDER_ID);
+    Logger.log('Pasta BO encontrada: ' + folder.getName());
   } catch (e) {
-    Logger.log('Erro em getSessionByToken_: ' + e.message);
-    return null;
+    Logger.log('Erro ao acessar BO_FOLDER_ID: ' + e.message);
+  }
+  try {
+    var folder2 = DriveApp.getFolderById(CONFIG.PDF_FOLDER_ID);
+    Logger.log('Pasta PDF encontrada: ' + folder2.getName());
+  } catch (e) {
+    Logger.log('Erro ao acessar PDF_FOLDER_ID: ' + e.message);
   }
 }
 
 // ============================================================================
-// doGet — PONTO ÚNICO DE ROTEAMENTO (inalterado)
+// doGet — PONTO ÚNICO DE ROTEAMENTO
 // ============================================================================
 
 function doGet(e) {
@@ -471,46 +313,49 @@ function doGet(e) {
     const token = e && e.parameter ? e.parameter.token : null;
     const session = token ? validateSession_(token) : null;
 
-    // LOG PARA DIAGNÓSTICO
-    console.log('SESSION:', session);
-    console.log('NIVEL:', session ? session.nivel : 'null');
-
     if (!session) {
       return renderTemplate_('Login');
     }
 
     if (session.nivel === CONFIG.NIVEIS.MATRIZ) {
-      console.log('Servindo DashboardMatriz');
       return renderTemplate_('DashboardMatriz', { session: session });
     }
 
     if (session.nivel === CONFIG.NIVEIS.TECNICO) {
-      console.log('Servindo DashboardTecnico');
       return renderTemplate_('DashboardTecnico', { session: session });
     }
 
-    console.log('Servindo DashboardFilial (fallback)');
     return renderTemplate_('DashboardFilial', { session: session });
   } catch (err) {
-    console.error('ERRO em doGet:', err.message);
+    console.error('ERRO em doGet:', err);
     return HtmlService.createHtmlOutput(
       '<h2 style="color:red;">ERRO NO SERVIDOR</h2>' +
-      '<p><strong>Mensagem:</strong> ' + err.message + '</p>' +
-      '<p><strong>Stack:</strong> <pre>' + err.stack + '</pre></p>' +
-      '<p><em>Verifique os IDs das 3 planilhas em CONFIG.SPREADSHEETS e se a Sheets API está ativada.</em></p>'
+      '<p><strong>Mensagem:</strong> ' + escapeHtml_(err.message) + '</p>' +
+      '<p><strong>Stack:</strong></p><pre>' + escapeHtml_(err.stack || '') + '</pre>'
     );
   }
 }
 
 function renderTemplate_(fileName, vars) {
-  const template = HtmlService.createTemplateFromFile(fileName);
-  if (vars) {
-    Object.keys(vars).forEach(function (key) { template[key] = vars[key]; });
+  try {
+    const template = HtmlService.createTemplateFromFile(fileName);
+
+    if (vars) {
+      Object.keys(vars).forEach(function (key) {
+        template[key] = vars[key];
+      });
+    }
+
+    return template.evaluate()
+      .setTitle('SCE - Sistema de Controle de Equipamentos')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch (err) {
+    throw new Error(
+      'Erro ao renderizar o arquivo HTML "' + fileName + '": ' + err.message +
+      '\n\nStack original:\n' + (err.stack || '')
+    );
   }
-  return template.evaluate()
-    .setTitle('SCE - Sistema de Controle de Equipamentos')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
 function include(fileName) {
@@ -522,56 +367,56 @@ function include(fileName) {
 }
 
 // ============================================================================
-// AUTENTICAÇÃO — OTP (One-Time Password) — dados agora em SCE_Autenticacao
+// AUTENTICAÇÃO — OTP
 // ============================================================================
 
 function requestOtp(email) {
-  console.log('requestOtp chamada com email:', email);
   try {
     email = String(email || '').trim().toLowerCase();
-    if (!email) {
-      console.warn('E-mail vazio');
-      return { ok: false, message: 'E-mail não informado.' };
-    }
+    if (!email) return { ok: false, message: 'E-mail não informado.' };
 
     const usuario = findUsuarioByEmail_(email);
-    console.log('Usuário encontrado?', usuario ? 'Sim' : 'Não');
-
-    if (!usuario) {
-      console.warn('Usuário não cadastrado:', email);
+    if (!usuario || usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) {
       return { ok: false, message: 'Se este e-mail estiver cadastrado, um código será enviado.' };
-    }
-    if (usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) {
-      console.warn('Usuário removido:', email);
-      return { ok: false, message: 'Acesso não autorizado para este e-mail.' };
     }
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const now = Date.now();
+    upsertOtpRow_(email, code, now, now + CONFIG.OTP_EXPIRATION_MS);
 
-    try {
-      upsertOtpRow_(email, code, now, now + CONFIG.OTP_EXPIRATION_MS);
-      console.log('OTP salvo via Sheets API com sucesso.');
-    } catch (sheetError) {
-      console.error('Erro ao salvar OTP:', sheetError.message);
-      return { ok: false, message: 'Erro ao salvar código: ' + sheetError.message };
-    }
+    const logoUrl = 'https://i.ibb.co/3yBdJq67/IMG-9095.png';
+    const htmlBody = `
+      <div style="font-family: Arial, Helvetica, sans-serif; background-color:#f4f4f7; padding:24px;">
+        <div style="max-width:480px; margin:0 auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <div style="background-color:#0b3d91; padding:20px; text-align:center;">
+            <img src="${logoUrl}" alt="URE Leste 3" style="max-height:60px;">
+          </div>
+          <div style="padding:32px 24px; text-align:center;">
+            <h2 style="margin:0 0 8px; color:#222;">Código de acesso</h2>
+            <p style="margin:0 0 24px; color:#555; font-size:14px;">Use o código abaixo para acessar o SCE (Sistema de Controle de Equipamentos):</p>
+            <div style="display:inline-block; background:#f0f2f5; border-radius:6px; padding:16px 32px; margin-bottom:24px;">
+              <span style="font-size:32px; font-weight:bold; letter-spacing:8px; color:#0b3d91;">${code}</span>
+            </div>
+            <p style="margin:0; color:#888; font-size:13px;">Este código expira em 10 minutos.</p>
+            <p style="margin:16px 0 0; color:#aaa; font-size:12px;">Se você não solicitou este código, ignore este e-mail.</p>
+          </div>
+          <div style="background:#f4f4f7; padding:16px; text-align:center; font-size:11px; color:#999;">
+            URE Leste 3 &middot; Diretoria de Ensino Região Leste 3
+          </div>
+        </div>
+      </div>
+    `;
+    const plainBody = 'Seu código de acesso ao SCE é: ' + code + '\n\nEle expira em 10 minutos. Se você não solicitou este código, ignore este e-mail.';
 
-    try {
-      MailApp.sendEmail({
-        to: email,
-        subject: 'SCE - Código de acesso',
-        body: 'Seu código de acesso ao SCE é: ' + code + '\n\nEle expira em 10 minutos. Se você não solicitou este código, ignore este e-mail.'
-      });
-      console.log('E-mail enviado para:', email);
-    } catch (mailError) {
-      console.error('Erro ao enviar e-mail:', mailError.message);
-      return { ok: false, message: 'Erro ao enviar e-mail: ' + mailError.message };
-    }
-
+    MailApp.sendEmail({
+      to: email,
+      subject: 'URE Leste 3 - SCE - Código de acesso: ' + code,
+      body: plainBody,
+      htmlBody: htmlBody
+    });
     return { ok: true, message: 'Código enviado para ' + email + '.' };
   } catch (err) {
-    console.error('Erro geral em requestOtp:', err.message);
+    console.error('Erro em requestOtp:', err.message);
     return { ok: false, message: 'Erro interno: ' + err.message };
   }
 }
@@ -586,98 +431,16 @@ function validateOtp(email, code) {
   }
 
   const otpRow = findOtpRow_(email);
-  if (!otpRow) {
-    return { ok: false, message: 'Nenhum código pendente para este e-mail.' };
-  }
-  if (Date.now() > otpRow.expiraEm) {
-    return { ok: false, message: 'Código expirado. Solicite um novo.' };
-  }
-  if (String(otpRow.code) !== code) {
-    return { ok: false, message: 'Código incorreto.' };
-  }
+  if (!otpRow) return { ok: false, message: 'Nenhum código pendente para este e-mail.' };
+  if (Date.now() > otpRow.expiraEm) return { ok: false, message: 'Código expirado. Solicite um novo.' };
+  if (String(otpRow.code) !== code) return { ok: false, message: 'Código incorreto.' };
 
   deleteOtpRow_(otpRow.rowIndex);
-
   const session = createSession_(usuario);
   const url = ScriptApp.getService().getUrl() + '?token=' + encodeURIComponent(session.token);
   registrarAuditoria_('login', email, { via: 'otp' });
   return { ok: true, message: 'Login realizado com sucesso.', redirectUrl: url };
 }
-
-// ============================================================================
-// SESSÃO (aba Sessoes, em SCE_Autenticacao)
-// ============================================================================
-
-function createSession_(usuario) {
-  const token = Utilities.getUuid();
-  const now = Date.now();
-
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    sheetsApiAppendRow_(CONFIG.SHEETS.SESSOES, [
-      token, usuario.email, usuario.nivel, usuario.filial, now, now + CONFIG.SESSION_DURATION_MS
-    ]);
-  } finally {
-    lock.releaseLock();
-  }
-
-  return { token: token, email: usuario.email, nivel: usuario.nivel, filial: usuario.filial };
-}
-
-function validateSession_(token) {
-  if (!token) return null;
-
-  const data = sheetsApiGetValues_(CONFIG.SHEETS.SESSOES);
-  // Colunas: token(0) | email(1) | nivel(2) | filial(3) | criadoEm(4) | expiraEm(5)
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === token) {
-      const expiraEm = data[i][5];
-      if (Date.now() > expiraEm) return null;
-
-      const usuario = findUsuarioByEmail_(data[i][1]);
-      if (!usuario || usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) return null;
-
-      return { token: token, email: data[i][1], nivel: data[i][2], filial: data[i][3] };
-    }
-  }
-  return null;
-}
-
-function requireSession_(token, nivelExigido) {
-  const session = validateSession_(token);
-  if (!session) {
-    throw new Error('Sessão inválida ou expirada. Faça login novamente.');
-  }
-  if (nivelExigido && session.nivel !== nivelExigido) {
-    throw new Error('Você não tem permissão para executar esta ação.');
-  }
-  return session;
-}
-
-// ============================================================================
-// ACESSO A DADOS — USUÁRIOS (aba Usuarios, em SCE_Autenticacao)
-// Estrutura: email(0) | nome(1) | nivel(2) | filial(3) | status(4) | dataRemocao(5)
-// ============================================================================
-
-function findUsuarioByEmail_(email) {
-  const data = sheetsApiGetValues_(CONFIG.SHEETS.USUARIOS);
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toLowerCase() === email) {
-      return {
-        rowIndex: i + 1,
-        email: data[i][0], nome: data[i][1], nivel: data[i][2],
-        filial: data[i][3], status: data[i][4], dataRemocao: data[i][5]
-      };
-    }
-  }
-  return null;
-}
-
-// ============================================================================
-// ACESSO A DADOS — OTP (aba Otp_Codes, em SCE_Autenticacao)
-// Estrutura: email(0) | code(1) | criadoEm(2) | expiraEm(3)
-// ============================================================================
 
 function upsertOtpRow_(email, code, criadoEm, expiraEm) {
   const data = sheetsApiGetValues_(CONFIG.SHEETS.OTP);
@@ -710,7 +473,78 @@ function deleteOtpRow_(rowIndex) {
 }
 
 // ============================================================================
-// ACESSO A DADOS — EQUIPAMENTOS (aba Equipamentos, em SCE_Core)
+// SESSÃO
+// ============================================================================
+
+function createSession_(usuario) {
+  const token = Utilities.getUuid();
+  const now = Date.now();
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    sheetsApiAppendRow_(CONFIG.SHEETS.SESSOES, [
+      token, usuario.email, usuario.nivel, usuario.filial, now, now + CONFIG.SESSION_DURATION_MS
+    ]);
+  } finally {
+    lock.releaseLock();
+  }
+  return { token: token, email: usuario.email, nivel: usuario.nivel, filial: usuario.filial };
+}
+
+function validateSession_(token) {
+  if (!token) return null;
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.SESSOES);
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (data[i][0] === token) {
+      const expiraEm = data[i][5];
+      if (Date.now() > expiraEm) return null;
+      const usuario = findUsuarioByEmail_(data[i][1]);
+      if (!usuario || usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) return null;
+      return { token: token, email: data[i][1], nivel: data[i][2], filial: data[i][3] };
+    }
+  }
+  return null;
+}
+
+function requireSession_(token, niveisPermitidos) {
+  const session = validateSession_(token);
+  if (!session) {
+    throw new Error('Sessão inválida ou expirada. Faça login novamente.');
+  }
+  if (niveisPermitidos) {
+    const niveis = Array.isArray(niveisPermitidos) ? niveisPermitidos : [niveisPermitidos];
+    if (niveis.indexOf(session.nivel) === -1) {
+      throw new Error('Você não tem permissão para executar esta ação.');
+    }
+  }
+  return session;
+}
+
+// ============================================================================
+// ACESSO A DADOS — USUÁRIOS
+// ============================================================================
+
+function findUsuarioByEmail_(email) {
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.USUARIOS);
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().toLowerCase() === email) {
+      return {
+        rowIndex: i + 1,
+        email: data[i][0],
+        nome: data[i][1],
+        nivel: data[i][2],
+        filial: data[i][3],
+        status: data[i][4],
+        dataRemocao: data[i][5]
+      };
+    }
+  }
+  return null;
+}
+
+// ============================================================================
+// ACESSO A DADOS — EQUIPAMENTOS
 // ============================================================================
 
 function getAllEquipamentos_() {
@@ -718,9 +552,8 @@ function getAllEquipamentos_() {
   if (!data || data.length === 0) return [];
   const headers = data[0];
   const rows = data.slice(1);
-
   return rows.map(function (row, idx) {
-    const obj = { _rowIndex: idx + 2 }; // linha real na planilha (1-based + cabeçalho)
+    const obj = { _rowIndex: idx + 2 };
     headers.forEach(function (header, colIdx) {
       obj[header] = row[colIdx] !== undefined ? row[colIdx] : '';
     });
@@ -728,20 +561,10 @@ function getAllEquipamentos_() {
   });
 }
 
-/**
- * Verifica se já existe outro equipamento ATIVO (não removido) com o mesmo
- * Número de Série ou Patrimônio. Comparação case-insensitive e com trim.
- * @param {string} numeroSerie
- * @param {string} patrimonio
- * @param {string} [ignorarId] id do próprio equipamento, usado na edição
- *   para não comparar o item consigo mesmo.
- * @return {boolean}
- */
 function equipamentoDuplicado_(numeroSerie, patrimonio, ignorarId) {
   const serie = String(numeroSerie || '').trim().toUpperCase();
   const patr = String(patrimonio || '').trim().toUpperCase();
   if (!serie && !patr) return false;
-
   const todos = getAllEquipamentos_();
   return todos.some(function (e) {
     if (ignorarId && e.id === ignorarId) return false;
@@ -752,83 +575,34 @@ function equipamentoDuplicado_(numeroSerie, patrimonio, ignorarId) {
   });
 }
 
-/**
- * Retorna os equipamentos visíveis para a sessão atual:
- *   - Matriz: todos.
- *   - Filial: só da própria unidade.
- *   - Técnico: de todas as unidades vinculadas a ele (session.filial pode
- *     conter várias, separadas por vírgula — ver sessaoTemAcessoAUnidade_).
- * Mantido com o nome antigo (getEquipamentosDaFilial) por compatibilidade
- * com o frontend já publicado (Filial e Matriz continuam chamando esta
- * função sem nenhuma mudança). O dashboard do Técnico chama a mesma função.
- */
 function getEquipamentosDaFilial(token) {
   try {
     const session = requireSession_(token);
-    if (!session) {
-      Logger.log('Sessão não encontrada');
-      return [];
-    }
-
-    Logger.log('Sessão: ' + session.email + ' (' + session.nivel + ') unidades: ' + session.filial);
-
     const todos = getAllEquipamentos_();
-    if (!todos) {
-      Logger.log('Nenhum equipamento encontrado');
-      return [];
-    }
-    Logger.log('Total bruto: ' + todos.length);
-
+    if (!todos) return [];
     const filtrados = todos.filter(function (item) {
       const naoRemovido = item['status'] !== 'Removido';
       const temAcesso = sessaoTemAcessoAUnidade_(session, item['unidade']);
       return naoRemovido && temAcesso;
     });
-
-    Logger.log('Filtrados: ' + filtrados.length);
-
-    const jsonString = JSON.stringify(filtrados);
-    return JSON.parse(jsonString);
+    return JSON.parse(JSON.stringify(filtrados));
   } catch (e) {
-    Logger.log('ERRO CRÍTICO: ' + e.message);
-    Logger.log('Stack: ' + e.stack);
+    Logger.log('ERRO em getEquipamentosDaFilial: ' + e.message);
     return [];
   }
 }
 
 function getEquipamentosGlobal(token, incluirRemovidos) {
   try {
-    const session = requireSession_(token);
-    if (!session) {
-      Logger.log('Sessão inválida para token: ' + token);
-      return [];
-    }
-
-    const nivel = session.nivel || '';
-    const isMatriz = nivel.trim().toUpperCase() === (CONFIG.NIVEIS.MATRIZ || 'MATRIZ').trim().toUpperCase();
-    if (!isMatriz) {
-      Logger.log('Usuário não é Matriz. Nível: ' + nivel);
-      return [];
-    }
-
-    Logger.log('Usuário Matriz autenticado: ' + session.email);
-
+    const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
     const todos = getAllEquipamentos_();
-    if (!todos || !Array.isArray(todos)) {
-      Logger.log('Falha ao ler equipamentos');
-      return [];
-    }
-    Logger.log('Total bruto: ' + todos.length);
-
+    if (!todos || !Array.isArray(todos)) return [];
     const filtrados = todos.filter(function (item) {
       return incluirRemovidos ? true : item['status'] !== 'Removido';
     });
-    Logger.log('Filtrados (Removidos ' + (incluirRemovidos ? 'incluídos' : 'excluídos') + '): ' + filtrados.length);
-
-    const jsonString = JSON.stringify(filtrados);
-    return JSON.parse(jsonString);
+    return JSON.parse(JSON.stringify(filtrados));
   } catch (e) {
-    Logger.log('ERRO CRÍTICO em getEquipamentosGlobal: ' + e.message);
+    Logger.log('ERRO em getEquipamentosGlobal: ' + e.message);
     return [];
   }
 }
@@ -837,8 +611,23 @@ function createEquipamento(token, dadosEquipamento) {
   const session = requireSession_(token);
   const unidade = resolverUnidadeParaEscrita_(session, dadosEquipamento.unidade);
 
-  // Verificação de duplicidade (Série/Patrimônio) ANTES de gastar o lock
-  // com leitura/escrita — evita cadastro de item já existente.
+  // --- VALIDAÇÃO DE PATRIMÔNIO E SÉRIE COM JUSTIFICATIVA ---
+  const patrimonio = (dadosEquipamento.patrimonio || '').trim();
+  const justifPat = (dadosEquipamento.justificativaPatrimonio || '').trim();
+  const serie = (dadosEquipamento.numeroSerie || '').trim();
+  const justifSerie = (dadosEquipamento.justificativaNumeroSerie || '').trim();
+
+  if (!patrimonio && !justifPat) {
+    throw new Error('Informe o Patrimônio ou uma justificativa para a sua ausência.');
+  }
+  if (!serie && !justifSerie) {
+    throw new Error('Informe o Número de Série ou uma justificativa para a sua ausência.');
+  }
+  // Se patrimônio foi preenchido, limpa a justificativa (para não guardar lixo)
+  if (patrimonio) dadosEquipamento.justificativaPatrimonio = '';
+  if (serie) dadosEquipamento.justificativaNumeroSerie = '';
+  // --- FIM VALIDAÇÃO ---
+
   if (equipamentoDuplicado_(dadosEquipamento.numeroSerie, dadosEquipamento.patrimonio)) {
     throw new Error('Já existe um equipamento cadastrado com este Número de Série ou Patrimônio.');
   }
@@ -848,9 +637,20 @@ function createEquipamento(token, dadosEquipamento) {
   try {
     const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = data[0];
-
     const id = Utilities.getUuid();
     const now = new Date();
+
+    let anexoUrl = null;
+    if (dadosEquipamento.status === 'Extraviado') {
+      if (!dadosEquipamento._anexoBoletim) {
+        throw new Error('Para o status "Extraviado", o anexo do Boletim de Ocorrência é obrigatório.');
+      }
+      const anexo = dadosEquipamento._anexoBoletim;
+      anexoUrl = salvarAnexoBoletim_(anexo.base64, anexo.mimeType, anexo.fileName, unidade);
+      delete dadosEquipamento._anexoBoletim;
+      dadosEquipamento.boletimOcorrenciaAnexoUrl = anexoUrl;
+    }
+
     const linha = headers.map(function (header) {
       if (header === 'id') return id;
       if (header === 'unidade') return unidade;
@@ -866,7 +666,6 @@ function createEquipamento(token, dadosEquipamento) {
     sheetsApiAppendRow_(CONFIG.SHEETS.EQUIPAMENTOS, linha);
     registrarHistorico_(id, 'criação', '', 'Equipamento cadastrado', session.email);
     registrarAuditoria_('createEquipamento', session.email, { id: id, unidade: unidade });
-
     return { ok: true, id: id };
   } finally {
     lock.releaseLock();
@@ -878,8 +677,6 @@ function updateEquipamento(token, id, camposAlterados) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-      // Trata o anexo do B.O. separadamente (não é uma célula "simples")
-    
     const data = sheetsApiGetValues_(CONFIG.SHEETS.EQUIPAMENTOS);
     const headers = data[0];
     const idCol = headers.indexOf('id');
@@ -887,24 +684,41 @@ function updateEquipamento(token, id, camposAlterados) {
 
     const rowIndex = findRowIndexById_(data, idCol, id);
     if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
-
     const linhaAtual = data[rowIndex - 1];
     if (!sessaoTemAcessoAUnidade_(session, linhaAtual[unidadeCol])) {
       throw new Error('Você não tem permissão para editar este equipamento.');
     }
 
-    // Verificação de duplicidade — só reavalia se Série ou Patrimônio
-    // estão sendo alterados nesta edição.
+    // --- VALIDAÇÃO DE PATRIMÔNIO E SÉRIE COM JUSTIFICATIVA (na edição) ---
+    // Verifica se os campos estão sendo alterados
+    const novoPatrimonio = (camposAlterados.patrimonio !== undefined) ? camposAlterados.patrimonio : linhaAtual[headers.indexOf('patrimonio')];
+    const novaSerie = (camposAlterados.numeroSerie !== undefined) ? camposAlterados.numeroSerie : linhaAtual[headers.indexOf('numeroSerie')];
+    const justifPat = (camposAlterados.justificativaPatrimonio !== undefined) ? camposAlterados.justificativaPatrimonio : linhaAtual[headers.indexOf('justificativaPatrimonio')] || '';
+    const justifSerie = (camposAlterados.justificativaNumeroSerie !== undefined) ? camposAlterados.justificativaNumeroSerie : linhaAtual[headers.indexOf('justificativaNumeroSerie')] || '';
+
+    const patrimonioVazio = !novoPatrimonio || novoPatrimonio.trim() === '';
+    const serieVazia = !novaSerie || novaSerie.trim() === '';
+
+    if (patrimonioVazio && !justifPat) {
+      throw new Error('Informe o Patrimônio ou uma justificativa para a sua ausência.');
+    }
+    if (serieVazia && !justifSerie) {
+      throw new Error('Informe o Número de Série ou uma justificativa para a sua ausência.');
+    }
+    // Se foi preenchido, limpa a justificativa
+    if (!patrimonioVazio && camposAlterados.justificativaPatrimonio !== undefined) {
+      camposAlterados.justificativaPatrimonio = '';
+    }
+    if (!serieVazia && camposAlterados.justificativaNumeroSerie !== undefined) {
+      camposAlterados.justificativaNumeroSerie = '';
+    }
+    // --- FIM VALIDAÇÃO ---
+
     if (camposAlterados.numeroSerie !== undefined || camposAlterados.patrimonio !== undefined) {
       const serieNovaIdx = headers.indexOf('numeroSerie');
       const patrimonioNovoIdx = headers.indexOf('patrimonio');
-      const serieNova = camposAlterados.numeroSerie !== undefined
-        ? camposAlterados.numeroSerie
-        : (serieNovaIdx !== -1 ? linhaAtual[serieNovaIdx] : '');
-      const patrimonioNovo = camposAlterados.patrimonio !== undefined
-        ? camposAlterados.patrimonio
-        : (patrimonioNovoIdx !== -1 ? linhaAtual[patrimonioNovoIdx] : '');
-
+      const serieNova = camposAlterados.numeroSerie !== undefined ? camposAlterados.numeroSerie : (serieNovaIdx !== -1 ? linhaAtual[serieNovaIdx] : '');
+      const patrimonioNovo = camposAlterados.patrimonio !== undefined ? camposAlterados.patrimonio : (patrimonioNovoIdx !== -1 ? linhaAtual[patrimonioNovoIdx] : '');
       if (equipamentoDuplicado_(serieNova, patrimonioNovo, id)) {
         throw new Error('Já existe outro equipamento com este Número de Série ou Patrimônio.');
       }
@@ -914,14 +728,12 @@ function updateEquipamento(token, id, camposAlterados) {
 
     let anexoUrl = null;
     if (camposAlterados.status === 'Extraviado' && camposAlterados._anexoBoletim) {
-    const anexo = camposAlterados._anexoBoletim; // { base64, mimeType, fileName }
-    anexoUrl = salvarAnexoBoletim_(anexo.base64, anexo.mimeType, anexo.fileName);
-    camposAlterados.boletimOcorrenciaAnexoUrl = anexoUrl;
-    delete camposAlterados._anexoBoletim; // não é uma coluna, não deixa ir pro loop de células
-  }
+      const anexo = camposAlterados._anexoBoletim;
+      anexoUrl = salvarAnexoBoletim_(anexo.base64, anexo.mimeType, anexo.fileName, session.filial);
+      camposAlterados.boletimOcorrenciaAnexoUrl = anexoUrl;
+      delete camposAlterados._anexoBoletim;
+    }
 
-    // Monta TODAS as alterações de célula e manda numa única chamada
-    // Values.batchUpdate, em vez de uma chamada por campo.
     const cellUpdates = [];
     const historicoParaRegistrar = [];
 
@@ -929,11 +741,9 @@ function updateEquipamento(token, id, camposAlterados) {
       if (campo === 'id' || campo === 'dataCadastro' || campo === 'cadastradoPor') return;
       const colIndex = headers.indexOf(campo);
       if (colIndex === -1) return;
-
       const valorAntigo = linhaAtual[colIndex];
       const valorNovo = camposAlterados[campo];
       if (String(valorAntigo) === String(valorNovo)) return;
-
       cellUpdates.push({ row: rowIndex, col: colIndex + 1, value: valorNovo });
       historicoParaRegistrar.push({ campo: campo, antigo: valorAntigo, novo: valorNovo });
     });
@@ -942,9 +752,6 @@ function updateEquipamento(token, id, camposAlterados) {
     if (atualizadoCol !== -1 && cellUpdates.length > 0) {
       cellUpdates.push({ row: rowIndex, col: atualizadoCol + 1, value: new Date() });
     }
-
-    // Registro de quem fez a última alteração — só aparece pro perfil
-    // Matriz no front, mas é sempre gravado independente de quem edita.
     const ultimaAlteracaoCol = headers.indexOf('ultimaAlteracaoPor');
     if (ultimaAlteracaoCol !== -1 && cellUpdates.length > 0) {
       cellUpdates.push({ row: rowIndex, col: ultimaAlteracaoCol + 1, value: session.email });
@@ -966,10 +773,8 @@ function updateEquipamento(token, id, camposAlterados) {
     lock.releaseLock();
   }
 }
-
 function cloneEquipamento(token, idOrigem) {
   const session = requireSession_(token);
-
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -981,7 +786,6 @@ function cloneEquipamento(token, idOrigem) {
 
     const rowIndex = findRowIndexById_(data, idCol, idOrigem);
     if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
-
     const linhaOrigem = data[rowIndex - 1];
     if (!sessaoTemAcessoAUnidade_(session, linhaOrigem[unidadeCol])) {
       throw new Error('Você não tem permissão para clonar este equipamento.');
@@ -991,10 +795,6 @@ function cloneEquipamento(token, idOrigem) {
     const novaLinha = linhaOrigem.slice();
     novaLinha[idCol] = novoId;
     novaLinha[statusCol] = 'Disponível';
-
-    // Clone nunca deve herdar número de série/patrimônio do original —
-    // isso causaria duplicidade instantânea. Zera esses campos e deixa
-    // quem clonou preencher manualmente depois via edição.
     setIfHeaderExists_(novaLinha, headers, 'numeroSerie', '');
     setIfHeaderExists_(novaLinha, headers, 'patrimonio', '');
     setIfHeaderExists_(novaLinha, headers, 'dataCadastro', new Date());
@@ -1005,7 +805,6 @@ function cloneEquipamento(token, idOrigem) {
     sheetsApiAppendRow_(CONFIG.SHEETS.EQUIPAMENTOS, novaLinha);
     registrarHistorico_(novoId, 'criação', '', 'Clonado a partir de ' + idOrigem, session.email);
     registrarAuditoria_('cloneEquipamento', session.email, { idOrigem: idOrigem, novoId: novoId });
-
     return { ok: true, id: novoId };
   } finally {
     lock.releaseLock();
@@ -1013,7 +812,7 @@ function cloneEquipamento(token, idOrigem) {
 }
 
 function removerEquipamento(token, id) {
-  const session = requireSession_(token);
+  const session = requireSession_(token, [CONFIG.NIVEIS.MATRIZ, CONFIG.NIVEIS.ADMIN_FILIAL]);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1026,7 +825,6 @@ function removerEquipamento(token, id) {
 
     const rowIndex = findRowIndexById_(data, idCol, id);
     if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
-
     const linhaAtual = data[rowIndex - 1];
     if (!sessaoTemAcessoAUnidade_(session, linhaAtual[unidadeCol])) {
       throw new Error('Você não tem permissão para remover este equipamento.');
@@ -1036,20 +834,12 @@ function removerEquipamento(token, id) {
     sheetsApiUpdateCell_(CONFIG.SHEETS.EQUIPAMENTOS, rowIndex, statusCol + 1, 'Removido');
     registrarHistorico_(id, 'status', statusAntigo, 'Removido', session.email);
     registrarAuditoria_('removerEquipamento', session.email, { id: id });
-
     return { ok: true, message: 'Equipamento removido (soft-delete).' };
   } finally {
     lock.releaseLock();
   }
 }
 
-/**
- * Atualiza somente o status de manutenção (Pendente/Em andamento/Concluído)
- * de um equipamento, sem passar pelo fluxo completo de updateEquipamento.
- * Usado pelo modal de manutenção nos dashboards de Matriz e Técnico.
- * Também é chamada internamente por registrarManutencao() para manter a
- * coluna do equipamento sincronizada com a última entrada do diário.
- */
 function atualizarStatusManutencao(token, equipamentoId, novoStatus) {
   const session = requireSession_(token);
   if (STATUS_MANUTENCAO_VALIDOS_.indexOf(novoStatus) === -1) {
@@ -1072,16 +862,13 @@ function atualizarStatusManutencao(token, equipamentoId, novoStatus) {
 
     const rowIndex = findRowIndexById_(data, idCol, equipamentoId);
     if (rowIndex === -1) throw new Error('Equipamento não encontrado.');
-
     const linhaAtual = data[rowIndex - 1];
     if (!sessaoTemAcessoAUnidade_(session, linhaAtual[unidadeCol])) {
       throw new Error('Você não tem permissão para alterar este equipamento.');
     }
 
     const statusAntigo = linhaAtual[statusManutCol];
-    if (String(statusAntigo) === String(novoStatus)) {
-      return { ok: true }; // nada a fazer, evita histórico ruidoso
-    }
+    if (String(statusAntigo) === String(novoStatus)) return { ok: true };
 
     const cellUpdates = [{ row: rowIndex, col: statusManutCol + 1, value: novoStatus }];
     if (ultimaAlteracaoCol !== -1) {
@@ -1091,7 +878,6 @@ function atualizarStatusManutencao(token, equipamentoId, novoStatus) {
 
     registrarHistorico_(equipamentoId, 'statusManutencao', statusAntigo, novoStatus, session.email);
     registrarAuditoria_('atualizarStatusManutencao', session.email, { id: equipamentoId, novoStatus: novoStatus });
-
     return { ok: true };
   } finally {
     lock.releaseLock();
@@ -1102,15 +888,13 @@ function validarStatusEspecial_(camposAlterados, linhaAtual, headers) {
   if (!('status' in camposAlterados)) return;
 
   if (camposAlterados.status === 'Extraviado') {
-  // ✅ AGORA olha para o campo que foi criado, e não para o que foi deletado!
-  const anexoNoPayload = camposAlterados.boletimOcorrenciaAnexoUrl; 
-  const anexoColIdx = headers.indexOf('boletimOcorrenciaAnexoUrl');
-  const anexoExistente = anexoColIdx !== -1 ? linhaAtual[anexoColIdx] : '';
-  
-  if (!anexoNoPayload && !anexoExistente) {
-    throw new Error('Para o status "Extraviado", anexe o Boletim de Ocorrência.');
+    const anexoNoPayload = camposAlterados.boletimOcorrenciaAnexoUrl;
+    const anexoColIdx = headers.indexOf('boletimOcorrenciaAnexoUrl');
+    const anexoExistente = anexoColIdx !== -1 ? linhaAtual[anexoColIdx] : '';
+    if (!anexoNoPayload && !anexoExistente) {
+      throw new Error('Para o status "Extraviado", anexe o Boletim de Ocorrência.');
+    }
   }
-}
 
   const REGRAS_STATUS_ESPECIAL = {
     'Manutenção': 'numeroChamadoManutencao',
@@ -1139,47 +923,119 @@ function findRowIndexById_(data, idCol, id) {
   return -1;
 }
 
-// ============================================================================
-// LISTAS AUXILIARES (aba Listas, em SCE_Core) — categoria / marca / modelo
-// ----------------------------------------------------------------------------
-// Usado para popular os <select> de cadastro/edição de equipamento nos
-// dashboards de Matriz e Técnico (e pode ser usado na Filial também, se
-// quiser padronizar por lá futuramente).
-// Estrutura esperada da aba: colunas "categoria" | "marca" | "modelo",
-// cada uma podendo ter uma quantidade diferente de linhas preenchidas.
+/// ============================================================================
+// LISTAS AUXILIARES (com cache e estrutura hierárquica)
 // ============================================================================
 
 function getListasCadastro(token) {
-  requireSession_(token);
+  // Valida a sessão (opcional, mas garante que o usuário está autenticado)
+  try {
+    requireSession_(token); // apenas para verificar token válido
+  } catch (e) {
+    throw new Error('Token inválido ou sessão expirada.');
+  }
 
+  // Lê a aba "Listas" usando o mesmo método do restante do sistema
   const data = sheetsApiGetValues_(CONFIG.SHEETS.LISTAS);
-  if (!data || data.length < 2) return { categorias: [], marcas: [], modelos: [] };
+  if (!data || data.length < 2) {
+    return [];
+  }
+
+  const headers = data[0];
+  let idxCategoria = headers.indexOf('categoria');
+  let idxMarca = headers.indexOf('marca');
+  let idxModelo = headers.indexOf('modelo');
+
+  // Fallback para posições fixas caso os cabeçalhos não sejam encontrados
+  if (idxCategoria === -1) idxCategoria = 0;
+  if (idxMarca === -1) idxMarca = 1;
+  if (idxModelo === -1) idxModelo = 2;
+
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const cat = row[idxCategoria] ? String(row[idxCategoria]).trim() : '';
+    const marca = row[idxMarca] ? String(row[idxMarca]).trim() : '';
+    const modelo = row[idxModelo] ? String(row[idxModelo]).trim() : '';
+    if (cat && marca && modelo) {
+      result.push({ categoria: cat, marca: marca, modelo: modelo });
+    }
+  }
+  return result;
+}
+function lerListasDaPlanilha_() {
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.LISTAS);
+  if (!data || data.length < 2) {
+    // Fallback com dados de exemplo (opcional)
+    return {
+      categorias: ['Notebook', 'Desktop', 'Monitor', 'Cellular', 'Tablet'],
+      marcasPorCategoria: {
+        'Notebook': ['Lenovo', 'Positivo', 'Multilaser', 'Samsung'],
+        'Desktop': ['Dell', 'Lenovo', 'HP'],
+        'Monitor': ['LG', 'Samsung', 'AOC', 'ITAUTEC'],
+        'Cellular': ['Redmi', 'Motorola', 'Xiaomi', 'Realme', 'Multilaser'],
+        'Tablet': ['Positivo']
+      },
+      modelosPorMarca: {
+        'Lenovo': ['ThinkPad L14', 'ThinkCentre', 'ThinkVision'],
+        'Positivo': ['Master N1110', 'Master N1210', 'T2040'],
+        'Multilaser': ['PC114', 'Ultra', 'G2'],
+        'Samsung': ['Chromebook', 'Odyssey G5'],
+        'Dell': ['OptiPlex 3080', 'Inspiron 15'],
+        'HP': ['ProDesk 400'],
+        'LG': ['FLATRON 19EB13PW', 'UltraGear 27'],
+        'AOC': ['22P1E'],
+        'ITAUTEC': ['E2011PX'],
+        'Redmi': ['12C', '13C', '9C', 'A1', 'A1 +', 'A3', 'Note 11S', 'Note 11', 'Note 11 Pro', 'Note 12', 'Note 12 Pro', 'Note 12S', 'Note 13', 'Note 13 PRO', 'Note 14', 'Note 9', 'Note 8'],
+        'Motorola': ['G13'],
+        'Xiaomi': ['Poco C85', 'Poco M3 PRO', 'Poco M5', 'Poco M6 PRO', 'Poco X5'],
+        'Realme': ['C51', 'C61', 'Note 50']
+      }
+    };
+  }
 
   const headers = data[0];
   const colCategoria = headers.indexOf('categoria');
   const colMarca = headers.indexOf('marca');
   const colModelo = headers.indexOf('modelo');
 
-  const categorias = [], marcas = [], modelos = [];
-  data.slice(1).forEach(function (row) {
-    if (colCategoria !== -1 && row[colCategoria]) categorias.push(row[colCategoria]);
-    if (colMarca !== -1 && row[colMarca]) marcas.push(row[colMarca]);
-    if (colModelo !== -1 && row[colModelo]) modelos.push(row[colModelo]);
-  });
-
-  function uniqOrdenado(arr) {
-    return arr.filter(function (v, i, a) { return a.indexOf(v) === i; }).sort();
+  if (colCategoria === -1 || colMarca === -1 || colModelo === -1) {
+    return { categorias: [], marcasPorCategoria: {}, modelosPorMarca: {} };
   }
 
+  const dados = data.slice(1).filter(row => row[colCategoria] && row[colMarca] && row[colModelo]);
+
+  const marcasPorCategoria = {};
+  const modelosPorMarca = {};
+  const categoriasSet = new Set();
+
+  dados.forEach(row => {
+    const cat = row[colCategoria].trim();
+    const marca = row[colMarca].trim();
+    const modelo = row[colModelo].trim();
+
+    categoriasSet.add(cat);
+
+    if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = [];
+    if (!marcasPorCategoria[cat].includes(marca)) marcasPorCategoria[cat].push(marca);
+
+    if (!modelosPorMarca[marca]) modelosPorMarca[marca] = [];
+    if (!modelosPorMarca[marca].includes(modelo)) modelosPorMarca[marca].push(modelo);
+  });
+
+  const categorias = Array.from(categoriasSet).sort();
+  Object.keys(marcasPorCategoria).forEach(cat => marcasPorCategoria[cat].sort());
+  Object.keys(modelosPorMarca).forEach(marca => modelosPorMarca[marca].sort());
+
   return {
-    categorias: uniqOrdenado(categorias),
-    marcas: uniqOrdenado(marcas),
-    modelos: uniqOrdenado(modelos)
+    categorias: categorias,
+    marcasPorCategoria: marcasPorCategoria,
+    modelosPorMarca: modelosPorMarca
   };
 }
 
 // ============================================================================
-// HISTÓRICO (aba Historico_Itens, em SCE_Movimentacao)
+// HISTÓRICO
 // ============================================================================
 
 function registrarHistorico_(equipamentoId, campo, valorAntigo, valorNovo, autor) {
@@ -1192,8 +1048,7 @@ function registrarHistorico_(equipamentoId, campo, valorAntigo, valorNovo, autor
 
 function getHistoricoEquipamento(token, equipamentoId) {
   const session = requireSession_(token);
-
-  if (session.nivel !== CONFIG.NIVEIS.MATRIZ) {
+  if (session.nivel !== CONFIG.NIVEIS.MATRIZ && session.nivel !== CONFIG.NIVEIS.ADMIN_FILIAL) {
     const equipamentos = getAllEquipamentos_();
     const item = equipamentos.filter(function (e) { return e.id === equipamentoId; })[0];
     if (!item || !sessaoTemAcessoAUnidade_(session, item.unidade)) {
@@ -1211,33 +1066,11 @@ function getHistoricoEquipamento(token, equipamentoId) {
 }
 
 // ============================================================================
-// REGISTRO DE MANUTENÇÃO (aba Registros_Manutencao, em SCE_Movimentacao)
-// ----------------------------------------------------------------------------
-// Diferente do Historico_Itens (que registra "campo X mudou de Y para Z"
-// automaticamente a cada edição), isto é um diário técnico em texto livre:
-// o técnico (ou Filial/Matriz, se quiserem) registra o que foi feito numa
-// visita/manutenção específica. Fica atrelado ao equipamento, mais recente
-// primeiro, e não é editável depois de criado (só inserção).
-//
-// Cada entrada carrega também um "status" (Pendente/Em andamento/Concluído)
-// que, ao ser registrado, sincroniza automaticamente a coluna
-// "statusManutencao" do equipamento (ver atualizarStatusManutencao).
+// REGISTRO DE MANUTENÇÃO
 // ============================================================================
 
-/**
- * Registra uma entrada de manutenção para um equipamento. Qualquer perfil
- * com acesso à unidade do equipamento pode registrar (Matriz, Filial da
- * própria unidade, Técnico vinculado à unidade).
- *
- * @param {string} token
- * @param {string} equipamentoId
- * @param {string} descricao texto livre (o que foi feito/observado)
- * @param {string} [status] Pendente | Em andamento | Concluído (default: Pendente)
- * @return {{ok:boolean, id:string}}
- */
 function registrarManutencao(token, equipamentoId, descricao, status) {
   const session = requireSession_(token);
-
   descricao = String(descricao || '').trim();
   if (!descricao) throw new Error('Descreva o que foi feito antes de registrar.');
   status = STATUS_MANUTENCAO_VALIDOS_.indexOf(status) !== -1 ? status : CONFIG.STATUS_MANUTENCAO.PENDENTE;
@@ -1260,9 +1093,6 @@ function registrarManutencao(token, equipamentoId, descricao, status) {
     lock.releaseLock();
   }
 
-  // Mantém a coluna statusManutencao do equipamento sincronizada com a
-  // última entrada do diário. Não deve derrubar o registro principal se
-  // a coluna ainda não existir na planilha — só loga o aviso.
   try {
     atualizarStatusManutencao(token, equipamentoId, status);
   } catch (e) {
@@ -1270,22 +1100,12 @@ function registrarManutencao(token, equipamentoId, descricao, status) {
   }
 
   registrarAuditoria_('registrarManutencao', session.email, { equipamentoId: equipamentoId, registroId: id, status: status });
-
   return { ok: true, id: id };
 }
 
-/**
- * Retorna o diário de manutenção de um equipamento, mais recente primeiro.
- * Mesma regra de acesso de registrarManutencao.
- *
- * @param {string} token
- * @param {string} equipamentoId
- * @return {Array<Object>}
- */
 function getRegistrosManutencao(token, equipamentoId) {
   try {
     const session = requireSession_(token);
-
     const equipamentos = getAllEquipamentos_();
     const item = equipamentos.filter(function (e) { return e.id === equipamentoId; })[0];
     if (!item || !sessaoTemAcessoAUnidade_(session, item.unidade)) {
@@ -1309,7 +1129,7 @@ function getRegistrosManutencao(token, equipamentoId) {
 }
 
 // ============================================================================
-// EMPRÉSTIMOS / DEVOLUÇÕES (aba Emprestimos, em SCE_Movimentacao)
+// EMPRÉSTIMOS / DEVOLUÇÕES
 // ============================================================================
 
 function registrarEmprestimo(token, equipamentoIds, dadosEmprestimo) {
@@ -1349,10 +1169,9 @@ function registrarEmprestimo(token, equipamentoIds, dadosEmprestimo) {
 
     const emprestimoId = Utilities.getUuid();
     const now = new Date();
-    const termo = gerarTermoEmprestimoPdf_(emprestimoId, itens, headers, dadosEmprestimo);
+    const unidade = itens.length > 0 ? valueByHeader_(itens[0].row, headers, 'unidade') : '';
+    const termo = gerarTermoEmprestimoPdf_(emprestimoId, itens, headers, dadosEmprestimo, unidade);
 
-    // Uma chamada de batchUpdate por item (status/responsavel/dataAtribuicao/
-    // dataUltimaAtualizacao), em vez de 4 chamadas separadas por item.
     itens.forEach(function (item) {
       sheetsApiAppendRow_(CONFIG.SHEETS.EMPRESTIMOS, [
         emprestimoId, item.id, valueByHeader_(item.row, headers, 'patrimonio'),
@@ -1430,7 +1249,6 @@ function registrarDevolucao(token, equipamentoIds, observacoes) {
     });
 
     registrarAuditoria_('registrarDevolucao', session.email, { itens: equipamentoIds });
-
     return { ok: true, message: 'Devolucao registrada.' };
   } finally {
     lock.releaseLock();
@@ -1461,7 +1279,7 @@ function fecharEmprestimoAberto_(equipamentoId, devolvidoPor, dataDevolucao, obs
 }
 
 // ============================================================================
-// EXPORTAÇÃO (CSV / PDF) — usa getEquipamentosGlobal, já migrado
+// EXPORTAÇÃO
 // ============================================================================
 
 function exportarCSV(token) {
@@ -1480,7 +1298,7 @@ function exportarCSV(token) {
     }).join(','));
   });
 
-  const bom = '\uFEFF'; // BOM UTF-8 para compatibilidade com Excel
+  const bom = '\uFEFF';
   const csvContent = bom + linhas.join('\r\n');
   const blob = Utilities.newBlob(csvContent, 'text/csv', 'sce-equipamentos.csv');
   registrarAuditoria_('exportarCSV', session.email, { total: equipamentos.length });
@@ -1509,30 +1327,6 @@ function exportarEquipamentosPDF(token, filtros) {
   return { ok: true, url: file.getUrl(), name: file.getName() };
 }
 
-function gerarTermoEmprestimoPdf_(emprestimoId, itens, headers, dados) {
-  const rows = itens.map(function (item) {
-    return '<tr><td>' + escapeHtml_(valueByHeader_(item.row, headers, 'patrimonio')) + '</td>' +
-      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'categoria')) + '</td>' +
-      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'marca')) + '</td>' +
-      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'modelo')) + '</td>' +
-      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'numeroSerie')) + '</td></tr>';
-  }).join('');
-  const html =
-    '<h2>Termo de emprestimo de equipamentos</h2>' +
-    '<p><strong>ID:</strong> ' + escapeHtml_(emprestimoId) + '</p>' +
-    '<p><strong>Responsavel:</strong> ' + escapeHtml_(dados.responsavel || '') + '</p>' +
-    '<p><strong>CPF:</strong> ' + escapeHtml_(dados.cpf || '') + '</p>' +
-    '<p><strong>E-mail:</strong> ' + escapeHtml_(dados.emailResponsavel || '') + '</p>' +
-    '<p><strong>Data:</strong> ' + new Date().toLocaleString() + '</p>' +
-    '<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>Patrimonio</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Serie</th></tr></thead><tbody>' +
-    rows + '</tbody></table>' +
-    '<p style="margin-top:32px;">Declaro ter recebido os equipamentos acima e me responsabilizo por sua guarda e devolucao.</p>' +
-    '<p style="margin-top:64px;">____________________________________<br>Assinatura do responsavel</p>';
-  const blob = HtmlService.createHtmlOutput(html).getBlob().setName('termo-emprestimo.pdf').getAs(MimeType.PDF);
-  const file = salvarBlobPdf_(blob, 'termo-emprestimo-' + emprestimoId + '.pdf');
-  return { blob: blob, url: file.getUrl() };
-}
-
 function filtrarEquipamentosParaExport_(equipamentos, filtros) {
   const busca = String(filtros.busca || '').toLowerCase();
   return equipamentos.filter(function (item) {
@@ -1556,36 +1350,87 @@ function montarTabelaHtmlEquipamentos_(equipamentos) {
 }
 
 // ============================================================================
-// GESTÃO DE USUÁRIOS (aba Usuarios, em SCE_Autenticacao — restrito à Matriz)
+// GESTÃO DE USUÁRIOS (CORRIGIDO: FILTRAR REMOVIDOS + LIMITE 2 PARA ADMINFILIAL)
 // ============================================================================
 
+function getNomeUsuario(token) {
+  try {
+    const session = requireSession_(token);
+    const usuario = findUsuarioByEmail_(session.email);
+    return usuario ? usuario.nome : '';
+  } catch (e) {
+    Logger.log('Erro ao buscar nome do usuário: ' + e.message);
+    return '';
+  }
+}
+
+
 function listarUsuarios(token) {
-  requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  const session = requireSession_(token, [CONFIG.NIVEIS.MATRIZ, CONFIG.NIVEIS.ADMIN_FILIAL]);
+
   const data = sheetsApiGetValues_(CONFIG.SHEETS.USUARIOS);
   if (!data || data.length === 0) return [];
   const headers = data[0];
-  return data.slice(1).map(function (row) {
+  let usuarios = data.slice(1).map(function (row) {
     const obj = {};
     headers.forEach(function (h, i) { obj[h] = row[i]; });
     return obj;
   });
+
+  // Filtrar usuários removidos (soft delete)
+  usuarios = usuarios.filter(function (u) { return u.status !== CONFIG.STATUS_USUARIO.REMOVIDO; });
+
+  if (session.nivel === CONFIG.NIVEIS.ADMIN_FILIAL) {
+    const filial = session.filial;
+    return usuarios.filter(function (u) {
+      return u.filial === filial && (u.nivel === CONFIG.NIVEIS.FILIAL || u.nivel === CONFIG.NIVEIS.ADMIN_FILIAL);
+    });
+  }
+  return usuarios;
 }
 
 function adicionarUsuario(token, novoUsuario) {
-  const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  const session = requireSession_(token, [CONFIG.NIVEIS.MATRIZ, CONFIG.NIVEIS.ADMIN_FILIAL]);
 
   const email = String(novoUsuario.email || '').trim().toLowerCase();
   if (!email) throw new Error('E-mail é obrigatório.');
 
+  const nivel = novoUsuario.nivel || CONFIG.NIVEIS.FILIAL;
+  const filial = novoUsuario.filial || '';
+
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
+    // AdminFilial: validar filial, perfil permitido e limite de 2 usuários
+    if (session.nivel === CONFIG.NIVEIS.ADMIN_FILIAL) {
+      if (filial !== session.filial) {
+        throw new Error('Você só pode criar usuários para sua própria unidade.');
+      }
+      if (nivel !== CONFIG.NIVEIS.FILIAL && nivel !== CONFIG.NIVEIS.ADMIN_FILIAL) {
+        throw new Error('Você só pode criar perfis Filial ou AdminFilial.');
+      }
+
+      // Contar usuários ativos (não removidos) daquela filial com perfis permitidos
+      const data = sheetsApiGetValues_(CONFIG.SHEETS.USUARIOS);
+      let count = 0;
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (row[4] === CONFIG.STATUS_USUARIO.REMOVIDO) continue; // removido
+        if (row[3] !== filial) continue; // outra filial
+        if (row[2] === CONFIG.NIVEIS.FILIAL || row[2] === CONFIG.NIVEIS.ADMIN_FILIAL) {
+          count++;
+        }
+      }
+      if (count >= 2) {
+        throw new Error('Limite máximo de 2 usuários por unidade para AdminFilial.');
+      }
+    }
+
     if (findUsuarioByEmail_(email)) {
       throw new Error('Já existe um usuário com este e-mail.');
     }
     sheetsApiAppendRow_(CONFIG.SHEETS.USUARIOS, [
-      email, novoUsuario.nome || '', novoUsuario.nivel || CONFIG.NIVEIS.FILIAL,
-      novoUsuario.filial || '', CONFIG.STATUS_USUARIO.ATIVO, ''
+      email, novoUsuario.nome || '', nivel, filial, CONFIG.STATUS_USUARIO.ATIVO, ''
     ]);
   } finally {
     lock.releaseLock();
@@ -1595,13 +1440,13 @@ function adicionarUsuario(token, novoUsuario) {
   return { ok: true, message: 'Usuário adicionado.' };
 }
 
-/**
- * Atualiza dados de um usuário existente. Restrito à Matriz. Faz checagem
- * de colisão de e-mail se o e-mail estiver sendo alterado.
- */
 function atualizarUsuario(token, emailAtual, dadosAtualizados) {
-  const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  const session = requireSession_(token, [CONFIG.NIVEIS.MATRIZ, CONFIG.NIVEIS.ADMIN_FILIAL]);
   emailAtual = String(emailAtual || '').trim().toLowerCase();
+
+  if (emailAtual === session.email) {
+    throw new Error('Você não pode editar seu próprio usuário.');
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1609,10 +1454,22 @@ function atualizarUsuario(token, emailAtual, dadosAtualizados) {
     const usuario = findUsuarioByEmail_(emailAtual);
     if (!usuario) throw new Error('Usuário não encontrado.');
 
-    const novoEmail = dadosAtualizados.email
-      ? String(dadosAtualizados.email).trim().toLowerCase()
-      : emailAtual;
+    // AdminFilial: validações específicas
+    if (session.nivel === CONFIG.NIVEIS.ADMIN_FILIAL) {
+      if (usuario.filial !== session.filial) {
+        throw new Error('Você só pode editar usuários da sua unidade.');
+      }
+      const novaFilial = dadosAtualizados.filial || usuario.filial;
+      if (novaFilial !== session.filial) {
+        throw new Error('Não é permitido alterar a filial do usuário.');
+      }
+      const novoNivel = dadosAtualizados.nivel || usuario.nivel;
+      if (novoNivel !== CONFIG.NIVEIS.FILIAL && novoNivel !== CONFIG.NIVEIS.ADMIN_FILIAL) {
+        throw new Error('Você só pode atribuir perfis Filial ou AdminFilial.');
+      }
+    }
 
+    const novoEmail = dadosAtualizados.email ? String(dadosAtualizados.email).trim().toLowerCase() : emailAtual;
     if (novoEmail !== emailAtual) {
       const colisao = findUsuarioByEmail_(novoEmail);
       if (colisao) throw new Error('Já existe outro usuário com este e-mail.');
@@ -1634,13 +1491,27 @@ function atualizarUsuario(token, emailAtual, dadosAtualizados) {
 }
 
 function removerUsuario(token, emailParaRemover) {
-  const session = requireSession_(token, CONFIG.NIVEIS.MATRIZ);
+  const session = requireSession_(token, [CONFIG.NIVEIS.MATRIZ, CONFIG.NIVEIS.ADMIN_FILIAL]);
+
+  if (String(emailParaRemover).trim().toLowerCase() === session.email) {
+    throw new Error('Você não pode remover seu próprio usuário.');
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
     const usuario = findUsuarioByEmail_(String(emailParaRemover).trim().toLowerCase());
     if (!usuario) throw new Error('Usuário não encontrado.');
+
+    // AdminFilial: validações específicas
+    if (session.nivel === CONFIG.NIVEIS.ADMIN_FILIAL) {
+      if (usuario.filial !== session.filial) {
+        throw new Error('Você só pode remover usuários da sua unidade.');
+      }
+      if (usuario.nivel !== CONFIG.NIVEIS.FILIAL && usuario.nivel !== CONFIG.NIVEIS.ADMIN_FILIAL) {
+        throw new Error('Você não pode remover este perfil.');
+      }
+    }
 
     sheetsApiBatchUpdateCells_(CONFIG.SHEETS.USUARIOS, [
       { row: usuario.rowIndex, col: 5, value: CONFIG.STATUS_USUARIO.REMOVIDO },
@@ -1655,16 +1526,99 @@ function removerUsuario(token, emailParaRemover) {
 }
 
 // ============================================================================
-// UTILITÁRIOS GERAIS
+// UTILITÁRIOS — DRIVE, PDF, TERMO, BO
 // ============================================================================
 
-function salvarBlobPdf_(blob, name) {
-  blob = blob.setName(name);
-  if (CONFIG.PDF_FOLDER_ID) {
-    return DriveApp.getFolderById(CONFIG.PDF_FOLDER_ID).createFile(blob);
-  }
-  return DriveApp.createFile(blob);
+function formatarDataHoraArquivo() {
+  const agora = new Date();
+  const dia = String(agora.getDate()).padStart(2, '0');
+  const mes = String(agora.getMonth() + 1).padStart(2, '0');
+  const ano = agora.getFullYear();
+  const hora = String(agora.getHours()).padStart(2, '0');
+  const minuto = String(agora.getMinutes()).padStart(2, '0');
+  const segundo = String(agora.getSeconds()).padStart(2, '0');
+  return `${dia}-${mes}-${ano} ${hora}-${minuto}-${segundo}`;
 }
+
+function salvarBlobPdf_(blob, name) {
+  try {
+    blob = blob.setName(name);
+    let folder;
+    try {
+      folder = DriveApp.getFolderById(CONFIG.PDF_FOLDER_ID);
+    } catch (e) {
+      Logger.log('PDF_FOLDER_ID não encontrada. Criando "SCE_TERMOS" na raiz.');
+      folder = DriveApp.createFolder('SCE_TERMOS');
+    }
+    return folder.createFile(blob);
+  } catch (e) {
+    Logger.log('Erro ao salvar PDF: ' + e.message);
+    throw new Error('Não foi possível salvar o termo. Verifique a pasta no Drive.');
+  }
+}
+
+function salvarAnexoBoletim_(base64, mimeType, fileNameOriginal, unidade) {
+  try {
+    const extensao = fileNameOriginal.includes('.') ? fileNameOriginal.split('.').pop() : '';
+    const extensaoFormatada = extensao ? '.' + extensao : '';
+
+    const nomeUnidade = (unidade && unidade.trim()) ? unidade.trim() : 'Unidade';
+    const dataHora = formatarDataHoraArquivo();
+    const novoNome = `${nomeUnidade} - Boletim de ocorrência - ${dataHora}${extensaoFormatada}`;
+
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, novoNome);
+
+    let folder;
+    try {
+      folder = DriveApp.getFolderById(CONFIG.BO_FOLDER_ID);
+    } catch (e) {
+      Logger.log('Pasta BO não encontrada. Criando "SCE_BO" na raiz.');
+      folder = DriveApp.createFolder('SCE_BO');
+    }
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch (e) {
+    Logger.log('Erro ao salvar anexo do B.O.: ' + e.message);
+    throw new Error('Não foi possível salvar o anexo. Verifique a pasta no Drive.');
+  }
+}
+
+function gerarTermoEmprestimoPdf_(emprestimoId, itens, headers, dados, unidade) {
+  const rows = itens.map(function (item) {
+    return '<tr><td>' + escapeHtml_(valueByHeader_(item.row, headers, 'patrimonio')) + '</td>' +
+      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'categoria')) + '</td>' +
+      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'marca')) + '</td>' +
+      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'modelo')) + '</td>' +
+      '<td>' + escapeHtml_(valueByHeader_(item.row, headers, 'numeroSerie')) + '</td></tr>';
+  }).join('');
+
+  const html =
+    '<h2>Termo de empréstimo de equipamentos</h2>' +
+    '<p><strong>ID:</strong> ' + escapeHtml_(emprestimoId) + '</p>' +
+    '<p><strong>Responsável:</strong> ' + escapeHtml_(dados.responsavel || '') + '</p>' +
+    '<p><strong>CPF:</strong> ' + escapeHtml_(dados.cpf || '') + '</p>' +
+    '<p><strong>E-mail:</strong> ' + escapeHtml_(dados.emailResponsavel || '') + '</p>' +
+    '<p><strong>Data:</strong> ' + new Date().toLocaleString() + '</p>' +
+    '<table border="1" cellspacing="0" cellpadding="6"><thead><tr><th>Patrimônio</th><th>Categoria</th><th>Marca</th><th>Modelo</th><th>Série</th></tr></thead><tbody>' +
+    rows + '</tbody></table>' +
+    '<p style="margin-top:32px;">Declaro ter recebido os equipamentos acima e me responsabilizo por sua guarda e devolução.</p>' +
+    '<p style="margin-top:64px;">____________________________________<br>Assinatura do responsável</p>';
+
+  const blob = HtmlService.createHtmlOutput(html).getBlob().setName('termo-temp.pdf').getAs(MimeType.PDF);
+
+  const nomeUnidade = (unidade && unidade.trim()) ? unidade.trim() : 'Unidade';
+  const dataHora = formatarDataHoraArquivo();
+  const idAbreviado = emprestimoId.substring(0, 8);
+  const nomeArquivo = `${nomeUnidade} - Termo de Empréstimo - ${dataHora} - ${idAbreviado}.pdf`;
+
+  const file = salvarBlobPdf_(blob, nomeArquivo);
+  return { blob: blob, url: file.getUrl() };
+}
+
+// ============================================================================
+// UTILITÁRIOS GERAIS
+// ============================================================================
 
 function valueByHeader_(row, headers, header) {
   const idx = headers.indexOf(header);
@@ -1683,4 +1637,24 @@ function escapeHtml_(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function debugSessoes() {
+  const data = sheetsApiGetValues_('Sessoes');
+  Logger.log(JSON.stringify(data.slice(0, 3)));
+}
+
+function debugUsuarioEspecifico() {
+  const email = 'matheus.oliveira07@educacao.sp.gov.br'; // <-- troque aqui
+  
+  const u = findUsuarioByEmail_(email);
+  Logger.log('Usuario encontrado: ' + JSON.stringify(u));
+  
+  if (u) {
+    Logger.log('Status igual a Ativo? ' + (u.status === 'Ativo'));
+    Logger.log('Status removido? ' + (u.status === 'Removido'));
+    Logger.log('Nivel: [' + u.nivel + ']');
+    Logger.log('Filial: [' + u.filial + ']');
+    Logger.log('Chars no email: ' + JSON.stringify(u.email.split('')));
+  }
 }

@@ -322,6 +322,124 @@
     --sce-border: #cccdcf;
     --sce-bg: #eef0f2;
   }
+
+
+  /* ==============================================
+   ESTILOS PARA STATUS, BADGES E FILTROS RÁPIDOS
+   ============================================== */
+
+/* Cores de fundo para linhas da tabela por status */
+tr.status-disponível { background-color: #e8f5e9 !important; }
+tr.status-manutenção { background-color: #fff3e0 !important; }
+tr.status-emprestado { background-color: #e3f2fd !important; }
+tr.status-extraviado { background-color: #ffebee !important; }
+tr.status-inservível { background-color: #efebe9 !important; }
+tr.status-em-verificação { background-color: #f3e5f5 !important; }
+tr.status-removido { background-color: #eceff1 !important; opacity: 0.7; }
+
+/* Badges de manutenção */
+.badge-manutencao {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.badge-pendente {
+  background-color: #fff9c4;
+  color: #f57f17;
+}
+.badge-em-andamento {
+  background-color: #bbdefb;
+  color: #0d47a1;
+}
+.badge-concluído {
+  background-color: #c8e6c9;
+  color: #1b5e20;
+}
+
+/* Badge de atraso de devolução */
+.badge-atraso {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-atrasado {
+  background-color: #ffcdd2;
+  color: #b71c1c;
+}
+.badge-em-dia {
+  background-color: #c8e6c9;
+  color: #1b5e20;
+}
+
+/* Filtros rápidos */
+.filtros-rapidos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.filtros-rapidos .btn-filtro {
+  background: transparent;
+  border: 1px solid var(--sce-border);
+  border-radius: 20px;
+  padding: 4px 16px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--sce-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.filtros-rapidos .btn-filtro:hover {
+  background: var(--sce-primary-light);
+  border-color: var(--sce-primary);
+  color: var(--sce-primary-dark);
+}
+.filtros-rapidos .btn-filtro.ativo {
+  background: var(--sce-primary);
+  border-color: var(--sce-primary);
+  color: white;
+}
+
+/* Ícone de atraso na tabela */
+.icone-atraso {
+  font-size: 1rem;
+  vertical-align: middle;
+}
+.icone-atraso.atrasado { color: #d32f2f; }
+.icone-atraso.em-dia { color: #2e7d32; }
+
+/* Checkbox de seleção em lote */
+.check-equipamento {
+  transform: scale(1.1);
+}
+
+/* Badge de "vinculado BlueMonitor" */
+.badge-blue {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-blue.sim {
+  background-color: #bbdefb;
+  color: #0d47a1;
+}
+.badge-blue.nao {
+  background-color: #e0e0e0;
+  color: #616161;
+}
+
+.sce-footer a { text-decoration:none; font-weight:500; }
+.sce-footer a:hover { text-decoration:underline; }
 </style>
 
 <div class="sce-header">
@@ -400,4 +518,207 @@
     if (el) el.innerText = 'Gerado em ' + new Date().toLocaleString('pt-BR');
     window.print();
   }
+
+  // ================================================================
+// LISTAS COM CASCATA E "OUTRO"
+// ================================================================
+
+function preencherSelectCategoria(prefixo) {
+  if (!window.listasCache || !window.listasCache.categorias) return;
+  const select = document.getElementById(prefixo + '-categoria');
+  if (!select) return;
+
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+    window.listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
+    '<option value="__outro__">Outro...</option>';
+
+  if (valorAtual && window.listasCache.categorias.includes(valorAtual)) {
+    select.value = valorAtual;
+  } else if (valorAtual === '__outro__') {
+    select.value = '__outro__';
+    mostrarCampoOutro(prefixo, 'categoria');
+  }
+
+  M.FormSelect.init(select);
+  // Dispara a mudança para popular marcas (se tiver um valor selecionado que não seja "outro")
+  if (select.value && select.value !== '__outro__') {
+    popularMarcas(prefixo, select.value);
+  } else {
+    limparMarcaModelo(prefixo);
+  }
+}
+
+function popularMarcas(prefixo, categoria) {
+  const selectMarca = document.getElementById(prefixo + '-marca');
+  if (!selectMarca) return;
+
+  if (!categoria || !window.listasCache || !window.listasCache.marcasPorCategoria[categoria]) {
+    // Se não houver categoria selecionada, mostra todas as marcas (ou vazio)
+    const marcas = window.listasCache && window.listasCache.marcasPorCategoria ? 
+      Object.values(window.listasCache.marcasPorCategoria).flat() : [];
+    const unicas = [...new Set(marcas)].sort();
+    selectMarca.innerHTML = '<option value="" disabled selected>Selecione a categoria</option>' +
+      unicas.map(m => `<option value="${m}">${m}</option>`).join('') +
+      '<option value="__outro__">Outro...</option>';
+    M.FormSelect.init(selectMarca);
+    // Limpa modelos
+    const selectModelo = document.getElementById(prefixo + '-modelo');
+    if (selectModelo) {
+      selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
+      M.FormSelect.init(selectModelo);
+    }
+    return;
+  }
+
+  const marcas = window.listasCache.marcasPorCategoria[categoria];
+  const valorAtual = selectMarca.value;
+  selectMarca.innerHTML = '<option value="" disabled selected>Selecione uma marca</option>' +
+    marcas.map(m => `<option value="${m}">${m}</option>`).join('') +
+    '<option value="__outro__">Outro...</option>';
+
+  if (valorAtual && marcas.includes(valorAtual)) {
+    selectMarca.value = valorAtual;
+  } else if (valorAtual === '__outro__') {
+    selectMarca.value = '__outro__';
+    mostrarCampoOutro(prefixo, 'marca');
+  }
+
+  M.FormSelect.init(selectMarca);
+  // Popular modelos se houver marca selecionada (não sendo "outro")
+  if (selectMarca.value && selectMarca.value !== '__outro__') {
+    popularModelos(prefixo, selectMarca.value);
+  } else {
+    const selectModelo = document.getElementById(prefixo + '-modelo');
+    if (selectModelo) {
+      selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>' +
+        '<option value="__outro__">Outro...</option>';
+      M.FormSelect.init(selectModelo);
+    }
+  }
+}
+
+function popularModelos(prefixo, marca) {
+  const selectModelo = document.getElementById(prefixo + '-modelo');
+  if (!selectModelo) return;
+
+  if (!marca || !window.listasCache || !window.listasCache.modelosPorMarca[marca]) {
+    // Se não houver marca, mostra todos os modelos ou vazio
+    const modelos = window.listasCache && window.listasCache.modelosPorMarca ?
+      Object.values(window.listasCache.modelosPorMarca).flat() : [];
+    const unicos = [...new Set(modelos)].sort();
+    selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>' +
+      unicos.map(m => `<option value="${m}">${m}</option>`).join('') +
+      '<option value="__outro__">Outro...</option>';
+    M.FormSelect.init(selectModelo);
+    return;
+  }
+
+  const modelos = window.listasCache.modelosPorMarca[marca];
+  const valorAtual = selectModelo.value;
+  selectModelo.innerHTML = '<option value="" disabled selected>Selecione um modelo</option>' +
+    modelos.map(m => `<option value="${m}">${m}</option>`).join('') +
+    '<option value="__outro__">Outro...</option>';
+
+  if (valorAtual && modelos.includes(valorAtual)) {
+    selectModelo.value = valorAtual;
+  } else if (valorAtual === '__outro__') {
+    selectModelo.value = '__outro__';
+    mostrarCampoOutro(prefixo, 'modelo');
+  }
+
+  M.FormSelect.init(selectModelo);
+}
+
+function mostrarCampoOutro(prefixo, campo) {
+  const containerId = prefixo + '-outro-' + campo;
+  const container = document.getElementById(containerId);
+  if (container) container.style.display = 'block';
+}
+
+function esconderCampoOutro(prefixo, campo) {
+  const containerId = prefixo + '-outro-' + campo;
+  const container = document.getElementById(containerId);
+  if (container) {
+    container.style.display = 'none';
+    const input = container.querySelector('input');
+    if (input) input.value = '';
+  }
+}
+
+function limparMarcaModelo(prefixo) {
+  const selectMarca = document.getElementById(prefixo + '-marca');
+  if (selectMarca) {
+    selectMarca.innerHTML = '<option value="" disabled selected>Selecione a categoria</option>';
+    M.FormSelect.init(selectMarca);
+  }
+  const selectModelo = document.getElementById(prefixo + '-modelo');
+  if (selectModelo) {
+    selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
+    M.FormSelect.init(selectModelo);
+  }
+  esconderCampoOutro(prefixo, 'marca');
+  esconderCampoOutro(prefixo, 'modelo');
+}
+
+// Evento change para os selects
+function setupSelectCascata(prefixo) {
+  const selectCat = document.getElementById(prefixo + '-categoria');
+  const selectMarca = document.getElementById(prefixo + '-marca');
+  const selectModelo = document.getElementById(prefixo + '-modelo');
+
+  if (selectCat) {
+    selectCat.addEventListener('change', function() {
+      const val = this.value;
+      if (val === '__outro__') {
+        mostrarCampoOutro(prefixo, 'categoria');
+        limparMarcaModelo(prefixo);
+      } else {
+        esconderCampoOutro(prefixo, 'categoria');
+        popularMarcas(prefixo, val);
+      }
+    });
+  }
+
+  if (selectMarca) {
+    selectMarca.addEventListener('change', function() {
+      const val = this.value;
+      if (val === '__outro__') {
+        mostrarCampoOutro(prefixo, 'marca');
+        // Limpa modelos
+        const selectModelo = document.getElementById(prefixo + '-modelo');
+        if (selectModelo) {
+          selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
+          M.FormSelect.init(selectModelo);
+        }
+        esconderCampoOutro(prefixo, 'modelo');
+      } else {
+        esconderCampoOutro(prefixo, 'marca');
+        popularModelos(prefixo, val);
+      }
+    });
+  }
+
+  if (selectModelo) {
+    selectModelo.addEventListener('change', function() {
+      if (this.value === '__outro__') {
+        mostrarCampoOutro(prefixo, 'modelo');
+      } else {
+        esconderCampoOutro(prefixo, 'modelo');
+      }
+    });
+  }
+}
+
+// Função auxiliar para obter o valor final (select ou input "outro")
+function getValorCampo(prefixo, campo) {
+  const select = document.getElementById(prefixo + '-' + campo);
+  if (!select) return '';
+  const val = select.value;
+  if (val === '__outro__') {
+    const input = document.getElementById(prefixo + '-outro-' + campo + '-input');
+    return input ? input.value.trim() : '';
+  }
+  return val;
+}
 </script>

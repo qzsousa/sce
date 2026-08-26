@@ -4,28 +4,81 @@
   <base target="_top">
   <meta charset="utf-8">
   <?!= include('Shared') ?>
+  <meta name="version" content="v2.1.0-matriz">
+  <style>
+    .campo-justificativa {
+      margin-top: 5px;
+      padding: 8px 0;
+    }
+    .campo-outro {
+      margin-top: 0;
+      padding: 0 0 10px 0;
+      display: none;
+    }
+    .campo-outro input {
+      width: 100%;
+    }
+  </style>
 </head>
 <body class="theme-matriz">
-  <!--
-    Assim como no DashboardFilial, este arquivo assume perfil Matriz já
-    validado no doGet. Não replicar checagem de role aqui.
-  -->
+
   <div class="sce-container">
 
     <div class="sce-page-title">
       <i class="material-icons">account_balance</i>
-      <h5>Painel Estratégico — Matriz</h5>
-    </div>
-
-    <div id="kpis" class="row"><!-- KPIs preenchidos via JS --></div>
-
-    <div class="sce-panel">
-      <div class="row" style="margin-bottom:0;">
-        <div id="chart-por-unidade" style="width:50%;height:300px;display:inline-block;"></div>
-        <div id="chart-por-categoria" style="width:50%;height:300px;display:inline-block;"></div>
+      <div>
+        <h5 style="margin:0;">Perfil: Matriz – <span id="nome-usuario">Carregando...</span></h5>
+        <span style="font-size:0.85rem;color:var(--sce-muted);">
+          Visualizando <span id="total-unidades">0</span> unidade(s)
+        </span>
       </div>
     </div>
 
+    <!-- Seletor de unidade -->
+    <div class="sce-panel" style="background:var(--sce-primary-light);border-color:var(--sce-primary);">
+      <div class="row" style="margin-bottom:0;align-items:center;">
+        <div class="col s12 m2" style="font-weight:600;color:var(--sce-primary-dark);">
+          <i class="material-icons left" style="vertical-align:middle;">filter_list</i> Unidade:
+        </div>
+        <div class="col s12 m4">
+          <select id="seletor-unidade" class="browser-default" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--sce-border);background:white;">
+            <option value="">Todas as unidades</option>
+          </select>
+        </div>
+        <div class="col s12 m6" style="text-align:right;font-size:0.85rem;color:var(--sce-muted);">
+          Equipamentos: <span id="contador-equipamentos">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div id="kpis" class="row"></div>
+
+        <!-- Gráficos -->
+    <div class="sce-panel">
+      <div class="row" style="margin-bottom:0;">
+        <div class="col s12 m4">
+          <div class="sce-panel-title" style="font-size:0.9rem;"><i class="material-icons" style="font-size:18px;">pie_chart</i>Por status</div>
+          <div id="chart-status" style="width:100%;height:180px;position:relative;">
+            <canvas id="canvas-chart-status"></canvas>
+          </div>
+        </div>
+        <div class="col s12 m4">
+          <div class="sce-panel-title" style="font-size:0.9rem;"><i class="material-icons" style="font-size:18px;">business</i>Por unidade</div>
+          <div id="chart-unidade" style="width:100%;height:180px;position:relative;">
+            <canvas id="canvas-chart-unidade"></canvas>
+          </div>
+        </div>
+        <div class="col s12 m4">
+          <div class="sce-panel-title" style="font-size:0.9rem;"><i class="material-icons" style="font-size:18px;">category</i>Por categoria</div>
+          <div id="chart-categoria" style="width:100%;height:180px;position:relative;">
+            <canvas id="canvas-chart-categoria"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ações -->
     <div class="sce-panel">
       <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações</div>
       <div class="row" style="margin-bottom:0;">
@@ -35,32 +88,73 @@
         <button class="btn waves-effect" id="btn-abrir-cadastro">
           <i class="material-icons left">add</i>Adicionar equipamento
         </button>
+        <button class="btn red waves-effect" id="btn-excluir-selecionados">
+          <i class="material-icons left">delete</i>Excluir selecionados
+        </button>
+        <button class="btn waves-effect" id="btn-alterar-status-lote">
+          <i class="material-icons left">edit</i>Alterar status em lote
+        </button>
         <button class="btn-flat waves-effect" id="btn-atualizar-lista">
           <i class="material-icons left">refresh</i>Atualizar
         </button>
         <button class="btn" id="btn-exportar-csv">
-          <i class="material-icons left">description</i>Exportar CSV
+          <i class="material-icons left">description</i>CSV
         </button>
         <button class="btn" id="btn-exportar-pdf">
-          <i class="material-icons left">picture_as_pdf</i>Exportar PDF
+          <i class="material-icons left">picture_as_pdf</i>PDF
         </button>
       </div>
     </div>
 
+    <!-- Filtros -->
+    <div class="sce-panel no-print">
+      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros adicionais</div>
+      <div class="filtros-rapidos">
+        <button class="btn-filtro ativo" data-filtro="todos">Todos</button>
+        <button class="btn-filtro" data-filtro="Disponível">Disponíveis</button>
+        <button class="btn-filtro" data-filtro="Manutenção">Manutenção</button>
+        <button class="btn-filtro" data-filtro="Extraviado">Extraviados</button>
+        <button class="btn-filtro" data-filtro="Emprestado">Emprestados</button>
+        <button class="btn-filtro" data-filtro="Inservível">Inservíveis</button>
+        <button class="btn-filtro" data-filtro="Em verificação">Em verificação</button>
+      </div>
+      <div class="row" style="margin-bottom:0;">
+        <div class="input-field col s6">
+          <i class="material-icons prefix" style="color:var(--sce-muted);">search</i>
+          <input type="text" id="filtro-busca">
+          <label for="filtro-busca">Buscar por patrimônio, série ou modelo</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="filtro-status"><option value="">Todos os status</option></select>
+          <label>Status</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela -->
     <div class="sce-panel">
       <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos — todas as unidades</div>
       <table class="striped" id="tabela-equipamentos-global">
         <thead>
           <tr>
-            <th>Unidade</th><th>Categoria</th><th>Marca</th>
-            <th>Patrimônio</th><th>Status</th><th>Status manutenção</th>
-            <th>Última alteração por</th><th>Ações</th>
+            <th class="no-print"><label><input type="checkbox" id="check-todos"><span></span></label></th>
+            <th data-sort="unidade" class="sortable" style="cursor:pointer;">Unidade <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th>Manutenção</th>
+            <th>Devolução</th>
+            <th>BlueMonitor</th>
+            <th class="no-print">Ações</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
   </div>
+
+  <!-- ========== MODAIS ========== -->
 
   <!-- Modal de cadastro -->
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
@@ -73,35 +167,55 @@
           <label for="new-unidade">Unidade</label>
         </div>
         <div class="input-field col s6">
-          <select id="new-categoria"><option value="" disabled selected>Selecione</option></select>
-          <label>Categoria</label>
+          <select id="new-categoria" onchange="onCategoriaChange('new')"><option value="" disabled selected>Selecione</option></select>
+          <label>Categoria *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-categoria-container">
+          <input type="text" id="new-outro-categoria" placeholder="Digite a categoria">
+          <label for="new-outro-categoria">Outra categoria</label>
         </div>
         <div class="input-field col s6">
-          <select id="new-marca"><option value="" disabled selected>Selecione</option></select>
-          <label>Marca</label>
+          <select id="new-marca" onchange="onMarcaChange('new')"><option value="" disabled selected>Selecione</option></select>
+          <label>Marca *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-marca-container">
+          <input type="text" id="new-outro-marca" placeholder="Digite a marca">
+          <label for="new-outro-marca">Outra marca</label>
         </div>
         <div class="input-field col s6">
           <select id="new-modelo"><option value="" disabled selected>Selecione</option></select>
-          <label>Modelo</label>
+          <label>Modelo *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-modelo-container">
+          <input type="text" id="new-outro-modelo" placeholder="Digite o modelo">
+          <label for="new-outro-modelo">Outro modelo</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-patrimonio">
-          <label for="new-patrimonio">Patrimonio</label>
+          <label for="new-patrimonio">Patrimônio *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
+          <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea>
+          <label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio *</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-numeroSerie">
-          <label for="new-numeroSerie">Numero de serie</label>
+          <label for="new-numeroSerie">Número de série *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-serie" style="display:none;">
+          <textarea id="new-justificativaNumeroSerie" class="materialize-textarea"></textarea>
+          <label for="new-justificativaNumeroSerie">Justificativa para ausência de Número de Série *</label>
         </div>
         <div class="input-field col s6">
-          <select id="new-status">
-            <option value="Dispon&#237;vel" selected>Dispon&#237;vel</option>
-            <option value="Manuten&#231;&#227;o">Manuten&#231;&#227;o</option>
+          <select id="new-status" onchange="atualizarCamposCondicionaisCadastro()">
+            <option value="Disponível" selected>Disponível</option>
+            <option value="Manutenção">Manutenção</option>
             <option value="Emprestado">Emprestado</option>
             <option value="Extraviado">Extraviado</option>
-            <option value="Inserv&#237;vel">Inserv&#237;vel</option>
-            <option value="Em verifica&#231;&#227;o">Em verifica&#231;&#227;o</option>
+            <option value="Inservível">Inservível</option>
+            <option value="Em verificação">Em verificação</option>
           </select>
-          <label>Status</label>
+          <label>Status *</label>
         </div>
         <div class="input-field col s6">
           <select id="new-vinculadoBlueMonitor">
@@ -109,6 +223,12 @@
             <option value="Sim">Sim</option>
           </select>
           <label>Vinculado no BlueMonitor?</label>
+        </div>
+        <div class="input-field col s12" id="campo-bo-cadastro" style="display:none;">
+          <div style="margin-top:10px;">
+            <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="new-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
+          </div>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-sistemaOperacional">
@@ -120,7 +240,7 @@
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-memoriaRAM">
-          <label for="new-memoriaRAM">Memoria RAM</label>
+          <label for="new-memoriaRAM">Memória RAM</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-armazenamento">
@@ -132,11 +252,11 @@
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-responsavelAtual">
-          <label for="new-responsavelAtual">Responsavel atual</label>
+          <label for="new-responsavelAtual">Responsável atual</label>
         </div>
         <div class="input-field col s12">
           <textarea id="new-observacoes" class="materialize-textarea"></textarea>
-          <label for="new-observacoes">Observacoes</label>
+          <label for="new-observacoes">Observações</label>
         </div>
       </div>
     </div>
@@ -146,64 +266,7 @@
     </div>
   </div>
 
-  <div id="modal-usuarios" class="modal modal-fixed-footer">
-    <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">group</i>Gerenciar usuarios</h5>
-
-      <div class="row">
-        <div class="input-field col s3">
-          <input type="email" id="user-email">
-          <label for="user-email">E-mail</label>
-        </div>
-        <div class="input-field col s3">
-          <input type="text" id="user-nome">
-          <label for="user-nome">Nome</label>
-        </div>
-        <div class="input-field col s2">
-          <select id="user-nivel">
-            <option value="Filial" selected>Filial</option>
-            <option value="Matriz">Matriz</option>
-            <option value="Tecnico">Tecnico</option>
-          </select>
-          <label>Nivel</label>
-        </div>
-        <div class="input-field col s3">
-          <input type="text" id="user-filial">
-          <label for="user-filial">Filial(is) — separe por vírgula se for Técnico</label>
-        </div>
-        <div class="input-field col s1">
-          <button class="btn waves-effect" id="btn-adicionar-usuario" title="Adicionar">
-            <i class="material-icons">add</i>
-          </button>
-        </div>
-      </div>
-
-      <table class="striped" id="tabela-usuarios">
-        <thead>
-          <tr>
-            <th>E-mail</th><th>Nome</th><th>Nivel</th><th>Filial</th><th>Status</th><th>Acoes</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div class="modal-footer">
-      <a class="modal-close btn-flat">Fechar</a>
-    </div>
-  </div>
-
-  <div id="modal-confirmar-remocao" class="modal">
-    <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
-      <p>Esta ação marcará o item como removido. Deseja continuar?</p>
-    </div>
-    <div class="modal-footer">
-      <a class="modal-close btn-flat">Cancelar</a>
-      <a class="btn red" id="btn-confirmar-remocao">Remover</a>
-    </div>
-  </div>
-
-  <!-- Modal de edição — Matriz também pode alterar a unidade do equipamento -->
+  <!-- Modal de edição -->
   <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5>
@@ -215,24 +278,44 @@
           <label for="edit-unidade" class="active">Unidade</label>
         </div>
         <div class="input-field col s6">
-          <select id="edit-categoria"><option value="" disabled selected>Selecione</option></select>
-          <label>Categoria</label>
+          <select id="edit-categoria" onchange="onCategoriaChange('edit')"><option value="" disabled selected>Selecione</option></select>
+          <label class="active">Categoria *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-categoria-container">
+          <input type="text" id="edit-outro-categoria" placeholder="Digite a categoria">
+          <label for="edit-outro-categoria">Outra categoria</label>
         </div>
         <div class="input-field col s6">
-          <select id="edit-marca"><option value="" disabled selected>Selecione</option></select>
-          <label>Marca</label>
+          <select id="edit-marca" onchange="onMarcaChange('edit')"><option value="" disabled selected>Selecione</option></select>
+          <label class="active">Marca *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-marca-container">
+          <input type="text" id="edit-outro-marca" placeholder="Digite a marca">
+          <label for="edit-outro-marca">Outra marca</label>
         </div>
         <div class="input-field col s6">
           <select id="edit-modelo"><option value="" disabled selected>Selecione</option></select>
-          <label>Modelo</label>
+          <label class="active">Modelo *</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-modelo-container">
+          <input type="text" id="edit-outro-modelo" placeholder="Digite o modelo">
+          <label for="edit-outro-modelo">Outro modelo</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="edit-patrimonio">
-          <label for="edit-patrimonio" class="active">Patrimônio</label>
+          <label for="edit-patrimonio" class="active">Patrimônio *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
+          <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea>
+          <label for="edit-justificativaPatrimonio" class="active">Justificativa para ausência de Patrimônio *</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="edit-numeroSerie">
-          <label for="edit-numeroSerie" class="active">Número de série</label>
+          <label for="edit-numeroSerie" class="active">Número de série *</label>
+        </div>
+        <div class="input-field col s12" id="campo-justificativa-serie-edit" style="display:none;">
+          <textarea id="edit-justificativaNumeroSerie" class="materialize-textarea"></textarea>
+          <label for="edit-justificativaNumeroSerie" class="active">Justificativa para ausência de Número de Série *</label>
         </div>
         <div class="input-field col s6">
           <select id="edit-status" onchange="atualizarCamposCondicionais()">
@@ -243,7 +326,7 @@
             <option value="Inservível">Inservível</option>
             <option value="Em verificação">Em verificação</option>
           </select>
-          <label>Status</label>
+          <label>Status *</label>
         </div>
         <div class="input-field col s6">
           <select id="edit-vinculadoBlueMonitor">
@@ -259,7 +342,12 @@
         </div>
         <div class="input-field col s12" id="campo-bo" style="display:none;">
           <input type="text" id="edit-boletimOcorrencia">
-          <label for="edit-boletimOcorrencia" class="active">Boletim de ocorrência</label>
+          <label for="edit-boletimOcorrencia" class="active">Nº do Boletim de Ocorrência</label>
+          <div style="margin-top:10px;">
+            <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="edit-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
+            <span id="anexo-bo-existente" style="font-size:.78rem;"></span>
+          </div>
         </div>
         <div class="input-field col s12" id="campo-justificativa" style="display:none;">
           <textarea id="edit-justificativaVerificacao" class="materialize-textarea"></textarea>
@@ -302,12 +390,94 @@
     </div>
   </div>
 
+  <!-- Modal de histórico -->
+  <div id="modal-historico" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">history</i>Histórico de alterações</h5>
+      <p><strong>Equipamento:</strong> <span id="historico-patrimonio"></span> – <span id="historico-modelo"></span></p>
+      <table class="striped" id="tabela-historico">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Autor</th>
+            <th>Campo</th>
+            <th>Valor antigo</th>
+            <th>Valor novo</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Fechar</a>
+    </div>
+  </div>
+
+    <!-- Modal de usuários -->
+  <div id="modal-usuarios" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">group</i>Gerenciar usuários</h5>
+
+      <div class="row" style="margin-bottom:0;">
+        <div class="input-field col s12 m3">
+          <input type="email" id="user-email">
+          <label for="user-email">E-mail</label>
+        </div>
+        <div class="input-field col s12 m3">
+          <input type="text" id="user-nome">
+          <label for="user-nome">Nome</label>
+        </div>
+        <div class="input-field col s12 m2">
+          <select id="user-nivel">
+            <option value="Matriz">Matriz</option>
+            <option value="AdminFilial">AdminFilial</option>
+            <option value="Filial" selected>Filial</option>
+            <option value="Tecnico">Técnico</option>
+          </select>
+          <label>Nível</label>
+        </div>
+        <div class="input-field col s12 m3">
+          <input type="text" id="user-filial">
+          <label for="user-filial">Filial(is) — separe por vírgula se for Técnico</label>
+        </div>
+        <div class="col s12 m1" style="display:flex; align-items:center; height:60px;">
+          <button class="btn waves-effect btn-small" id="btn-adicionar-usuario" title="Adicionar" style="width:100%;">
+            <i class="material-icons">add</i>
+          </button>
+        </div>
+      </div>
+
+      <table class="striped" id="tabela-usuarios">
+        <thead>
+          <tr>
+            <th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Fechar</a>
+    </div>
+  </div>
+
+  <!-- Modal de confirmação de remoção -->
+  <div id="modal-confirmar-remocao" class="modal">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
+      <p>Esta ação marcará o item como removido. Deseja continuar?</p>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn red" id="btn-confirmar-remocao">Remover</a>
+    </div>
+  </div>
+
   <!-- Modal de manutenção -->
   <div id="modal-manutencao" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5>
       <input type="hidden" id="manut-equipamento-id">
-
       <div class="row">
         <div class="input-field col s4">
           <select id="manut-status">
@@ -322,11 +492,9 @@
           <label for="manut-descricao">O que foi feito / observado</label>
         </div>
       </div>
-
       <a class="btn waves-effect" id="btn-registrar-manutencao">
         <i class="material-icons left">add</i>Registrar
       </a>
-
       <table class="striped" style="margin-top:20px;">
         <thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead>
         <tbody id="tabela-manutencao-body"></tbody>
@@ -336,44 +504,369 @@
       <a class="modal-close btn-flat">Fechar</a>
     </div>
   </div>
+
+  <!-- Modal de alterar status em lote -->
+  <div id="modal-alterar-status-lote" class="modal">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Alterar status em lote</h5>
+      <p>Selecione o novo status para os <span id="lote-contagem">0</span> equipamento(s) selecionado(s):</p>
+      <div class="input-field">
+        <select id="lote-novo-status">
+          <option value="Disponível">Disponível</option>
+          <option value="Manutenção">Manutenção</option>
+          <option value="Emprestado">Emprestado</option>
+          <option value="Extraviado">Extraviado</option>
+          <option value="Inservível">Inservível</option>
+          <option value="Em verificação">Em verificação</option>
+        </select>
+        <label>Novo status</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-confirmar-alterar-status-lote">Aplicar</a>
+    </div>
+  </div>
+
+  <footer class="sce-footer">
+    <div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;">
+      <span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span>
+      <a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a>
+      <a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a>
+      <a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a>
+      <span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.1.0</span>
+    </div>
+  </footer>
+
 </body>
 
 <script>
+  // ================================================================
+  // TOKEN E AUTENTICAÇÃO
+  // ================================================================
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    if (tokenFromUrl) {
+      localStorage.setItem('sce_token', tokenFromUrl);
+      console.log('✅ Token salvo no localStorage a partir da URL:', tokenFromUrl);
+    } else {
+      console.warn('⚠️ Nenhum token encontrado na URL. Usando localStorage existente.');
+    }
+  })();
 
-  
   const SCE_TOKEN = localStorage.getItem('sce_token');
+  console.log('🔑 SCE_TOKEN:', SCE_TOKEN);
+
+  if (!SCE_TOKEN) {
+    console.error('❌ Nenhum token encontrado. Redirecionando para login...');
+    M.toast({ html: 'Sessão expirada. Faça login novamente.' });
+    setTimeout(function() { window.location.href = window.location.href.split('?')[0]; }, 2000);
+  }
+
+  // ================================================================
+  // VARIÁVEIS GLOBAIS
+  // ================================================================
+  const SESSION_EMAIL = '<?= session.email ?>';
+  console.log('📧 SESSION_EMAIL:', SESSION_EMAIL);
 
   let equipamentosCache = [];
+  let equipamentosFiltrados = [];
   let idPendenteRemocao = null;
   let modalRemocaoInstance = null;
   let modalEdicaoInstance = null;
   let modalCadastroInstance = null;
   let modalUsuariosInstance = null;
   let modalManutencaoInstance = null;
+  let modalStatusLoteInstance = null;
+  let modalHistoricoInstance = null;
   let itemEmEdicaoOriginal = null;
   let equipamentoIdManutencaoAtual = null;
+  let usuariosCache = [];
 
-  // Inclui "unidade" aqui — só a Matriz pode reatribuir um equipamento
-  // para outra unidade. Inclui também "vinculadoBlueMonitor" — só existe
-  // aqui e no dashboard do Técnico, não existe na Filial.
+  let chartStatus = null;
+  let chartUnidade = null;
+  let chartCategoria = null;
+
+  let ordemAtual = 'asc';
+  let campoOrdenacao = null;
+  let listasCache = null;
+
   const CAMPOS_EDITAVEIS = [
     'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
     'vinculadoBlueMonitor',
     'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
     'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
-    'tamanhoTela', 'responsavelAtual', 'observacoes'
+    'tamanhoTela', 'responsavelAtual', 'observacoes',
+    'justificativaPatrimonio', 'justificativaNumeroSerie'
   ];
 
   const CAMPOS_CADASTRO = [
     'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
     'vinculadoBlueMonitor',
     'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
-    'tamanhoTela', 'responsavelAtual', 'observacoes'
+    'tamanhoTela', 'responsavelAtual', 'observacoes',
+    'justificativaPatrimonio', 'justificativaNumeroSerie'
   ];
 
+  // ================================================================
+  // OBTER NOME DO USUÁRIO
+  // ================================================================
+  function obterNomeUsuario() {
+    google.script.run
+      .withSuccessHandler(function (nome) {
+        document.getElementById('nome-usuario').innerText = nome || 'Matriz';
+      })
+      .withFailureHandler(function () {
+        document.getElementById('nome-usuario').innerText = 'Matriz';
+      })
+      .getNomeUsuario(SCE_TOKEN);
+  }
 
-// --- KPIs + gráfico ---------------------------------------------------------
+  // ================================================================
+  // CARREGAR LISTAS (CATEGORIA, MARCA, MODELO) - CASCATA + "OUTRO"
+  // ================================================================
+  function carregarListasCadastro() {
+    console.log('🟢 carregarListasCadastro() iniciado...');
+    google.script.run
+      .withSuccessHandler(function (dados) {
+        console.log('✅ Listas recebidas:', dados);
+        processarListas(dados);
+        preencherSelectCategoria('new');
+        preencherSelectCategoria('edit');
+      })
+      .withFailureHandler(function (err) {
+        console.error('❌ Erro ao carregar listas:', err.message);
+        M.toast({ html: 'Erro ao carregar listas. Recarregue a página.' });
+      })
+      .getListasCadastro(SCE_TOKEN);
+  }
 
+  function processarListas(combinacoes) {
+    const categorias = new Set();
+    const marcasPorCategoria = {};
+    const modelosPorCategoriaMarca = {};
+
+    combinacoes.forEach(item => {
+      const cat = item.categoria;
+      const marca = item.marca;
+      const modelo = item.modelo;
+      if (!cat || !marca || !modelo) return;
+      categorias.add(cat);
+      if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
+      marcasPorCategoria[cat].add(marca);
+      if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};
+      if (!modelosPorCategoriaMarca[cat][marca]) modelosPorCategoriaMarca[cat][marca] = new Set();
+      modelosPorCategoriaMarca[cat][marca].add(modelo);
+    });
+
+    listasCache = {
+      combinacoes: combinacoes,
+      categorias: Array.from(categorias).sort(),
+      marcasPorCategoria: marcasPorCategoria,
+      modelosPorCategoriaMarca: modelosPorCategoriaMarca
+    };
+  }
+
+  function preencherSelectCategoria(prefixo) {
+    const select = document.getElementById(prefixo + '-categoria');
+    if (!select || !listasCache) return;
+    const valorAtual = select.value;
+    select.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+      listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
+      '<option value="__outro__">Outro (digitar)</option>';
+    if (valorAtual && listasCache.categorias.includes(valorAtual)) {
+      select.value = valorAtual;
+    } else if (valorAtual && valorAtual !== '__outro__') {
+      // Se o valor atual não está na lista, seleciona "__outro__" e preenche o campo de texto
+      select.value = '__outro__';
+      const input = document.getElementById(prefixo + '-outro-categoria');
+      if (input) input.value = valorAtual;
+      toggleOutroCampo(prefixo, 'categoria');
+    } else {
+      select.value = valorAtual; // pode ser '__outro__' ou vazio
+      toggleOutroCampo(prefixo, 'categoria');
+    }
+    M.FormSelect.init(select);
+    if (select.value && select.value !== '__outro__') {
+      popularMarcas(prefixo, select.value);
+      limparModelo(prefixo);
+    } else {
+      limparMarcaModelo(prefixo);
+    }
+  }
+
+  function popularMarcas(prefixo, categoria) {
+    const selectMarca = document.getElementById(prefixo + '-marca');
+    if (!selectMarca || !listasCache) return;
+    const marcasSet = listasCache.marcasPorCategoria[categoria] || new Set();
+    const marcas = Array.from(marcasSet).sort();
+    const valorAtual = selectMarca.value;
+    selectMarca.innerHTML = '<option value="" disabled selected>Selecione uma marca</option>' +
+      marcas.map(m => `<option value="${m}">${m}</option>`).join('') +
+      '<option value="__outro__">Outro (digitar)</option>';
+    if (valorAtual && marcas.includes(valorAtual)) {
+      selectMarca.value = valorAtual;
+    } else if (valorAtual && valorAtual !== '__outro__') {
+      selectMarca.value = '__outro__';
+      const input = document.getElementById(prefixo + '-outro-marca');
+      if (input) input.value = valorAtual;
+      toggleOutroCampo(prefixo, 'marca');
+    } else {
+      selectMarca.value = valorAtual;
+      toggleOutroCampo(prefixo, 'marca');
+    }
+    M.FormSelect.init(selectMarca);
+    if (selectMarca.value && selectMarca.value !== '__outro__') {
+      popularModelos(prefixo, categoria, selectMarca.value);
+    } else {
+      limparModelo(prefixo);
+    }
+  }
+
+  function popularModelos(prefixo, categoria, marca) {
+    const selectModelo = document.getElementById(prefixo + '-modelo');
+    if (!selectModelo || !listasCache) return;
+    const modelosSet = listasCache.modelosPorCategoriaMarca[categoria]?.[marca] || new Set();
+    const modelos = Array.from(modelosSet).sort();
+    const valorAtual = selectModelo.value;
+    selectModelo.innerHTML = '<option value="" disabled selected>Selecione um modelo</option>' +
+      modelos.map(m => `<option value="${m}">${m}</option>`).join('') +
+      '<option value="__outro__">Outro (digitar)</option>';
+    if (valorAtual && modelos.includes(valorAtual)) {
+      selectModelo.value = valorAtual;
+    } else if (valorAtual && valorAtual !== '__outro__') {
+      selectModelo.value = '__outro__';
+      const input = document.getElementById(prefixo + '-outro-modelo');
+      if (input) input.value = valorAtual;
+      toggleOutroCampo(prefixo, 'modelo');
+    } else {
+      selectModelo.value = valorAtual;
+      toggleOutroCampo(prefixo, 'modelo');
+    }
+    M.FormSelect.init(selectModelo);
+  }
+
+  function limparMarcaModelo(prefixo) {
+    const selectMarca = document.getElementById(prefixo + '-marca');
+    if (selectMarca) {
+      selectMarca.innerHTML = '<option value="" disabled selected>Selecione a categoria</option>';
+      M.FormSelect.init(selectMarca);
+    }
+    limparModelo(prefixo);
+  }
+
+  function limparModelo(prefixo) {
+    const selectModelo = document.getElementById(prefixo + '-modelo');
+    if (selectModelo) {
+      selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
+      M.FormSelect.init(selectModelo);
+    }
+  }
+
+  // Função para controlar visibilidade do campo "Outro"
+  function toggleOutroCampo(prefixo, tipo) {
+    const select = document.getElementById(prefixo + '-' + tipo);
+    const container = document.getElementById(prefixo + '-outro-' + tipo + '-container');
+    const input = document.getElementById(prefixo + '-outro-' + tipo);
+    if (!select || !container || !input) return;
+    if (select.value === '__outro__') {
+      container.style.display = 'block';
+      input.focus();
+    } else {
+      container.style.display = 'none';
+      input.value = '';
+    }
+  }
+
+  // Eventos de cascata
+  function onCategoriaChange(prefixo) {
+    const select = document.getElementById(prefixo + '-categoria');
+    toggleOutroCampo(prefixo, 'categoria');
+    if (select && select.value && select.value !== '__outro__') {
+      popularMarcas(prefixo, select.value);
+      limparModelo(prefixo);
+    } else {
+      limparMarcaModelo(prefixo);
+      // Se for "__outro__", limpar os campos de texto de marca e modelo também
+    }
+  }
+
+  function onMarcaChange(prefixo) {
+    const selectMarca = document.getElementById(prefixo + '-marca');
+    const selectCategoria = document.getElementById(prefixo + '-categoria');
+    toggleOutroCampo(prefixo, 'marca');
+    if (selectMarca && selectCategoria && selectMarca.value && selectMarca.value !== '__outro__' && selectCategoria.value && selectCategoria.value !== '__outro__') {
+      popularModelos(prefixo, selectCategoria.value, selectMarca.value);
+    } else {
+      limparModelo(prefixo);
+      if (selectMarca && selectMarca.value === '__outro__') {
+        // Se marca é "outro", não carregamos modelos (o usuário digitará)
+      }
+    }
+  }
+
+  // ================================================================
+  // FUNÇÕES DE JUSTIFICATIVA (Patrimônio e Série)
+  // ================================================================
+  function configurarJustificativas(prefixo) {
+    const campoPat = document.getElementById(prefixo + '-patrimonio');
+    const campoSerie = document.getElementById(prefixo + '-numeroSerie');
+    const justPatContainer = document.getElementById('campo-justificativa-patrimonio' + (prefixo === 'edit' ? '-edit' : ''));
+    const justSerieContainer = document.getElementById('campo-justificativa-serie' + (prefixo === 'edit' ? '-edit' : ''));
+    const justPatInput = document.getElementById(prefixo + '-justificativaPatrimonio');
+    const justSerieInput = document.getElementById(prefixo + '-justificativaNumeroSerie');
+
+    if (!campoPat || !campoSerie || !justPatContainer || !justSerieContainer) return;
+
+    function verificarPatrimonio() {
+      if (campoPat.value.trim() === '') {
+        justPatContainer.style.display = 'block';
+        justPatInput.required = true;
+      } else {
+        justPatContainer.style.display = 'none';
+        justPatInput.value = '';
+        justPatInput.required = false;
+      }
+    }
+
+    function verificarSerie() {
+      if (campoSerie.value.trim() === '') {
+        justSerieContainer.style.display = 'block';
+        justSerieInput.required = true;
+      } else {
+        justSerieContainer.style.display = 'none';
+        justSerieInput.value = '';
+        justSerieInput.required = false;
+      }
+    }
+
+    campoPat.addEventListener('input', verificarPatrimonio);
+    campoSerie.addEventListener('input', verificarSerie);
+    verificarPatrimonio();
+    verificarSerie();
+  }
+
+  // ================================================================
+  // INICIALIZAR SELETOR DE UNIDADE
+  // ================================================================
+  function inicializarSeletorUnidade() {
+    const select = document.getElementById('seletor-unidade');
+    if (!select) return;
+    const unidades = equipamentosCache
+      .map(e => e.unidade)
+      .filter(u => u && u.trim())
+      .filter((u, i, arr) => arr.indexOf(u) === i)
+      .sort();
+    select.innerHTML = '<option value="">Todas as unidades</option>' +
+      unidades.map(u => `<option value="${u}">${u}</option>`).join('');
+    document.getElementById('total-unidades').innerText = unidades.length;
+    select.addEventListener('change', aplicarFiltros);
+  }
+
+  // ================================================================
+  // KPIs
+  // ================================================================
   function kpiCard_(icone, valor, label, extraClass) {
     return '<div class="col s12 m3">' +
       '<div class="sce-kpi ' + (extraClass || '') + '">' +
@@ -382,141 +875,338 @@
       '</div></div>';
   }
 
-  function atualizarKpisEGrafico(equipamentos) {
+  function atualizarKpis(equipamentos) {
     const porStatus = {};
     equipamentos.forEach(function (item) {
       const s = item.status || 'Não definido';
       porStatus[s] = (porStatus[s] || 0) + 1;
     });
-
     const total = equipamentos.length;
     const disponiveis = porStatus['Disponível'] || 0;
     const manutencao = porStatus['Manutenção'] || 0;
     const quebrados = porStatus['Quebrado'] || 0;
     const inserviveis = porStatus['Inservível'] || 0;
     const extraviado = porStatus['Extraviado'] || 0;
-    const emVerificacao = porStatus ['Em verificação'] || 0;
+    const emVerificacao = porStatus['Em verificação'] || 0;
 
     document.getElementById('kpis').innerHTML =
-    kpiCard_('devices', total, 'Total de equipamentos', 'kpi-total') +
-    kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
-    kpiCard_('build', manutencao, 'Em manutenção', 'kpi-manutencao') +
-    kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados') +
-    kpiCard_('close', inserviveis, 'Inservíveis', 'kpi-inserviveis') +
-    kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado') +   // ícone ajustado
-    kpiCard_('search', emVerificacao, 'Em verificação', 'kpi-emVerificacao');
-    renderGraficosMatriz_(equipamentos);
+      kpiCard_('devices', total, 'Total', 'kpi-total') +
+      kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
+      kpiCard_('build', manutencao, 'Manutenção', 'kpi-manutencao') +
+      kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados') +
+      kpiCard_('close', inserviveis, 'Inservíveis', 'kpi-inserviveis') +
+      kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado') +
+      kpiCard_('search', emVerificacao, 'Em verificação', 'kpi-emVerificacao');
   }
 
-  function renderGraficosMatriz_(equipamentos) {
-  const porUnidade = {};
-  const porCategoria = {};
-  equipamentos.forEach(function (item) {
-    const u = item.unidade || 'Sem unidade';
-    const c = item.categoria || 'Sem categoria';
-    porUnidade[u] = (porUnidade[u] || 0) + 1;
-    porCategoria[c] = (porCategoria[c] || 0) + 1;
-  });
+  // ================================================================
+  // GRÁFICOS
+  // ================================================================
+  function renderGraficos(equipamentos) {
+    // Status
+    const porStatus = {};
+    equipamentos.forEach(function (item) {
+      const s = item.status || 'Não definido';
+      porStatus[s] = (porStatus[s] || 0) + 1;
+    });
+    const labelsStatus = Object.keys(porStatus);
+    const dataStatus = labelsStatus.map(l => porStatus[l]);
+    const coresStatus = ['#1565c0', '#43a047', '#ef6c00', '#d32f2f', '#8e24aa', '#00838f', '#795548', '#607d8b'];
+    if (chartStatus) chartStatus.destroy();
+    chartStatus = new Chart(document.getElementById('canvas-chart-status').getContext('2d'), {
+      type: 'pie',
+      data: { labels: labelsStatus, datasets: [{ data: dataStatus, backgroundColor: coresStatus }] },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
 
-  google.charts.load('current', { packages: ['corechart'] });
-  google.charts.setOnLoadCallback(function () {
-    desenharPizza_('chart-por-unidade', 'Por unidade', porUnidade);
-    desenharPizza_('chart-por-categoria', 'Por categoria', porCategoria);
-  });
-}
+    // Unidade
+    const porUnidade = {};
+    equipamentos.forEach(function (item) {
+      const u = item.unidade || 'Sem unidade';
+      porUnidade[u] = (porUnidade[u] || 0) + 1;
+    });
+    const labelsUnidade = Object.keys(porUnidade);
+    const dataUnidade = labelsUnidade.map(l => porUnidade[l]);
+    const coresUnidade = ['#1b5e20', '#2e7d32', '#388e3c', '#43a047', '#4caf50', '#66bb6a', '#81c784', '#a5d6a7'];
+    if (chartUnidade) chartUnidade.destroy();
+    chartUnidade = new Chart(document.getElementById('canvas-chart-unidade').getContext('2d'), {
+      type: 'pie',
+      data: { labels: labelsUnidade, datasets: [{ data: dataUnidade, backgroundColor: coresUnidade }] },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
 
-function desenharPizza_(elementId, titulo, contagem) {
-  const data = [['Item', 'Qtd']];
-  Object.keys(contagem).forEach(function (k) { data.push([k, contagem[k]]); });
-  const chart = new google.visualization.PieChart(document.getElementById(elementId));
-  chart.draw(google.visualization.arrayToDataTable(data), {
-    title: titulo, width: '100%', height: 300
-  });
-}
-  // --- Listas de categoria/marca/modelo (aba Listas, SCE_Core) -----------
-
-  function carregarListasCadastro() {
-    google.script.run
-      .withSuccessHandler(function (listas) {
-        preencherSelectLista_('new-categoria', listas.categorias);
-        preencherSelectLista_('new-marca', listas.marcas);
-        preencherSelectLista_('new-modelo', listas.modelos);
-        preencherSelectLista_('edit-categoria', listas.categorias);
-        preencherSelectLista_('edit-marca', listas.marcas);
-        preencherSelectLista_('edit-modelo', listas.modelos);
-      })
-      .withFailureHandler(function (err) { console.error('Erro ao carregar listas:', err.message); })
-      .getListasCadastro(SCE_TOKEN);
+    // Categoria
+    const porCategoria = {};
+    equipamentos.forEach(function (item) {
+      const c = item.categoria || 'Sem categoria';
+      porCategoria[c] = (porCategoria[c] || 0) + 1;
+    });
+    const labelsCategoria = Object.keys(porCategoria);
+    const dataCategoria = labelsCategoria.map(l => porCategoria[l]);
+    const coresCategoria = ['#4a148c', '#6a1b9a', '#7b1fa2', '#8e24aa', '#9c27b0', '#ab47bc', '#ba68c8', '#ce93d8'];
+    if (chartCategoria) chartCategoria.destroy();
+    chartCategoria = new Chart(document.getElementById('canvas-chart-categoria').getContext('2d'), {
+      type: 'pie',
+      data: { labels: labelsCategoria, datasets: [{ data: dataCategoria, backgroundColor: coresCategoria }] },
+      options: { responsive: true, maintainAspectRatio: false }
+    });
   }
 
-  function preencherSelectLista_(id, valores) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const valorAtual = el.value;
-    el.innerHTML = '<option value="" disabled selected>Selecione</option>' +
-      (valores || []).map(function (v) { return '<option value="' + v + '">' + v + '</option>'; }).join('');
-    if (valorAtual) el.value = valorAtual;
-    M.FormSelect.init(el);
-  }
-
-  // --- Carregamento / tabela global ------------------------------------------
-
+  // ================================================================
+  // CARREGAR EQUIPAMENTOS
+  // ================================================================
   function carregarEquipamentosGlobal() {
+    sceShowLoading();
     google.script.run
       .withSuccessHandler(function (equipamentos) {
-        equipamentosCache = equipamentos;
-        renderTabelaGlobal(equipamentos);
-        atualizarKpisEGrafico(equipamentos); 
+        equipamentosCache = equipamentos || [];
+        equipamentosCache.forEach(item => {
+          if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+            const hoje = new Date();
+            const prevista = new Date(item.dataPrevistaDevolucao);
+            item.emAtraso = prevista < hoje;
+          } else {
+            item.emAtraso = false;
+          }
+        });
+        inicializarSeletorUnidade();
+        atualizarFiltrosOpcoes(equipamentosCache);
+        aplicarFiltros();
+        sceHideLoading();
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        console.error('Erro ao carregar:', err);
+        M.toast({ html: 'Erro ao carregar: ' + err.message });
+        sceHideLoading();
+      })
       .getEquipamentosGlobal(SCE_TOKEN, false);
   }
 
+  // ================================================================
+  // FILTROS
+  // ================================================================
+  function inicializarFiltrosRapidos() {
+    const botoes = document.querySelectorAll('.btn-filtro');
+    botoes.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        botoes.forEach(b => b.classList.remove('ativo'));
+        this.classList.add('ativo');
+        const filtro = this.dataset.filtro;
+        const selectStatus = document.getElementById('filtro-status');
+        selectStatus.value = filtro === 'todos' ? '' : filtro;
+        M.FormSelect.init(selectStatus);
+        aplicarFiltros();
+      });
+    });
+  }
+
+  function ordenarTabela(campo) {
+    if (campoOrdenacao === campo) {
+      ordemAtual = ordemAtual === 'asc' ? 'desc' : 'asc';
+    } else {
+      campoOrdenacao = campo;
+      ordemAtual = 'asc';
+    }
+    equipamentosFiltrados.sort((a, b) => {
+      const valA = (a[campo] || '').toString().toLowerCase();
+      const valB = (b[campo] || '').toString().toLowerCase();
+      if (valA < valB) return ordemAtual === 'asc' ? -1 : 1;
+      if (valA > valB) return ordemAtual === 'asc' ? 1 : -1;
+      return 0;
+    });
+    document.querySelectorAll('.sortable').forEach(th => {
+      const icon = th.querySelector('.material-icons');
+      if (icon) icon.textContent = 'unfold_more';
+    });
+    const thAtual = document.querySelector('[data-sort="' + campo + '"]');
+    if (thAtual) {
+      const icon = thAtual.querySelector('.material-icons');
+      if (icon) icon.textContent = ordemAtual === 'asc' ? 'arrow_upward' : 'arrow_downward';
+    }
+    renderTabelaGlobal(equipamentosFiltrados);
+  }
+
+  function aplicarFiltros() {
+    const busca = document.getElementById('filtro-busca')?.value?.trim()?.toLowerCase() || '';
+    const status = document.getElementById('filtro-status')?.value || '';
+    const unidadeSelecionada = document.getElementById('seletor-unidade')?.value || '';
+    equipamentosFiltrados = equipamentosCache.filter(item => {
+      if (status && item.status !== status) return false;
+      if (unidadeSelecionada && item.unidade !== unidadeSelecionada) return false;
+      if (!busca) return true;
+      return [item.patrimonio, item.numeroSerie, item.modelo, item.unidade].join(' ').toLowerCase().includes(busca);
+    });
+    document.getElementById('contador-equipamentos').innerText = equipamentosFiltrados.length;
+    renderTabelaGlobal(equipamentosFiltrados);
+    atualizarKpis(equipamentosFiltrados);
+    renderGraficos(equipamentosFiltrados);
+  }
+
+  function atualizarFiltrosOpcoes(equipamentos) {
+    preencherSelectFiltro('filtro-status', equipamentos.map(e => e.status), 'Todos os status');
+  }
+
+  function preencherSelectFiltro(id, valores, label) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const atual = select.value;
+    const unicos = valores.filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).sort();
+    select.innerHTML = '<option value="">' + label + '</option>' + unicos.map(v => `<option value="${v}">${v}</option>`).join('');
+    select.value = atual;
+    M.FormSelect.init(select);
+  }
+
+  function getIdsSelecionados() {
+    return Array.from(document.querySelectorAll('.check-equipamento:checked')).map(el => el.value);
+  }
+
+  // ================================================================
+  // TABELA GLOBAL
+  // ================================================================
   function renderTabelaGlobal(equipamentos) {
     const tbody = document.querySelector('#tabela-equipamentos-global tbody');
+    if (!tbody) return;
     tbody.innerHTML = '';
+    if (!equipamentos || equipamentos.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
+      return;
+    }
     equipamentos.forEach(function (item) {
       const tr = document.createElement('tr');
+      const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
+      tr.className = statusClass;
+
+      let badgeManutencao = '-';
+      if (item.statusManutencao) {
+        const sm = item.statusManutencao.toLowerCase().replace(/ /g, '-');
+        let cls = 'badge-manutencao ';
+        if (sm === 'pendente') cls += 'badge-pendente';
+        else if (sm === 'em-andamento') cls += 'badge-em-andamento';
+        else if (sm === 'concluído') cls += 'badge-concluído';
+        badgeManutencao = `<span class="${cls}">${item.statusManutencao}</span>`;
+      }
+
+      let indicadorAtraso = '-';
+      if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+        const hoje = new Date();
+        const prevista = new Date(item.dataPrevistaDevolucao);
+        const atrasado = prevista < hoje;
+        const label = atrasado ? 'Atrasado' : 'Em dia';
+        const cls = atrasado ? 'badge-atrasado' : 'badge-em-dia';
+        indicadorAtraso = `<span class="badge-atraso ${cls}">${label}</span>`;
+      }
+
+      const blueBadge = item.vinculadoBlueMonitor === 'Sim' ? '<span class="badge-blue sim">Sim</span>' : '<span class="badge-blue nao">Não</span>';
+
       tr.innerHTML =
+        '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
         '<td>' + (item.unidade || '') + '</td>' +
         '<td>' + (item.categoria || '') + '</td>' +
         '<td>' + (item.marca || '') + '</td>' +
-        '<td>' + (item.patrimonio || '') + '</td>' +
-        '<td>' + (item.status || '') + '</td>' +
-        '<td>' + (item.statusManutencao || '-') + '</td>' +
-        '<td>' + (item.ultimaAlteracaoPor || '-') + '</td>' +
-        '<td>' +
-          '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar">' +
-            '<i class="material-icons">edit</i></a> ' +
-          '<a class="btn-small waves-effect" onclick="abrirManutencao(\'' + item.id + '\')" title="Manutenção">' +
-            '<i class="material-icons">build</i></a> ' +
-          '<a class="btn-small waves-effect" onclick="clonarEquipamentoUI(\'' + item.id + '\', this)" title="Clonar">' +
-            '<i class="material-icons">content_copy</i></a> ' +
-          '<a class="btn-small waves-effect red" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover">' +
-            '<i class="material-icons">delete</i></a>' +
+        '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
+        '<td><strong>' + (item.status || '') + '</strong></td>' +
+        '<td>' + badgeManutencao + '</td>' +
+        '<td>' + indicadorAtraso + '</td>' +
+        '<td>' + blueBadge + '</td>' +
+        '<td class="no-print">' +
+          '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
+          '<a class="btn-small waves-effect" onclick="abrirHistorico(\'' + item.id + '\')" title="Histórico"><i class="material-icons">history</i></a> ' +
+          '<a class="btn-small waves-effect" onclick="abrirManutencao(\'' + item.id + '\')" title="Manutenção"><i class="material-icons">build</i></a> ' +
+          '<a class="btn-small red waves-effect" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover"><i class="material-icons">delete</i></a>' +
         '</td>';
       tbody.appendChild(tr);
     });
   }
 
-  // --- Cadastro ----------------------------------------------------------------
+  // ================================================================
+  // HISTÓRICO
+  // ================================================================
+  function abrirHistorico(equipamentoId) {
+    const item = equipamentosCache.find(e => e.id === equipamentoId);
+    if (!item) { M.toast({ html: 'Equipamento não encontrado.' }); return; }
 
+    document.getElementById('historico-patrimonio').innerText = item.patrimonio || 'Sem patrimônio';
+    document.getElementById('historico-modelo').innerText = item.modelo || 'Sem modelo';
+
+    const tbody = document.querySelector('#tabela-historico tbody');
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>';
+
+    if (!modalHistoricoInstance) {
+      modalHistoricoInstance = M.Modal.init(document.getElementById('modal-historico'));
+    }
+    modalHistoricoInstance.open();
+
+    google.script.run
+      .withSuccessHandler(function (registros) {
+        tbody.innerHTML = '';
+        if (!registros || registros.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sce-muted);">Nenhuma alteração registrada.</td></tr>';
+          return;
+        }
+        registros.forEach(function (r) {
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
+            '<td>' + (r.autor || '') + '</td>' +
+            '<td><strong>' + (r.campo || '') + '</strong></td>' +
+            '<td>' + (r.valorAntigo || '-') + '</td>' +
+            '<td>' + (r.valorNovo || '-') + '</td>';
+          tbody.appendChild(tr);
+        });
+      })
+      .withFailureHandler(function (err) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#d32f2f;">Erro: ' + err.message + '</td></tr>';
+      })
+      .getHistoricoEquipamento(SCE_TOKEN, equipamentoId);
+  }
+
+  // ================================================================
+  // CADASTRO
+  // ================================================================
   function abrirCadastroEquipamento() {
     CAMPOS_CADASTRO.forEach(function (campo) {
       const el = document.getElementById('new-' + campo);
       if (!el) return;
       if (campo === 'status') { el.value = 'Disponível'; return; }
       if (campo === 'vinculadoBlueMonitor') { el.value = 'Não'; return; }
-      if (el.tagName === 'SELECT') { el.selectedIndex = 0; return; }
       el.value = '';
     });
+    // Limpar campos "Outro"
+    ['categoria', 'marca', 'modelo'].forEach(tipo => {
+      const input = document.getElementById('new-outro-' + tipo);
+      if (input) input.value = '';
+      const container = document.getElementById('new-outro-' + tipo + '-container');
+      if (container) container.style.display = 'none';
+    });
+    document.getElementById('new-anexoBoletim').value = '';
+    document.getElementById('campo-justificativa-patrimonio').style.display = 'none';
+    document.getElementById('campo-justificativa-serie').style.display = 'none';
+    configurarJustificativas('new');
+    if (listasCache) {
+      preencherSelectCategoria('new');
+    }
+    atualizarCamposCondicionaisCadastro();
     M.FormSelect.init(document.querySelectorAll('#modal-cadastrar-equipamento select'));
     M.updateTextFields();
-
-    if (!modalCadastroInstance) {
-      modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
-    }
+    if (!modalCadastroInstance) modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
     modalCadastroInstance.open();
+  }
+
+  function atualizarCamposCondicionaisCadastro() {
+    const status = document.getElementById('new-status').value;
+    const campoBo = document.getElementById('campo-bo-cadastro');
+    campoBo.style.display = status === 'Extraviado' ? 'block' : 'none';
+    if (status !== 'Extraviado') document.getElementById('new-anexoBoletim').value = '';
+  }
+
+  function obterValorSelectOuOutro(prefixo, tipo) {
+    const select = document.getElementById(prefixo + '-' + tipo);
+    if (!select) return '';
+    if (select.value === '__outro__') {
+      const input = document.getElementById(prefixo + '-outro-' + tipo);
+      return input ? input.value.trim() : '';
+    }
+    return select.value;
   }
 
   function salvarCadastro() {
@@ -524,19 +1214,73 @@ function desenharPizza_(elementId, titulo, contagem) {
     if (btn.dataset.loading === '1') return;
 
     const dados = {};
-    CAMPOS_CADASTRO.forEach(function (campo) {
+    CAMPOS_CADASTRO.forEach(campo => {
+      // Tratar campos que podem ser "outro"
+      if (campo === 'categoria' || campo === 'marca' || campo === 'modelo') {
+        const valor = obterValorSelectOuOutro('new', campo);
+        if (valor) dados[campo] = valor;
+        return;
+      }
       const el = document.getElementById('new-' + campo);
       if (el && el.value) dados[campo] = el.value;
     });
 
-    if (!dados.unidade || !dados.categoria || !dados.patrimonio) {
-      M.toast({ html: 'Preencha Unidade, Categoria e Patrimonio.' });
+    // --- Validações ---
+    if (!dados.unidade || !dados.categoria || !dados.marca || !dados.modelo) {
+      M.toast({ html: 'Preencha Unidade, Categoria, Marca e Modelo.' });
+      return;
+    }
+    if (!dados.status) { M.toast({ html: 'Selecione um status.' }); return; }
+
+    const patrimonio = dados.patrimonio || '';
+    const justifPat = dados.justificativaPatrimonio || '';
+    if (!patrimonio && !justifPat) {
+      M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
+      return;
+    }
+    const serie = dados.numeroSerie || '';
+    const justifSerie = dados.justificativaNumeroSerie || '';
+    if (!serie && !justifSerie) {
+      M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
       return;
     }
 
+    const status = dados.status;
+    const fileInput = document.getElementById('new-anexoBoletim');
+    if (status === 'Manutenção') {
+      const chamado = document.getElementById('new-numeroChamadoManutencao');
+      if (chamado && !chamado.value.trim()) { M.toast({ html: 'Preencha o Nº do chamado de manutenção.' }); return; }
+    }
+    if (status === 'Extraviado') {
+      if (!fileInput || fileInput.files.length === 0) { M.toast({ html: 'Para o status "Extraviado", anexe o Boletim de Ocorrência.' }); return; }
+    }
+    if (status === 'Em verificação') {
+      const justif = document.getElementById('new-justificativaVerificacao');
+      if (justif && !justif.value.trim()) { M.toast({ html: 'Preencha a justificativa da verificação.' }); return; }
+    }
+
+    if (patrimonio) delete dados.justificativaPatrimonio;
+    if (serie) delete dados.justificativaNumeroSerie;
+
+    if (status === 'Extraviado') {
+      const file = fileInput.files[0];
+      if (file.size > 8 * 1024 * 1024) { M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' }); return; }
+      const reader = new FileReader();
+      reader.onload = function () {
+        const base64 = reader.result.split(',')[1];
+        dados._anexoBoletim = { base64, mimeType: file.type, fileName: file.name };
+        enviarCadastro(dados, btn);
+      };
+      reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
+      reader.readAsDataURL(file);
+    } else {
+      enviarCadastro(dados, btn);
+    }
+  }
+
+  function enviarCadastro(dados, btn) {
     btn.dataset.loading = '1';
     btn.classList.add('disabled');
-
     google.script.run
       .withSuccessHandler(function () {
         btn.dataset.loading = '0';
@@ -548,74 +1292,17 @@ function desenharPizza_(elementId, titulo, contagem) {
       .withFailureHandler(function (err) {
         btn.dataset.loading = '0';
         btn.classList.remove('disabled');
-        // Mensagem de duplicidade (Série/Patrimônio) já vem pronta do backend.
         M.toast({ html: 'Erro ao cadastrar: ' + err.message });
       })
       .createEquipamento(SCE_TOKEN, dados);
   }
 
-  // --- Remoção -----------------------------------------------------------------
-
-  function abrirModalRemocao(id) {
-    idPendenteRemocao = id;
-    if (!modalRemocaoInstance) {
-      modalRemocaoInstance = M.Modal.init(document.getElementById('modal-confirmar-remocao'));
-    }
-    modalRemocaoInstance.open();
-  }
-
-  function confirmarRemocao() {
-    const btn = document.getElementById('btn-confirmar-remocao');
-    if (btn.dataset.loading === '1') return;
-    if (!idPendenteRemocao) return;
-    const id = idPendenteRemocao;
-
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: res.message });
-        modalRemocaoInstance.close();
-        idPendenteRemocao = null;
-        carregarEquipamentosGlobal();
-      })
-      .withFailureHandler(function (err) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Erro ao remover: ' + err.message });
-        modalRemocaoInstance.close();
-        idPendenteRemocao = null;
-      })
-      .removerEquipamento(SCE_TOKEN, id);
-  }
-
-  // --- Clonagem --------------------------------------------------------------
-
-  function clonarEquipamentoUI(id, el) {
-    if (el && el.dataset.loading === '1') return;
-    if (el) { el.dataset.loading = '1'; el.classList.add('disabled'); }
-
-    google.script.run
-      .withSuccessHandler(function () {
-        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
-        M.toast({ html: 'Equipamento clonado.' });
-        carregarEquipamentosGlobal();
-      })
-      .withFailureHandler(function (err) {
-        if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
-        M.toast({ html: 'Erro ao clonar: ' + err.message });
-      })
-      .cloneEquipamento(SCE_TOKEN, id);
-  }
-
-  // --- Edição ----------------------------------------------------------------
-
+  // ================================================================
+  // EDIÇÃO
+  // ================================================================
   function editarEquipamento(id) {
-    const item = equipamentosCache.filter(function (e) { return e.id === id; })[0];
-    if (!item) { M.toast({ html: 'Item não encontrado no cache local.' }); return; }
+    const item = equipamentosCache.find(e => e.id === id);
+    if (!item) { M.toast({ html: 'Item não encontrado.' }); return; }
 
     itemEmEdicaoOriginal = item;
     document.getElementById('edit-id').value = item.id;
@@ -625,21 +1312,107 @@ function desenharPizza_(elementId, titulo, contagem) {
       if (el) el.value = item[campo] || (campo === 'vinculadoBlueMonitor' ? 'Não' : '');
     });
 
+    // Preencher campos "Outro" com valores atuais (serão sobrescritos na cascata)
+    ['categoria', 'marca', 'modelo'].forEach(tipo => {
+      const input = document.getElementById('edit-outro-' + tipo);
+      if (input) input.value = '';
+      const container = document.getElementById('edit-outro-' + tipo + '-container');
+      if (container) container.style.display = 'none';
+    });
+
+    configurarJustificativas('edit');
+    if (!item.patrimonio) document.getElementById('campo-justificativa-patrimonio-edit').style.display = 'block';
+    if (!item.numeroSerie) document.getElementById('campo-justificativa-serie-edit').style.display = 'block';
+
+    const anexoExistente = document.getElementById('anexo-bo-existente');
+    anexoExistente.innerText = item.boletimOcorrenciaAnexoUrl ? '📎 Anexo atual: ' + item.boletimOcorrenciaAnexoUrl : '';
+
+    // Preencher selects com cascata e suporte a "Outro"
+    if (listasCache) {
+      const selectCat = document.getElementById('edit-categoria');
+      // Preencher categorias com "__outro__"
+      selectCat.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+        listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
+        '<option value="__outro__">Outro (digitar)</option>';
+      if (item.categoria && listasCache.categorias.includes(item.categoria)) {
+        selectCat.value = item.categoria;
+      } else if (item.categoria) {
+        selectCat.value = '__outro__';
+        const input = document.getElementById('edit-outro-categoria');
+        if (input) input.value = item.categoria;
+        document.getElementById('edit-outro-categoria-container').style.display = 'block';
+      } else {
+        selectCat.value = '';
+      }
+      M.FormSelect.init(selectCat);
+
+      if (selectCat.value && selectCat.value !== '__outro__') {
+        popularMarcas('edit', selectCat.value);
+        setTimeout(() => {
+          const selectMarca = document.getElementById('edit-marca');
+          if (selectMarca) {
+            // Verifica se a marca atual está na lista
+            const marcasSet = listasCache.marcasPorCategoria[selectCat.value] || new Set();
+            if (item.marca && marcasSet.has(item.marca)) {
+              selectMarca.value = item.marca;
+            } else if (item.marca) {
+              selectMarca.value = '__outro__';
+              const input = document.getElementById('edit-outro-marca');
+              if (input) input.value = item.marca;
+              document.getElementById('edit-outro-marca-container').style.display = 'block';
+            } else {
+              selectMarca.value = '';
+            }
+            M.FormSelect.init(selectMarca);
+            if (selectMarca.value && selectMarca.value !== '__outro__') {
+              popularModelos('edit', selectCat.value, selectMarca.value);
+              setTimeout(() => {
+                const selectModelo = document.getElementById('edit-modelo');
+                if (selectModelo) {
+                  const modelosSet = listasCache.modelosPorCategoriaMarca[selectCat.value]?.[selectMarca.value] || new Set();
+                  if (item.modelo && modelosSet.has(item.modelo)) {
+                    selectModelo.value = item.modelo;
+                  } else if (item.modelo) {
+                    selectModelo.value = '__outro__';
+                    const input = document.getElementById('edit-outro-modelo');
+                    if (input) input.value = item.modelo;
+                    document.getElementById('edit-outro-modelo-container').style.display = 'block';
+                  } else {
+                    selectModelo.value = '';
+                  }
+                  M.FormSelect.init(selectModelo);
+                }
+              }, 50);
+            } else {
+              limparModelo('edit');
+              if (selectMarca.value === '__outro__') {
+                // Se a marca é "outro", não carregamos modelos, mas já temos o campo de texto visível
+              }
+            }
+          }
+        }, 50);
+      } else {
+        limparMarcaModelo('edit');
+        if (selectCat.value === '__outro__') {
+          // Categoria é "outro", já mostramos o campo de texto
+        }
+      }
+    }
+
     atualizarCamposCondicionais();
     M.FormSelect.init(document.querySelectorAll('#modal-editar-equipamento select'));
     M.updateTextFields();
-
-    if (!modalEdicaoInstance) {
-      modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
-    }
+    if (!modalEdicaoInstance) modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
     modalEdicaoInstance.open();
   }
 
   function atualizarCamposCondicionais() {
     const status = document.getElementById('edit-status').value;
-    document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
-    document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
-    document.getElementById('campo-justificativa').style.display = (status === 'Em verificação') ? 'block' : 'none';
+    document.getElementById('campo-chamado').style.display = status === 'Manutenção' ? 'block' : 'none';
+    document.getElementById('campo-bo').style.display = status === 'Extraviado' ? 'block' : 'none';
+    document.getElementById('campo-justificativa').style.display = status === 'Em verificação' ? 'block' : 'none';
+    const fileInput = document.getElementById('edit-anexoBoletim');
+    if (fileInput && status !== 'Extraviado') fileInput.value = '';
   }
 
   function salvarEdicao() {
@@ -647,9 +1420,18 @@ function desenharPizza_(elementId, titulo, contagem) {
     if (btn.dataset.loading === '1') return;
 
     const id = document.getElementById('edit-id').value;
+    const status = document.getElementById('edit-status').value;
     const camposAlterados = {};
 
     CAMPOS_EDITAVEIS.forEach(function (campo) {
+      if (campo === 'categoria' || campo === 'marca' || campo === 'modelo') {
+        const valor = obterValorSelectOuOutro('edit', campo);
+        const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
+        if (String(valor) !== String(valorAntigo)) {
+          camposAlterados[campo] = valor;
+        }
+        return;
+      }
       const el = document.getElementById('edit-' + campo);
       if (!el) return;
       const valorNovo = el.value;
@@ -659,7 +1441,31 @@ function desenharPizza_(elementId, titulo, contagem) {
       }
     });
 
-    const status = document.getElementById('edit-status').value;
+    // --- Validações ---
+    const patrimonio = document.getElementById('edit-patrimonio').value.trim();
+    const justifPat = document.getElementById('edit-justificativaPatrimonio').value.trim();
+    if (!patrimonio && !justifPat) {
+      M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
+      return;
+    }
+    const serie = document.getElementById('edit-numeroSerie').value.trim();
+    const justifSerie = document.getElementById('edit-justificativaNumeroSerie').value.trim();
+    if (!serie && !justifSerie) {
+      M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
+      return;
+    }
+    // Verificar se categoria, marca, modelo foram preenchidos (mesmo que via "Outro")
+    const catFinal = camposAlterados.categoria !== undefined ? camposAlterados.categoria : (itemEmEdicaoOriginal.categoria || '');
+    const marcaFinal = camposAlterados.marca !== undefined ? camposAlterados.marca : (itemEmEdicaoOriginal.marca || '');
+    const modeloFinal = camposAlterados.modelo !== undefined ? camposAlterados.modelo : (itemEmEdicaoOriginal.modelo || '');
+    if (!catFinal || !marcaFinal || !modeloFinal) {
+      M.toast({ html: 'Preencha Categoria, Marca e Modelo.' });
+      return;
+    }
+    if (patrimonio) delete camposAlterados.justificativaPatrimonio;
+    if (serie) delete camposAlterados.justificativaNumeroSerie;
+    // --- Fim validações ---
+
     const regrasStatus = {
       'Manutenção': 'numeroChamadoManutencao',
       'Extraviado': 'boletimOcorrencia',
@@ -676,15 +1482,38 @@ function desenharPizza_(elementId, titulo, contagem) {
       }
     }
 
-    if (Object.keys(camposAlterados).length === 0) {
+    const fileInput = document.getElementById('edit-anexoBoletim');
+    const jaTemAnexo = itemEmEdicaoOriginal && itemEmEdicaoOriginal.boletimOcorrenciaAnexoUrl;
+    if (status === 'Extraviado' && (!fileInput || fileInput.files.length === 0) && !jaTemAnexo) {
+      M.toast({ html: 'Anexe o Boletim de Ocorrência antes de salvar.' });
+      return;
+    }
+
+    if (Object.keys(camposAlterados).length === 0 && !(fileInput && fileInput.files.length > 0)) {
       M.toast({ html: 'Nada foi alterado.' });
       modalEdicaoInstance.close();
       return;
     }
 
+    if (status === 'Extraviado' && fileInput && fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      if (file.size > 8 * 1024 * 1024) { M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' }); return; }
+      const reader = new FileReader();
+      reader.onload = function () {
+        const base64 = reader.result.split(',')[1];
+        camposAlterados._anexoBoletim = { base64, mimeType: file.type, fileName: file.name };
+        enviarAtualizacaoEquipamento(id, camposAlterados, btn);
+      };
+      reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
+      reader.readAsDataURL(file);
+    } else {
+      enviarAtualizacaoEquipamento(id, camposAlterados, btn);
+    }
+  }
+
+  function enviarAtualizacaoEquipamento(id, camposAlterados, btn) {
     btn.dataset.loading = '1';
     btn.classList.add('disabled');
-
     google.script.run
       .withSuccessHandler(function () {
         btn.dataset.loading = '0';
@@ -701,8 +1530,115 @@ function desenharPizza_(elementId, titulo, contagem) {
       .updateEquipamento(SCE_TOKEN, id, camposAlterados);
   }
 
-  // --- Manutenção ------------------------------------------------------------
+  // ================================================================
+  // REMOÇÃO INDIVIDUAL
+  // ================================================================
+  function abrirModalRemocao(id) {
+    idPendenteRemocao = id;
+    if (!modalRemocaoInstance) modalRemocaoInstance = M.Modal.init(document.getElementById('modal-confirmar-remocao'));
+    modalRemocaoInstance.open();
+  }
 
+  function confirmarRemocao() {
+    if (!idPendenteRemocao) return;
+    const btn = document.getElementById('btn-confirmar-remocao');
+    if (btn.dataset.loading === '1') return;
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: res.message });
+        modalRemocaoInstance.close();
+        idPendenteRemocao = null;
+        carregarEquipamentosGlobal();
+      })
+      .withFailureHandler(function (err) {
+        btn.dataset.loading = '0';
+        btn.classList.remove('disabled');
+        M.toast({ html: 'Erro ao remover: ' + err.message });
+        modalRemocaoInstance.close();
+        idPendenteRemocao = null;
+      })
+      .removerEquipamento(SCE_TOKEN, idPendenteRemocao);
+  }
+
+  // ================================================================
+  // AÇÕES EM LOTE
+  // ================================================================
+  function excluirSelecionados() {
+    const ids = getIdsSelecionados();
+    if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
+    if (!confirm('Tem certeza que deseja excluir os ' + ids.length + ' equipamento(s)?')) return;
+    const btn = document.getElementById('btn-excluir-selecionados');
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+    let concluidos = 0;
+    ids.forEach(function (id) {
+      google.script.run
+        .withSuccessHandler(function () {
+          concluidos++;
+          if (concluidos === ids.length) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            M.toast({ html: 'Equipamentos excluídos.' });
+            carregarEquipamentosGlobal();
+          }
+        })
+        .withFailureHandler(function (err) {
+          btn.dataset.loading = '0';
+          btn.classList.remove('disabled');
+          M.toast({ html: 'Erro ao excluir: ' + err.message });
+        })
+        .removerEquipamento(SCE_TOKEN, id);
+    });
+  }
+
+  function abrirAlterarStatusLote() {
+    const ids = getIdsSelecionados();
+    if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
+    document.getElementById('lote-contagem').innerText = ids.length;
+    if (!modalStatusLoteInstance) modalStatusLoteInstance = M.Modal.init(document.getElementById('modal-alterar-status-lote'));
+    modalStatusLoteInstance.open();
+  }
+
+  function confirmarAlterarStatusLote() {
+    const btn = document.getElementById('btn-confirmar-alterar-status-lote');
+    if (btn.dataset.loading === '1') return;
+    const ids = getIdsSelecionados();
+    if (ids.length === 0) { M.toast({ html: 'Nenhum equipamento selecionado.' }); return; }
+    const novoStatus = document.getElementById('lote-novo-status').value;
+    btn.dataset.loading = '1';
+    btn.classList.add('disabled');
+    let concluidos = 0;
+    ids.forEach(function (id) {
+      const campos = { status: novoStatus };
+      google.script.run
+        .withSuccessHandler(function () {
+          concluidos++;
+          if (concluidos === ids.length) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            M.toast({ html: 'Status atualizado para ' + ids.length + ' equipamento(s).' });
+            modalStatusLoteInstance.close();
+            carregarEquipamentosGlobal();
+          }
+        })
+        .withFailureHandler(function (err) {
+          btn.dataset.loading = '0';
+          btn.classList.remove('disabled');
+          M.toast({ html: 'Erro ao atualizar status: ' + err.message });
+          modalStatusLoteInstance.close();
+        })
+        .updateEquipamento(SCE_TOKEN, id, campos);
+    });
+  }
+
+
+  // ================================================================
+  // MANUTENÇÃO
+  // ================================================================
   function abrirManutencao(id) {
     equipamentoIdManutencaoAtual = id;
     document.getElementById('manut-equipamento-id').value = id;
@@ -710,43 +1646,44 @@ function desenharPizza_(elementId, titulo, contagem) {
     M.FormSelect.init(document.getElementById('manut-status'));
     M.updateTextFields();
     carregarLogManutencao(id);
-
-    if (!modalManutencaoInstance) {
-      modalManutencaoInstance = M.Modal.init(document.getElementById('modal-manutencao'));
-    }
+    if (!modalManutencaoInstance) modalManutencaoInstance = M.Modal.init(document.getElementById('modal-manutencao'));
     modalManutencaoInstance.open();
   }
 
   function carregarLogManutencao(id) {
+    const tbody = document.getElementById('tabela-manutencao-body');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
     google.script.run
       .withSuccessHandler(function (registros) {
-        const tbody = document.getElementById('tabela-manutencao-body');
         tbody.innerHTML = '';
+        if (!registros || registros.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--sce-muted);">Nenhum registro ainda.</td></tr>';
+          return;
+        }
         registros.forEach(function (r) {
           const tr = document.createElement('tr');
           tr.innerHTML =
             '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
-            '<td>' + r.autor + '</td>' +
-            '<td>' + (r.status || '-') + '</td>' +
-            '<td>' + r.descricao + '</td>';
+            '<td>' + (r.autor || '') + '</td>' +
+            '<td>' + (r.status || '') + '</td>' +
+            '<td>' + (r.descricao || '') + '</td>';
           tbody.appendChild(tr);
         });
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar log: ' + err.message }); })
+      .withFailureHandler(function (err) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:#d32f2f;">Erro: ' + err.message + '</td></tr>';
+      })
       .getRegistrosManutencao(SCE_TOKEN, id);
   }
 
   function registrarManutencaoUI() {
     const btn = document.getElementById('btn-registrar-manutencao');
     if (btn.dataset.loading === '1') return;
-
     const descricao = document.getElementById('manut-descricao').value.trim();
     const status = document.getElementById('manut-status').value;
     if (!descricao) { M.toast({ html: 'Descreva o que foi feito.' }); return; }
-
     btn.dataset.loading = '1';
     btn.classList.add('disabled');
-
     google.script.run
       .withSuccessHandler(function () {
         btn.dataset.loading = '0';
@@ -764,12 +1701,11 @@ function desenharPizza_(elementId, titulo, contagem) {
       .registrarManutencao(SCE_TOKEN, equipamentoIdManutencaoAtual, descricao, status);
   }
 
-  // --- Gestão de usuários ------------------------------------------------------
-
+  // ================================================================
+  // USUÁRIOS (Matriz)
+  // ================================================================
   function abrirGestaoUsuarios() {
-    if (!modalUsuariosInstance) {
-      modalUsuariosInstance = M.Modal.init(document.getElementById('modal-usuarios'));
-    }
+    if (!modalUsuariosInstance) modalUsuariosInstance = M.Modal.init(document.getElementById('modal-usuarios'));
     modalUsuariosInstance.open();
     carregarUsuarios();
   }
@@ -777,26 +1713,35 @@ function desenharPizza_(elementId, titulo, contagem) {
   function carregarUsuarios() {
     google.script.run
       .withSuccessHandler(function (usuarios) {
-        renderTabelaUsuarios(usuarios);
+        usuariosCache = usuarios || [];
+        renderTabelaUsuarios(usuariosCache);
       })
-      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar usuarios: ' + err.message }); })
+      .withFailureHandler(function (err) { M.toast({ html: 'Erro ao carregar usuários: ' + err.message }); })
       .listarUsuarios(SCE_TOKEN);
   }
 
   function renderTabelaUsuarios(usuarios) {
     const tbody = document.querySelector('#tabela-usuarios tbody');
     tbody.innerHTML = '';
-    usuarios.forEach(function (usuario) {
-      const email = usuario.email || '';
+    if (!usuarios || usuarios.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">Nenhum usuário cadastrado.</td></tr>';
+      return;
+    }
+    usuarios.forEach(function (u) {
+      const isSelf = u.email === SESSION_EMAIL;
       const tr = document.createElement('tr');
       tr.innerHTML =
-        '<td>' + email + '</td>' +
-        '<td>' + (usuario.nome || '') + '</td>' +
-        '<td>' + (usuario.nivel || '') + '</td>' +
-        '<td>' + (usuario.filial || '') + '</td>' +
-        '<td>' + (usuario.status || '') + '</td>' +
-        '<td><a class="btn-small red waves-effect" onclick="removerUsuarioUI(\'' + email + '\', this)" title="Remover">' +
-          '<i class="material-icons">delete</i></a></td>';
+        '<td>' + (u.email || '') + '</td>' +
+        '<td>' + (u.nome || '') + '</td>' +
+        '<td>' + (u.nivel || '') + '</td>' +
+        '<td>' + (u.filial || '') + '</td>' +
+        '<td>' + (u.status || '') + '</td>' +
+        '<td>' +
+          (isSelf ? '' :
+            '<a class="btn-small waves-effect" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
+            '<a class="btn-small red waves-effect" onclick="removerUsuarioUI(\'' + u.email + '\', this)" title="Remover"><i class="material-icons">delete</i></a>'
+          ) +
+        '</td>';
       tbody.appendChild(tr);
     });
   }
@@ -804,22 +1749,15 @@ function desenharPizza_(elementId, titulo, contagem) {
   function adicionarUsuarioUI() {
     const btn = document.getElementById('btn-adicionar-usuario');
     if (btn.dataset.loading === '1') return;
-
     const novoUsuario = {
       email: document.getElementById('user-email').value.trim(),
       nome: document.getElementById('user-nome').value.trim(),
       nivel: document.getElementById('user-nivel').value,
       filial: document.getElementById('user-filial').value.trim()
     };
-
-    if (!novoUsuario.email || !novoUsuario.nome) {
-      M.toast({ html: 'Informe e-mail e nome.' });
-      return;
-    }
-
+    if (!novoUsuario.email || !novoUsuario.nome) { M.toast({ html: 'Informe e-mail e nome.' }); return; }
     btn.dataset.loading = '1';
     btn.classList.add('disabled');
-
     google.script.run
       .withSuccessHandler(function (res) {
         btn.dataset.loading = '0';
@@ -834,16 +1772,20 @@ function desenharPizza_(elementId, titulo, contagem) {
       .withFailureHandler(function (err) {
         btn.dataset.loading = '0';
         btn.classList.remove('disabled');
-        M.toast({ html: 'Erro ao adicionar usuario: ' + err.message });
+        M.toast({ html: 'Erro ao adicionar: ' + err.message });
       })
       .adicionarUsuario(SCE_TOKEN, novoUsuario);
   }
 
+  function editarUsuarioUI(email) {
+    // Implementação simplificada – você pode criar um modal de edição se desejar
+    M.toast({ html: 'Edição de usuário não implementada na interface atual.' });
+  }
+
   function removerUsuarioUI(email, el) {
     if (el && el.dataset.loading === '1') return;
-    if (!confirm('Remover o usuario ' + email + '?')) return;
+    if (!confirm('Remover o usuário ' + email + '?')) return;
     if (el) { el.dataset.loading = '1'; el.classList.add('disabled'); }
-
     google.script.run
       .withSuccessHandler(function (res) {
         if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
@@ -852,19 +1794,19 @@ function desenharPizza_(elementId, titulo, contagem) {
       })
       .withFailureHandler(function (err) {
         if (el) { el.dataset.loading = '0'; el.classList.remove('disabled'); }
-        M.toast({ html: 'Erro ao remover usuario: ' + err.message });
+        M.toast({ html: 'Erro ao remover: ' + err.message });
       })
       .removerUsuario(SCE_TOKEN, email);
   }
 
-  // --- Exportação --------------------------------------------------------------
-
+  // ================================================================
+  // EXPORTAÇÃO
+  // ================================================================
   function exportarCSV() {
     const btn = document.getElementById('btn-exportar-csv');
     if (btn.dataset.loading === '1') return;
     btn.dataset.loading = '1';
     btn.classList.add('disabled');
-
     google.script.run
       .withSuccessHandler(function (res) {
         btn.dataset.loading = '0';
@@ -896,7 +1838,6 @@ function desenharPizza_(elementId, titulo, contagem) {
     if (btn.dataset.loading === '1') return;
     btn.dataset.loading = '1';
     btn.classList.add('disabled');
-
     google.script.run
       .withSuccessHandler(function (res) {
         btn.dataset.loading = '0';
@@ -912,24 +1853,45 @@ function desenharPizza_(elementId, titulo, contagem) {
       .exportarEquipamentosPDF(SCE_TOKEN, {});
   }
 
-  // --- Boot --------------------------------------------------------------
-
-  document.addEventListener('DOMContentLoaded', function () {
+  // ================================================================
+  // INICIALIZAÇÃO
+  // ================================================================
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('🟢 Inicializando Dashboard Matriz...');
     M.FormSelect.init(document.querySelectorAll('select'));
+    inicializarFiltrosRapidos();
     carregarListasCadastro();
+    obterNomeUsuario();
     carregarEquipamentosGlobal();
 
+    document.getElementById('btn-abrir-gestao-usuarios').addEventListener('click', abrirGestaoUsuarios);
     document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
     document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentosGlobal);
     document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
-    document.getElementById('btn-abrir-gestao-usuarios').addEventListener('click', abrirGestaoUsuarios);
     document.getElementById('btn-adicionar-usuario').addEventListener('click', adicionarUsuarioUI);
     document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
     document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
     document.getElementById('btn-registrar-manutencao').addEventListener('click', registrarManutencaoUI);
     document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSV);
     document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDF);
+    document.getElementById('btn-excluir-selecionados').addEventListener('click', excluirSelecionados);
+    document.getElementById('btn-alterar-status-lote').addEventListener('click', abrirAlterarStatusLote);
+    document.getElementById('btn-confirmar-alterar-status-lote').addEventListener('click', confirmarAlterarStatusLote);
+
+    document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
+    document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+    document.querySelectorAll('.sortable').forEach(th => {
+      th.addEventListener('click', function() {
+        const campo = this.dataset.sort;
+        if (campo) ordenarTabela(campo);
+      });
+    });
+    document.getElementById('check-todos').addEventListener('change', function() {
+      const checked = this.checked;
+      document.querySelectorAll('.check-equipamento').forEach(el => el.checked = checked);
+    });
+
+    console.log('✅ Dashboard Matriz inicializado!');
   });
 </script>
-
 </html>
