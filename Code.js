@@ -1564,6 +1564,81 @@ function getListasCadastro(token) {
   return result;
 }
 
+const FILIAIS_LISTA = [
+  "E.E. ADHEMAR ANTONIO PRADO",
+  "E.E. ALCIDES BOSCOLO",
+  "E.E. ANDRÉ NUNES JUNIOR",
+  "E.E. ANTONIETA DE SOUZA ALCÂNTARA  / CHARLOTTE MARIA SHAW MASON",
+  "E.E. AQUILINO RIBEIRO  / MARIA TEREZA SIMÕES DE ALMEIDA PROFESSORA",
+  "E.E. ANÍSIO TEIXEIRA",
+  "E.E. ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM - TOM JOBIM",
+  "E.E. BARRO BRANCO II / LEÔNIDAS DA SILVA",
+  "E.E. BELIZE / BENJAMIN SAMUEL BLOOM",
+  "E.E. BERNADIM RIBEIRO",
+  "E.E. BRENO ROSSI, MAESTRO",
+  "E.E. CÂNDIDO PROCÓPIO F. CAMARGO",
+  "E.E. CARLOS HENRIQUE LIBERALLI",
+  "E.E. CARMELINDA M. PEREIRA  / LIMA BARRETO",
+  "E.E. CESAR DONATO CALABREZ /LEILA DINIZ",
+  "E.E. CLAUDIA DUTRA VIANA / ROSA PARKS",
+  "E.E. COHAB CARRÃOZINHO",
+  "E.E. COHAB ITAQUERA IV",
+  "E.E. DÉCIO FERRAZ ALVIM / FLORIANO PEIXOTO",
+  "E.E. ERNESTINA DEL B. TRAMA",
+  "E.E. ESTHER FIGUEIREDO FERRAZ",
+  "E.E. FABIO AGAZZI",
+  "E.E. FADLO HAIDAR",
+  "E.E. FERNANDO MAURO P. ROCHA, DEPUTADO",
+  "E.E. FERNANDO PESSOA",
+  "E.E. FRANCISCO DE ASSIS P. CORRÊA",
+  "E.E. FREDERICO MARIANO",
+  "E.E. GERALDINO DOS SANTOS, DEPUTADO  / JOSUÉ DE CASTRO",
+  "E.E. GUERRA JUNQUEIRO",
+  "E.E. HAYDEÉ HIDALGO",
+  "E.E. HUMBERTO BAPTISTELLI",
+  "E.E. HUMBERTO DANTAS",
+  "E.E. INDIANA ZUYCHER S. DE JESUS",
+  "E.E. ISAAC SCHIRAIBER",
+  "E.E. JARDIM DOM ANGÉLICO",
+  "E.E. JARDIM IGUATEMI",
+  "E.E. JARDIM LIMOEIRO III",
+  "E.E. JARDIM PEDRA BRANCA / PATRÍCIA GALVÃO - PAGU",
+  "E.E. JARDIM WILMA FLOR",
+  "E.E. JOÃO CASTELLANO",
+  "E.E. JOAQUIM SILVÉRIO G. DOS REIS",
+  "E.E. JORGE LUIS BORGES",
+  "E.E. JUAN CARLOS ONETTI",
+  "E.E. LUIS VAZ DE CAMÕES",
+  "E.E. LUIZ ROSANOVA",
+  "E.E. MARCOS ANTONIO COSTA  / HERBERT JOSÉ DE SOUZA - BETINHO",
+  "E.E. MARIA ANTONIETA FERRAZ BIBLIOTECARIA",
+  "E.E. MARIA DE LOURDES A. A. PACHECO / CHIQUINHA GONZAGA",
+  "E.E. MARIUMA BUAZAR MAUAD",
+  "E.E. MOACYR AMARAL DOS SANTOS",
+  "E.E. MOZART TAVARES DE LIMA",
+  "E.E. OSWALDO GAGLIARDI",
+  "E.E. PAULO ROLIM ROSA",
+  "E.E. PAULO SARASATE GOVERNADOR",
+  "E.E. PEDRO TAQUES",
+  "E.E. RECANTO VERDE SOL  / DJANIRA",
+  "E.E. RITA PINTO DE ARAUJO",
+  "E.E. ROCCA DORDALL",
+  "E.E. ROQUE THEOPHILO",
+  "E.E. RUY DE MELLO JUNQUEIRA",
+  "E.E. SALIM FARAH MALUF",
+  "E.E. SALVADOR ALLENDE GOSSENS",
+  "E.E. SATURNINO PEREIRA",
+  "E.E. SEBASTIÃO FARIAS ZIMBRES",
+  "E.E. SERGIO ESTANISTLAU DE CAMARGO",
+  "E.E. SERGIO ROCHA KIEHL",
+  "E.E. SILVANA EVANGELISTA",
+  "E.E. SIMÃO MATHIAS",
+  "E.E. SUMIE IWATA",
+  "E.E. VILA BELA",
+  "E.E. YERVANT KISSAJIKIAN",
+  "E.E. ZÍPORA RUBISTEIN",
+];
+
 function getFiliaisParaEmprestimo(token) {
   try {
     requireSession_(token);
@@ -1571,48 +1646,7 @@ function getFiliaisParaEmprestimo(token) {
     throw new Error("Token inválido ou sessão expirada.");
   }
 
-  const spreadsheetId = getSpreadsheetIdFor_(CONFIG.SHEETS.FILIAIS);
-  let data;
-
-  try {
-    data = sheetsApiGetValues_(CONFIG.SHEETS.FILIAIS);
-  } catch (e) {
-    if (e.message.includes("Unable to parse range")) {
-      const meta = Sheets.Spreadsheets.get(spreadsheetId, {
-        fields: "sheets(properties(title))",
-      });
-      const abas = (meta.sheets || []).map((s) => s.properties.title).join(", ");
-      throw new Error(
-        'Aba "Filiais" não encontrada na planilha CORE. Abas disponíveis: ' +
-          abas +
-          '. Verifique se a aba existe e se chama exatamente "Filiais".',
-      );
-    }
-    throw e;
-  }
-
-  if (!data || data.length < 2) {
-    return [];
-  }
-
-  const headers = data[0];
-  let idxNome = headers.indexOf("nome");
-  let idxSigla = headers.indexOf("sigla");
-
-  if (idxNome === -1) idxNome = 0;
-  if (idxSigla === -1) idxSigla = 1;
-
-  const result = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const nome = row[idxNome] ? String(row[idxNome]).trim() : "";
-    const sigla = row[idxSigla] ? String(row[idxSigla]).trim() : "";
-    const valor = nome || sigla;
-    if (valor) {
-      result.push(valor);
-    }
-  }
-  return result.sort();
+  return FILIAIS_LISTA.slice().sort();
 }
 function lerListasDaPlanilha_() {
   const data = sheetsApiGetValues_(CONFIG.SHEETS.LISTAS);
