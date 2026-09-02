@@ -1571,7 +1571,26 @@ function getFiliaisParaEmprestimo(token) {
     throw new Error("Token inválido ou sessão expirada.");
   }
 
-  const data = sheetsApiGetValues_(CONFIG.SHEETS.FILIAIS);
+  const spreadsheetId = getSpreadsheetIdFor_(CONFIG.SHEETS.FILIAIS);
+  let data;
+
+  try {
+    data = sheetsApiGetValues_(CONFIG.SHEETS.FILIAIS);
+  } catch (e) {
+    if (e.message.includes("Unable to parse range")) {
+      const meta = Sheets.Spreadsheets.get(spreadsheetId, {
+        fields: "sheets(properties(title))",
+      });
+      const abas = (meta.sheets || []).map((s) => s.properties.title).join(", ");
+      throw new Error(
+        'Aba "Filiais" não encontrada na planilha CORE. Abas disponíveis: ' +
+          abas +
+          '. Verifique se a aba existe e se chama exatamente "Filiais".',
+      );
+    }
+    throw e;
+  }
+
   if (!data || data.length < 2) {
     return [];
   }
