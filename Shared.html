@@ -477,6 +477,116 @@ tr.status-removido { background-color: #eceff1 !important; opacity: 0.7; }
   <p id="sce-print-data"></p>
 </div>
 
+<!-- Perfil Test Switcher (Dev Only) — ativado via ?dev=1 ou localStorage.sce_dev=1 -->
+<div id="sce-dev-panel" class="no-print" style="display:none;">
+  <div class="sce-dev-panel-content">
+    <div class="sce-dev-panel-header">
+      <i class="material-icons">bug_report</i>
+      <span>Painel de Desenvolvimento</span>
+      <button class="sce-dev-close" onclick="sceDevPanelHide()" title="Fechar">×</button>
+    </div>
+    <div class="sce-dev-panel-body">
+      <div class="sce-dev-section">
+        <label>Simular Perfil:</label>
+        <select id="sce-dev-profile-select" onchange="sceDevProfileChange(this.value)">
+          <option value="">-- Selecione --</option>
+          <option value="Matriz">Matriz (Admin Global)</option>
+          <option value="AdminFilial">AdminFilial (Admin Unidade)</option>
+          <option value="Filial">Filial (Usuário Padrão)</option>
+          <option value="Tecnico">Técnico (Multi-unidade)</option>
+        </select>
+        <small>Requer recarregar a página para aplicar</small>
+      </div>
+      <div class="sce-dev-section">
+        <label>Unidade (para AdminFilial/Técnico):</label>
+        <input type="text" id="sce-dev-filial-input" placeholder="Ex: ESCOLA EXEMPLO" onchange="sceDevFilialChange(this.value)">
+      </div>
+      <div class="sce-dev-section">
+        <label>E-mail simulado:</label>
+        <input type="email" id="sce-dev-email-input" placeholder="dev@teste.local" onchange="sceDevEmailChange(this.value)">
+      </div>
+      <div class="sce-dev-actions">
+        <button class="btn" onclick="sceDevApplyProfile()">Aplicar e Recarregar</button>
+        <button class="btn-flat" onclick="sceDevClearProfile()">Limpar Simulação</button>
+      </div>
+      <div class="sce-dev-info">
+        <small>Ative com <code>?dev=1</code> na URL ou <code>localStorage.setItem('sce_dev','1')</code> no console.</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  #sce-dev-panel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    font-family: 'Inter', 'Roboto', sans-serif;
+  }
+  #sce-dev-panel.visible { display: block; animation: sceDevSlideIn 0.3s ease; }
+  @keyframes sceDevSlideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  .sce-dev-panel-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(16,24,40,.18), 0 2px 8px rgba(16,24,40,.1);
+    border: 1px solid var(--sce-border);
+    min-width: 300px;
+    max-width: 360px;
+    overflow: hidden;
+  }
+  .sce-dev-panel-header {
+    background: linear-gradient(135deg, var(--sce-primary) 0%, var(--sce-primary-dark) 100%);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .sce-dev-panel-header .material-icons { font-size: 20px; }
+  .sce-dev-close {
+    margin-left: auto;
+    background: rgba(255,255,255,.15);
+    border: none;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sce-dev-close:hover { background: rgba(255,255,255,.25); }
+  .sce-dev-panel-body { padding: 16px; }
+  .sce-dev-section { margin-bottom: 14px; }
+  .sce-dev-section label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--sce-muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .sce-dev-section select, .sce-dev-section input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--sce-border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: white;
+    box-sizing: border-box;
+  }
+  .sce-dev-section select:focus, .sce-dev-section input:focus {
+    outline: none;
+    border-color: var(--sce-primary);
+    box-shadow: 0 0 0 3px rgba(21,101,192,.15);
+  }
+  .sce-dev-section small { display: block; margin-top: 4px; font-size: 0.7rem; color: var(--sce-muted); }
+  .sce-dev-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .sce-dev-actions .btn, .sce-dev-actions .btn-flat { flex: 1; padding: 10px; font-size: 0.85rem; }
+  .sce-dev-info { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--sce-border); color: var(--sce-muted); font-size: 0.7rem; text-align: center; }
+  .sce-dev-info code { background: var(--sce-bg); padding: 1px 6px; border-radius: 4px; font-size: 0.68rem; }
+  @media print { #sce-dev-panel { display: none !important; } }
+</style>
+
 <script>
   // Limpa o token salvo localmente e volta para a tela de login (doGet sem token).
   function sceLogout() {
@@ -721,4 +831,78 @@ function getValorCampo(prefixo, campo) {
   }
   return val;
 }
+
+// ================================================================
+// DEV PANEL — Profile Test Switcher (Development Only)
+// ================================================================
+(function() {
+  const isDevMode = new URLSearchParams(window.location.search).has('dev') || localStorage.getItem('sce_dev') === '1';
+  const panel = document.getElementById('sce-dev-panel');
+  if (!panel) return;
+
+  if (isDevMode) {
+    panel.classList.add('visible');
+    // Load saved dev profile
+    const savedProfile = localStorage.getItem('sce_dev_profile');
+    const savedFilial = localStorage.getItem('sce_dev_filial');
+    const savedEmail = localStorage.getItem('sce_dev_email');
+    if (savedProfile) document.getElementById('sce-dev-profile-select').value = savedProfile;
+    if (savedFilial) document.getElementById('sce-dev-filial-input').value = savedFilial;
+    if (savedEmail) document.getElementById('sce-dev-email-input').value = savedEmail;
+  }
+
+  window.sceDevPanelHide = function() {
+    panel.classList.remove('visible');
+  };
+
+  window.sceDevProfileChange = function(value) {
+    const filialInput = document.getElementById('sce-dev-filial-input');
+    filialInput.style.display = (value === 'AdminFilial' || value === 'Tecnico') ? 'block' : 'none';
+  };
+
+  window.sceDevFilialChange = function(value) {
+    localStorage.setItem('sce_dev_filial', value);
+  };
+
+  window.sceDevEmailChange = function(value) {
+    localStorage.setItem('sce_dev_email', value);
+  };
+
+  window.sceDevApplyProfile = function() {
+    const profile = document.getElementById('sce-dev-profile-select').value;
+    const filial = document.getElementById('sce-dev-filial-input').value;
+    const email = document.getElementById('sce-dev-email-input').value;
+
+    if (!profile) { alert('Selecione um perfil'); return; }
+    if ((profile === 'AdminFilial' || profile === 'Tecnico') && !filial) { alert('Informe a unidade/filial'); return; }
+
+    localStorage.setItem('sce_dev_profile', profile);
+    localStorage.setItem('sce_dev_filial', filial);
+    localStorage.setItem('sce_dev_email', email);
+
+    // Create a mock session via server-side endpoint
+    const baseUrl = getScriptUrlBase_();
+    const params = new URLSearchParams({ dev: '1', profile: profile });
+    if (filial) params.set('filial', filial);
+    if (email) params.set('email', email);
+    window.location.href = baseUrl + '?' + params.toString();
+  };
+
+  window.sceDevClearProfile = function() {
+    localStorage.removeItem('sce_dev_profile');
+    localStorage.removeItem('sce_dev_filial');
+    localStorage.removeItem('sce_dev_email');
+    document.getElementById('sce-dev-profile-select').value = '';
+    document.getElementById('sce-dev-filial-input').value = '';
+    document.getElementById('sce-dev-email-input').value = '';
+    document.getElementById('sce-dev-filial-input').style.display = 'none';
+    M.toast({ html: 'Simulação limpa. Recarregue para voltar ao normal.' });
+  };
+
+  // Initialize filial input visibility
+  const initialProfile = document.getElementById('sce-dev-profile-select').value;
+  if (initialProfile === 'AdminFilial' || initialProfile === 'Tecnico') {
+    document.getElementById('sce-dev-filial-input').style.display = 'block';
+  }
+})();
 </script>

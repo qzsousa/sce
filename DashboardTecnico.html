@@ -188,6 +188,7 @@
             <option value="Extraviado">Extraviado</option>
             <option value="Inservível">Inservível</option>
             <option value="Em verificação">Em verificação</option>
+            <option value="Quebrado">Quebrado</option>
           </select>
           <label>Status *</label>
         </div>
@@ -204,6 +205,10 @@
             <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
             <input type="file" id="new-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
           </div>
+        </div>
+        <div class="input-field col s12" id="campo-quebrado-cadastro" style="display:none;">
+          <textarea id="new-descricaoQuebrado" class="materialize-textarea"></textarea>
+          <label for="new-descricaoQuebrado">Descrição da avaria (obrigatório)</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-sistemaOperacional">
@@ -298,6 +303,7 @@
             <option value="Extraviado">Extraviado</option>
             <option value="Inservível">Inservível</option>
             <option value="Em verificação">Em verificação</option>
+            <option value="Quebrado">Quebrado</option>
           </select>
           <label>Status *</label>
         </div>
@@ -326,6 +332,10 @@
         <div class="input-field col s12" id="campo-justificativa" style="display:none;">
           <textarea id="edit-justificativaVerificacao" class="materialize-textarea"></textarea>
           <label for="edit-justificativaVerificacao" class="active">Justificativa da verificação</label>
+        </div>
+        <div class="input-field col s12" id="campo-quebrado" style="display:none;">
+          <textarea id="edit-descricaoQuebrado" class="materialize-textarea"></textarea>
+          <label for="edit-descricaoQuebrado" class="active">Descrição da avaria (obrigatório)</label>
         </div>
 
         <div class="input-field col s6">
@@ -469,7 +479,7 @@
   const CAMPOS_EDITAVEIS = [
     'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
     'vinculadoBlueMonitor',
-    'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
+    'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao', 'descricaoQuebrado',
     'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
     'tamanhoTela', 'responsavelAtual', 'observacoes',
     'justificativaPatrimonio', 'justificativaNumeroSerie'
@@ -480,7 +490,7 @@
     'vinculadoBlueMonitor',
     'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
     'tamanhoTela', 'responsavelAtual', 'observacoes',
-    'justificativaPatrimonio', 'justificativaNumeroSerie'
+    'justificativaPatrimonio', 'justificativaNumeroSerie', 'descricaoQuebrado'
   ];
 
   // ================================================================
@@ -1067,6 +1077,13 @@
       campoBo.style.display = 'none';
       document.getElementById('new-anexoBoletim').value = '';
     }
+    const campoQuebrado = document.getElementById('campo-quebrado-cadastro');
+    if (status === 'Quebrado') {
+      campoQuebrado.style.display = 'block';
+    } else {
+      campoQuebrado.style.display = 'none';
+      document.getElementById('new-descricaoQuebrado').value = '';
+    }
   }
 
   function salvarCadastro() {
@@ -1133,6 +1150,13 @@
       const justif = document.getElementById('new-justificativaVerificacao');
       if (justif && !justif.value.trim()) {
         M.toast({ html: 'Preencha a justificativa da verificação.' });
+        return;
+      }
+    }
+    if (status === 'Quebrado') {
+      const descQuebrado = document.getElementById('new-descricaoQuebrado');
+      if (!descQuebrado || !descQuebrado.value.trim()) {
+        M.toast({ html: 'Para o status "Quebrado", descreva a avaria.' });
         return;
       }
     }
@@ -1305,9 +1329,14 @@
     document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
     document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
     document.getElementById('campo-justificativa').style.display = (status === 'Em verificação') ? 'block' : 'none';
+    document.getElementById('campo-quebrado').style.display = (status === 'Quebrado') ? 'block' : 'none';
 
     const fileInput = document.getElementById('edit-anexoBoletim');
     if (fileInput && status !== 'Extraviado') fileInput.value = '';
+    if (status !== 'Quebrado') {
+      const inputQuebrado = document.getElementById('edit-descricaoQuebrado');
+      if (inputQuebrado) inputQuebrado.value = '';
+    }
   }
 
   function salvarEdicao() {
@@ -1365,7 +1394,8 @@
     const regrasStatus = {
       'Manutenção': 'numeroChamadoManutencao',
       'Extraviado': 'boletimOcorrencia',
-      'Em verificação': 'justificativaVerificacao'
+      'Em verificação': 'justificativaVerificacao',
+      'Quebrado': 'descricaoQuebrado'
     };
     const campoObrigatorio = regrasStatus[status];
     if (campoObrigatorio) {

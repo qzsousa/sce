@@ -260,14 +260,14 @@
         </div>
         <p class="sce-otp-hint">Digite o código recebido no e-mail</p>
 
-        <div class="sce-code-actions">
-          <button class="btn waves-effect" id="btn-validar-codigo" onclick="validarCodigo()">
-            <i class="material-icons">login</i>Entrar
-          </button>
-          <button class="btn-flat waves-effect" onclick="enviarCodigo()">
-            <i class="material-icons left">refresh</i>Reenviar código
-          </button>
-        </div>
+<div class="sce-code-actions">
+        <button class="btn waves-effect" id="btn-validar-codigo" onclick="validarCodigo()">
+          <i class="material-icons">login</i>Entrar
+        </button>
+        <button class="btn-flat waves-effect" id="btn-reenviar-codigo" onclick="enviarCodigo()">
+          <i class="material-icons left">refresh</i>Reenviar código
+        </button>
+      </div>
 
         <button type="button" class="sce-link-back" onclick="voltarParaEmail()">
           <i class="material-icons">arrow_back</i>Usar outro e-mail
@@ -280,6 +280,8 @@
 
   <script>
     let emailAtual = '';
+    let isSendingCode = false;
+    let isValidatingCode = false;
 
     function getOtpInputs() {
       return Array.prototype.slice.call(document.querySelectorAll('.sce-otp-digit'));
@@ -335,6 +337,7 @@
             inputs[index - 1].classList.remove('filled');
           }
           if (e.key === 'Enter') {
+            e.preventDefault();
             validarCodigo();
           }
         });
@@ -372,44 +375,76 @@
       document.getElementById('email').focus();
     }
 
+    function setButtonsDisabled(disabled) {
+      const btnEnviar = document.getElementById('btn-enviar-codigo');
+      const btnValidar = document.getElementById('btn-validar-codigo');
+      const btnReenviar = document.getElementById('btn-reenviar-codigo');
+      const emailInput = document.getElementById('email');
+      const otpInputs = getOtpInputs();
+      
+      if (btnEnviar) btnEnviar.disabled = disabled;
+      if (btnValidar) btnValidar.disabled = disabled;
+      if (btnReenviar) btnReenviar.disabled = disabled;
+      if (emailInput) emailInput.disabled = disabled;
+      otpInputs.forEach(function(input) { input.disabled = disabled; });
+    }
+
     function enviarCodigo() {
+      if (isSendingCode) return;
       const email = document.getElementById('email').value.trim();
       if (!email) { setFeedback('Informe um e-mail.', 'error'); return; }
+      
+      isSendingCode = true;
+      setButtonsDisabled(true);
       emailAtual = email;
       setFeedback('Enviando código...', 'info');
 
       google.script.run
         .withSuccessHandler(function (res) {
+          isSendingCode = false;
+          setButtonsDisabled(false);
           setFeedback(res.message, res.ok ? 'success' : 'error');
           if (res.ok) {
             irParaEtapaCodigo();
           }
         })
-        .withFailureHandler(function (err) { setFeedback('Erro: ' + err.message, 'error'); })
+        .withFailureHandler(function (err) {
+          isSendingCode = false;
+          setButtonsDisabled(false);
+          setFeedback('Erro: ' + err.message, 'error');
+        })
         .requestOtp(email);
     }
 
     function validarCodigo() {
+      if (isValidatingCode) return;
       const code = getCodigoCompleto();
       if (code.length < 6) {
         setFeedback('Digite os 6 dígitos do código.', 'error');
         focarPrimeiroOtp();
         return;
       }
+      
+      isValidatingCode = true;
+      setButtonsDisabled(true);
       setFeedback('Validando...', 'info');
 
       google.script.run
         .withSuccessHandler(function (res) {
+          isValidatingCode = false;
           if (res.ok) {
             localStorage.setItem('sce_token', res.redirectUrl.split('token=')[1]);
             top.location.href = res.redirectUrl;
           } else {
+            setButtonsDisabled(false);
             setFeedback(res.message, 'error');
             limparOtp();
             focarPrimeiroOtp();
           }
         })
         .withFailureHandler(function (err) {
+          isValidatingCode = false;
+          setButtonsDisabled(false);
           setFeedback('Erro: ' + err.message, 'error');
           limparOtp();
           focarPrimeiroOtp();
@@ -426,7 +461,10 @@
     document.addEventListener('DOMContentLoaded', function () {
       initOtpInputs();
       document.getElementById('email').addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') enviarCodigo();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          enviarCodigo();
+        }
       });
     });
 

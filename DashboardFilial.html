@@ -1,163 +1,699 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <base target="_top">
   <meta charset="utf-8">
   <?!= include('Shared') ?>
-  <meta name="version" content="v2.1.1-filial-fix">
+  <meta name="version" content="v2.9.0-filial-fix-filtros-acoes">
   <style>
+    /* ===== RESET E AJUSTES GERAIS ===== */
     .campo-justificativa {
       margin-top: 5px;
       padding: 8px 0;
     }
+
     .campo-outro {
       margin-top: 0;
       padding: 0 0 10px 0;
       display: none;
     }
+
     .campo-outro input {
       width: 100%;
     }
+
+    .obrigatorio::after {
+      content: " *";
+      color: #d32f2f;
+      font-weight: bold;
+    }
+
+    .campo-texto-marca-modelo {
+      display: none;
+    }
+
+    /* ===== LOADING OVERLAY ===== */
+    #sce-loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 9999;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    #sce-loading-overlay.active {
+      display: flex !important;
+    }
+
+    #sce-loading-overlay .loader-box {
+      background: #fff;
+      padding: 30px 40px;
+      border-radius: 8px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    #sce-loading-overlay .spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #1565c0;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #sce-loading-overlay p {
+      margin-top: 16px;
+      font-family: sans-serif;
+      color: #333;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .kpi-grid .sce-kpi {
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-left: 4px solid var(--sce-primary, #1565c0);
+    }
+
+    .kpi-grid .sce-kpi .sce-kpi-icon {
+      font-size: 28px;
+      color: var(--sce-primary, #1565c0);
+    }
+
+    .kpi-grid .sce-kpi .sce-kpi-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .kpi-grid .sce-kpi .sce-kpi-label {
+      font-size: 0.7rem;
+      color: var(--sce-muted, #777);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .kpi-total {
+      border-left-color: #1565c0;
+    }
+
+    .kpi-disponiveis {
+      border-left-color: #43a047;
+    }
+
+    .kpi-manutencao {
+      border-left-color: #ef6c00;
+    }
+
+    .kpi-quebrados {
+      border-left-color: #d32f2f;
+    }
+
+    .kpi-extraviado {
+      border-left-color: #8e24aa;
+    }
+
+    .graficos-wrapper {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .grafico-item {
+      background: #fff;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    .grafico-item .grafico-titulo {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--sce-muted, #555);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .grafico-item .grafico-titulo .material-icons {
+      color: var(--sce-primary, #1565c0);
+    }
+
+    .grafico-item #chart-status,
+    .grafico-item #chart-categoria {
+      width: 100%;
+      height: 220px;
+      position: relative;
+    }
+
+    @media(max-width:768px) {
+      .graficos-wrapper {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+    }
+
+    .filtros-tabela-wrapper {
+      background: #f8f9fa;
+      border-radius: 8px 8px 0 0;
+      padding: 16px 20px;
+      border-bottom: 2px solid #e0e0e0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 16px;
+    }
+
+    .filtros-tabela-wrapper .filtros-titulo {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--sce-muted, #555);
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      margin-right: 8px;
+      padding-bottom: 4px;
+      border-bottom: 2px solid var(--sce-primary, #1565c0);
+      text-align: center;
+      flex: 0 0 auto;
+    }
+
+    .filtros-tabela-wrapper .campo-filtro {
+      flex: 1 1 160px;
+      min-width: 130px;
+    }
+
+    .filtros-tabela-wrapper .campo-filtro label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--sce-muted, #666);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .filtros-tabela-wrapper .campo-filtro select,
+    .filtros-tabela-wrapper .campo-filtro input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      font-size: 0.9rem;
+      transition: border-color .2s;
+      height: 40px;
+      box-sizing: border-box;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .filtros-tabela-wrapper .campo-filtro select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+
+    .filtros-tabela-wrapper .campo-filtro select:focus,
+    .filtros-tabela-wrapper .campo-filtro input:focus {
+      border-color: var(--sce-primary, #1565c0);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.15);
+    }
+
+    .filtros-tabela-wrapper .campo-busca {
+      flex: 2 1 220px;
+    }
+
+    .filtros-tabela-wrapper .campo-busca input {
+      padding-left: 36px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+    }
+
+    .tabela-equipamentos {
+      border-radius: 0 0 8px 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .tabela-equipamentos table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .tabela-equipamentos thead {
+      background: var(--sce-primary, #1565c0);
+      color: #fff;
+    }
+
+    .tabela-equipamentos thead th {
+      padding: 12px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    .tabela-equipamentos thead th .material-icons {
+      font-size: 16px;
+      vertical-align: middle;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .tabela-equipamentos tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    .tabela-equipamentos tbody tr:hover {
+      background: #f5f8fc;
+    }
+
+    .tabela-equipamentos tbody tr.status-extraviado {
+      background: #fff5f5;
+    }
+
+    .tabela-equipamentos tbody tr.status-manutenção {
+      background: #fff8e1;
+    }
+
+    .tabela-equipamentos tbody tr.status-emprestado {
+      background: #e3f2fd;
+    }
+
+    .tabela-equipamentos tbody tr.status-disponível {
+      background: #e8f5e9;
+    }
+
+    .badge-manutencao {
+      font-size: 0.7rem;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .badge-pendente {
+      background: #ffcdd2;
+      color: #c62828;
+    }
+
+    .badge-em-andamento {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .badge-concluído {
+      background: #c8e6c9;
+      color: #2e7d32;
+    }
+
+    .badge-atraso {
+      font-size: 0.7rem;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .badge-atrasado {
+      background: #ffcdd2;
+      color: #c62828;
+    }
+
+    .badge-em-dia {
+      background: #c8e6c9;
+      color: #2e7d32;
+    }
+
+    .btn-acao {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--sce-muted, #666);
+      cursor: pointer;
+      transition: background .2s, color .2s;
+      font-size: 18px;
+    }
+
+    .btn-acao:hover {
+      background: rgba(0, 0, 0, 0.06);
+      color: var(--sce-primary, #1565c0);
+    }
+
+    .btn-acao.danger:hover {
+      background: #ffebee;
+      color: #d32f2f;
+    }
+
+    /* Botão de excluir na linha da tabela — ícone circular vermelho, consistente com os demais */
+    .btn-acao-excluir {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: none;
+      background: #ffebee;
+      color: #d32f2f;
+      cursor: pointer;
+      transition: background .2s, color .2s, transform .15s;
+      font-size: 18px;
+    }
+
+    .btn-acao-excluir .material-icons {
+      font-size: 18px;
+    }
+
+    .btn-acao-excluir:hover {
+      background: #d32f2f;
+      color: #fff;
+      transform: scale(1.05);
+    }
+
+    .paginacao {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: #fafafa;
+      border-top: 1px solid #eee;
+      border-radius: 0 0 8px 8px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .paginacao .info {
+      color: var(--sce-muted, #777);
+      font-size: 0.85rem;
+    }
+
+    .paginacao .botoes {
+      display: flex;
+      gap: 6px;
+    }
+
+    .paginacao .botoes button {
+      padding: 6px 16px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all .2s;
+    }
+
+    .paginacao .botoes button:hover:not(:disabled) {
+      background: var(--sce-primary, #1565c0);
+      color: #fff;
+      border-color: var(--sce-primary, #1565c0);
+    }
+
+    .paginacao .botoes button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    @media(max-width:768px) {
+      .filtros-tabela-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px 16px;
+      }
+
+      .filtros-tabela-wrapper .campo-filtro {
+        flex: 1 1 auto;
+        min-width: unset;
+      }
+
+      .kpi-grid {
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 8px;
+      }
+
+      .kpi-grid .sce-kpi {
+        padding: 10px 12px;
+      }
+
+      .kpi-grid .sce-kpi .sce-kpi-value {
+        font-size: 1.1rem;
+      }
+
+      .tabela-equipamentos thead th,
+      .tabela-equipamentos tbody td {
+        padding: 8px 10px;
+        font-size: 0.8rem;
+      }
+
+      .tabela-equipamentos thead th .material-icons {
+        font-size: 14px;
+      }
+    }
+
+    @media(max-width:480px) {
+      .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .paginacao {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+      }
+
+      .paginacao .botoes {
+        justify-content: center;
+      }
+    }
   </style>
 </head>
+
 <body class="theme-filial">
+
+  <!-- ===== LOADING OVERLAY ===== -->
+  <div id="sce-loading-overlay">
+    <div class="loader-box">
+      <div class="spinner"></div>
+      <p>Carregando...</p>
+    </div>
+  </div>
 
   <div class="sce-container">
 
     <div class="sce-page-title">
       <i class="material-icons">store</i>
       <div>
-        <h5 style="margin:0;">Painel da Unidade: <?= session.filial ?></h5>
+        <h5 style="margin:0;">Painel da Unidade:
+          <?= session.filial ?>
+        </h5>
         <span style="font-size:0.85rem;color:var(--sce-muted);">
-          Perfil: <?= session.nivel ?>
+          Perfil:
+          <?= session.nivel ?>
         </span>
       </div>
     </div>
 
     <div class="sce-panel">
       <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações rápidas</div>
-      <div class="row" style="margin-bottom:0;">
-        <button class="btn waves-effect" id="btn-abrir-cadastro">
-          <i class="material-icons left">add</i>Adicionar
-        </button>
-        <button class="btn waves-effect" id="btn-abrir-emprestimo">
-          <i class="material-icons left">assignment_turned_in</i>Emprestar
-        </button>
-        <button class="btn waves-effect" id="btn-devolver-selecionados">
-          <i class="material-icons left">keyboard_return</i>Devolver
-        </button>
-        <? if (session.nivel === 'AdminFilial' || session.nivel === 'Matriz') { ?>
+      <div class="row" style="margin-bottom:0;display:flex;flex-wrap:wrap;gap:8px;">
+        <button class="btn waves-effect" id="btn-abrir-cadastro"><i
+            class="material-icons left">add</i>Adicionar</button>
+        <button class="btn waves-effect" id="btn-abrir-emprestimo"><i
+            class="material-icons left">assignment_turned_in</i>Emprestar</button>
+        <button class="btn waves-effect" id="btn-devolver-selecionados"><i
+            class="material-icons left">keyboard_return</i>Devolver</button>
+        <? if (session.nivel === 'AdminFilial') { ?>
         <button class="btn red waves-effect" id="btn-excluir-selecionados">
           <i class="material-icons left">delete</i>Excluir selecionados
         </button>
         <? } ?>
         <? if (session.nivel === 'AdminFilial' || session.nivel === 'Matriz') { ?>
-        <button class="btn waves-effect" id="btn-gerenciar-usuarios">
-          <i class="material-icons left">people</i>Usuários
-        </button>
+        <button class="btn waves-effect" id="btn-gerenciar-usuarios"><i
+            class="material-icons left">people</i>Usuários</button>
         <? } ?>
-        <button class="btn-flat waves-effect" id="btn-atualizar-lista">
-          <i class="material-icons left">refresh</i>Atualizar
-        </button>
-        <button class="btn" id="btn-exportar-csv">
-          <i class="material-icons left">description</i>CSV
-        </button>
-        <button class="btn" id="btn-exportar-pdf">
-          <i class="material-icons left">picture_as_pdf</i>PDF
-        </button>
+        <button class="btn-flat waves-effect" id="btn-atualizar-lista"><i
+            class="material-icons left">refresh</i>Atualizar</button>
+        <button class="btn" id="btn-exportar-csv"><i class="material-icons left">description</i>CSV</button>
+        <button class="btn" id="btn-exportar-pdf"><i class="material-icons left">picture_as_pdf</i>PDF</button>
       </div>
     </div>
 
-    <div id="kpis" class="row"></div>
+    <div id="kpis" class="kpi-grid"></div>
 
-    <div class="sce-panel">
-      <div class="sce-panel-title"><i class="material-icons">pie_chart</i>Distribuição por status</div>
-      <div id="chart-status" style="width:100%;height:280px;position:relative;">
-        <canvas id="canvas-chart-status"></canvas>
+    <div class="graficos-wrapper">
+      <div class="grafico-item">
+        <div class="grafico-titulo"><i class="material-icons">pie_chart</i>Distribuição por status</div>
+        <div id="chart-status"><canvas id="canvas-chart-status"></canvas></div>
+      </div>
+      <div class="grafico-item">
+        <div class="grafico-titulo"><i class="material-icons">category</i>Distribuição por categoria</div>
+        <div id="chart-categoria"><canvas id="canvas-chart-categoria"></canvas></div>
       </div>
     </div>
 
-    <div class="sce-panel no-print">
-      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros</div>
-      <div class="filtros-rapidos">
-        <button class="btn-filtro ativo" data-filtro="todos">Todos</button>
-        <button class="btn-filtro" data-filtro="Disponível">Disponíveis</button>
-        <button class="btn-filtro" data-filtro="Manutenção">Manutenção</button>
-        <button class="btn-filtro" data-filtro="Extraviado">Extraviados</button>
-        <button class="btn-filtro" data-filtro="Emprestado">Emprestados</button>
-        <button class="btn-filtro" data-filtro="Inservível">Inservíveis</button>
-        <button class="btn-filtro" data-filtro="Em verificação">Em verificação</button>
-      </div>
-      <div class="row" style="margin-bottom:0;">
-        <div class="input-field col s6">
-          <i class="material-icons prefix" style="color:var(--sce-muted);">search</i>
-          <input type="text" id="filtro-busca">
-          <label for="filtro-busca">Buscar por patrimônio, série ou modelo</label>
+    <div class="sce-panel" style="padding:0;overflow:hidden;">
+      <div class="filtros-tabela-wrapper">
+        <span class="filtros-titulo">Filtros</span>
+        <div class="campo-filtro campo-busca">
+          <label for="filtro-busca">Buscar</label>
+          <input type="text" id="filtro-busca" placeholder="Patrimônio, série ou modelo">
         </div>
-        <div class="input-field col s3">
-          <select id="filtro-status"><option value="">Todos os status</option></select>
-          <label>Status</label>
+        <div class="campo-filtro">
+          <label for="filtro-status">Status</label>
+          <select id="filtro-status" class="browser-default">
+            <option value="">Todos</option>
+            <option value="Disponível">Disponível</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Emprestado">Emprestado</option>
+            <option value="Extraviado">Extraviado</option>
+          </select>
         </div>
-        <div class="input-field col s3">
-          <select id="filtro-categoria"><option value="">Todas as categorias</option></select>
-          <label>Categoria</label>
+        <div class="campo-filtro">
+          <label for="filtro-categoria">Categoria</label>
+          <select id="filtro-categoria" class="browser-default">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="campo-filtro">
+          <label for="filtro-marca">Marca</label>
+          <select id="filtro-marca" class="browser-default">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <div class="campo-filtro">
+          <label for="filtro-modelo">Modelo</label>
+          <select id="filtro-modelo" class="browser-default">
+            <option value="">Todos</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="tabela-equipamentos">
+        <table class="striped" id="tabela-equipamentos">
+          <thead>
+            <tr>
+              <th class="no-print" style="width:40px;"><label><input type="checkbox"
+                    id="check-todos"><span></span></label></th>
+              <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i
+                  class="material-icons">unfold_more</i></th>
+              <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i
+                  class="material-icons">unfold_more</i></th>
+              <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i
+                  class="material-icons">unfold_more</i></th>
+              <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i
+                  class="material-icons">unfold_more</i></th>
+              <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i
+                  class="material-icons">unfold_more</i></th>
+              <th>Manutenção</th>
+              <th>Devolução</th>
+              <th class="no-print" style="text-align:center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="paginacao">
+        <span class="info" id="pagina-info">Página 1 de 1 - 0 itens</span>
+        <div class="botoes">
+          <button id="btn-pagina-anterior" disabled>◀ Anterior</button>
+          <button id="btn-proxima-pagina">Próxima ▶</button>
         </div>
       </div>
     </div>
 
-    <div class="sce-panel">
-      <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos</div>
-      <table class="striped" id="tabela-equipamentos">
-        <thead>
-          <tr>
-            <th class="no-print"><label><input type="checkbox" id="check-todos"><span></span></label></th>
-            <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th>Manutenção</th>
-            <th>Devolução</th>
-            <th class="no-print">Ações</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <div class="row no-print" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
-        <button class="btn-flat" id="btn-pagina-anterior"><i class="material-icons left">chevron_left</i>Anterior</button>
-        <span id="pagina-info" style="color:var(--sce-muted);font-size:.9rem;"></span>
-        <button class="btn-flat" id="btn-proxima-pagina">Próxima<i class="material-icons right">chevron_right</i></button>
-      </div>
-    </div>
   </div>
 
   <!-- ========== MODAIS ========== -->
+  <!-- Modal de seleção de tipo de empréstimo -->
+  <div id="modal-tipo-emprestimo" class="modal">
+    <div class="modal-content">
+      <h5><i class="material-icons left"
+          style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Tipo de empréstimo</h5>
+      <p>Selecione o tipo de empréstimo:</p>
+      <div class="row" style="margin-top:20px;">
+        <div class="col s12 m6">
+          <button class="btn waves-effect waves-light" style="width:100%;height:100px;"
+            onclick="selecionarTipoEmprestimo('interno')">
+            <i class="material-icons left" style="font-size:2rem;">business</i>
+            <div style="line-height:1.5;">Empréstimo<br>Interno</div>
+            <small>Para responsável da mesma unidade</small>
+          </button>
+        </div>
+        <div class="col s12 m6">
+          <button class="btn waves-effect waves-light" style="width:100%;height:100px;background-color:#1a5f7a;"
+            onclick="selecionarTipoEmprestimo('interestadual')">
+            <i class="material-icons left" style="font-size:2rem;">school</i>
+            <div style="line-height:1.5;">Empréstimo<br>Inter-escolar</div>
+            <small>Para outra unidade/escola</small>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+    </div>
+  </div>
 
   <!-- Modal de empréstimo -->
   <div id="modal-emprestimo" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Registrar empréstimo</h5>
+      <h5><i class="material-icons left"
+          style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Registrar empréstimo</h5>
+      <input type="hidden" id="emp-tipo" value="interno">
       <div class="row">
-        <div class="input-field col s6">
-          <input type="text" id="emp-responsavel">
-          <label for="emp-responsavel">Responsável</label>
+        <div class="input-field col s12" id="emp-campo-escola" style="display:none;">
+          <select id="emp-escola-destino" class="browser-default">
+            <option value="" disabled selected>Selecione a escola de destino</option>
+          </select>
+          <label>Escola de destino *</label>
         </div>
-        <div class="input-field col s3">
-          <input type="text" id="emp-cpf">
-          <label for="emp-cpf">CPF</label>
-        </div>
-        <div class="input-field col s3">
-          <input type="email" id="emp-email">
-          <label for="emp-email">E-mail</label>
-        </div>
-        <div class="input-field col s4">
-          <input type="date" id="emp-prevista">
-          <label for="emp-prevista" class="active">Previsão de devolução</label>
-        </div>
-        <div class="input-field col s8">
-          <textarea id="emp-observacoes" class="materialize-textarea"></textarea>
-          <label for="emp-observacoes">Observações</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="emp-responsavel"><label
+            for="emp-responsavel">Responsável</label></div>
+        <div class="input-field col s3"><input type="text" id="emp-cpf"><label for="emp-cpf">CPF</label></div>
+        <div class="input-field col s3"><input type="email" id="emp-email"><label for="emp-email">E-mail</label></div>
+        <div class="input-field col s4"><input type="date" id="emp-prevista"><label for="emp-prevista"
+            class="active">Previsão de devolução</label></div>
+        <div class="input-field col s8"><textarea id="emp-observacoes" class="materialize-textarea"></textarea><label
+            for="emp-observacoes">Observações</label></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -169,48 +705,54 @@
   <!-- Modal de cadastro -->
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
-
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar
+        equipamento</h5>
       <div class="row">
         <div class="input-field col s6">
-          <select id="new-categoria" onchange="onCategoriaChange('new')"><option value="" disabled selected>Selecione</option></select>
-          <label>Categoria *</label>
+          <select id="new-categoria" onchange="onCategoriaChange('new')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="obrigatorio">Categoria</label>
         </div>
-        <div class="input-field col s12 campo-outro" id="new-outro-categoria-container">
-          <input type="text" id="new-outro-categoria" placeholder="Digite a categoria">
-          <label for="new-outro-categoria">Outra categoria</label>
+        <div class="input-field col s6" id="new-marca-container">
+          <select id="new-marca" onchange="onMarcaChange('new')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="obrigatorio">Marca</label>
         </div>
-        <div class="input-field col s6">
-          <select id="new-marca" onchange="onMarcaChange('new')"><option value="" disabled selected>Selecione</option></select>
-          <label>Marca *</label>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="new-marca-text-container" style="display:none;">
+          <input type="text" id="new-marca-text"><label for="new-marca-text" class="obrigatorio">Marca</label>
+        </div>
+        <div class="input-field col s6" id="new-modelo-container">
+          <select id="new-modelo" onchange="onModeloChange('new')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="obrigatorio">Modelo</label>
+        </div>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="new-modelo-text-container" style="display:none;">
+          <input type="text" id="new-modelo-text" onchange="onModeloTextChange('new')"><label for="new-modelo-text"
+            class="obrigatorio">Modelo</label>
         </div>
         <div class="input-field col s12 campo-outro" id="new-outro-marca-container">
-          <input type="text" id="new-outro-marca" placeholder="Digite a marca">
-          <label for="new-outro-marca">Outra marca</label>
-        </div>
-        <div class="input-field col s6">
-          <select id="new-modelo"><option value="" disabled selected>Selecione</option></select>
-          <label>Modelo *</label>
+          <input type="text" id="new-outro-marca" placeholder="Digite a marca"><label for="new-outro-marca">Outra
+            marca</label>
         </div>
         <div class="input-field col s12 campo-outro" id="new-outro-modelo-container">
-          <input type="text" id="new-outro-modelo" placeholder="Digite o modelo">
-          <label for="new-outro-modelo">Outro modelo</label>
+          <input type="text" id="new-outro-modelo" placeholder="Digite o modelo"><label for="new-outro-modelo">Outro
+            modelo</label>
         </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-patrimonio">
-          <label for="new-patrimonio">Patrimônio *</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="new-patrimonio"><label for="new-patrimonio"
+            class="obrigatorio">Patrimônio</label></div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
-          <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea>
-          <label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio *</label>
+          <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea><label
+            for="new-justificativaPatrimonio" class="obrigatorio">Justificativa para ausência de Patrimônio</label>
         </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-numeroSerie">
-          <label for="new-numeroSerie">Número de série *</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="new-numeroSerie"><label for="new-numeroSerie"
+            class="obrigatorio">Número de série</label></div>
         <div class="input-field col s12" id="campo-justificativa-serie" style="display:none;">
-          <textarea id="new-justificativaNumeroSerie" class="materialize-textarea"></textarea>
-          <label for="new-justificativaNumeroSerie">Justificativa para ausência de Número de Série *</label>
+          <textarea id="new-justificativaNumeroSerie" class="materialize-textarea"></textarea><label
+            for="new-justificativaNumeroSerie" class="obrigatorio">Justificativa para ausência de Número de
+            Série</label>
         </div>
         <div class="input-field col s6">
           <select id="new-status" onchange="atualizarCamposCondicionaisCadastro()">
@@ -220,50 +762,34 @@
             <option value="Extraviado">Extraviado</option>
             <option value="Inservível">Inservível</option>
             <option value="Em verificação">Em verificação</option>
+            <option value="Quebrado">Quebrado</option>
           </select>
-          <label>Status *</label>
+          <label class="obrigatorio">Status</label>
         </div>
-        <div class="input-field col s6">
-          <select id="new-vinculadoBlueMonitor">
-            <option value="Não" selected>Não</option>
-            <option value="Sim">Sim</option>
-          </select>
-          <label>Vinculado no BlueMonitor?</label>
+        <div class="input-field col s12" id="campo-quebrado-cadastro" style="display:none;">
+          <textarea id="new-descricaoQuebrado" class="materialize-textarea"></textarea>
+          <label for="new-descricaoQuebrado" class="obrigatorio">Descrição da avaria (obrigatório)</label>
         </div>
         <div class="input-field col s12" id="campo-bo-cadastro" style="display:none;">
-          <div style="margin-top:10px;">
-            <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
+          <div style="margin-top:10px;"><label style="font-size:.8rem;color:var(--sce-muted);"
+              class="obrigatorio">Anexar B.O. (obrigatório)</label>
             <input type="file" id="new-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
           </div>
         </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-sistemaOperacional">
-          <label for="new-sistemaOperacional">Sistema operacional</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-processador">
-          <label for="new-processador">Processador</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-memoriaRAM">
-          <label for="new-memoriaRAM">Memória RAM</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-armazenamento">
-          <label for="new-armazenamento">Armazenamento</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-tamanhoTela">
-          <label for="new-tamanhoTela">Tamanho da tela</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-responsavelAtual">
-          <label for="new-responsavelAtual">Responsável atual</label>
-        </div>
-        <div class="input-field col s12">
-          <textarea id="new-observacoes" class="materialize-textarea"></textarea>
-          <label for="new-observacoes">Observações</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="new-sistemaOperacional"><label
+            for="new-sistemaOperacional">Sistema operacional</label></div>
+        <div class="input-field col s6"><input type="text" id="new-processador"><label
+            for="new-processador">Processador</label></div>
+        <div class="input-field col s6"><input type="text" id="new-memoriaRAM"><label for="new-memoriaRAM">Memória
+            RAM</label></div>
+        <div class="input-field col s6"><input type="text" id="new-armazenamento"><label
+            for="new-armazenamento">Armazenamento</label></div>
+        <div class="input-field col s6"><input type="text" id="new-tamanhoTela"><label for="new-tamanhoTela">Tamanho da
+            tela</label></div>
+        <div class="input-field col s6"><input type="text" id="new-responsavelAtual"><label
+            for="new-responsavelAtual">Responsável atual</label></div>
+        <div class="input-field col s12"><textarea id="new-observacoes" class="materialize-textarea"></textarea><label
+            for="new-observacoes">Observações</label></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -275,49 +801,56 @@
   <!-- Modal de edição -->
   <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar
+        equipamento</h5>
       <input type="hidden" id="edit-id">
-
       <div class="row">
         <div class="input-field col s6">
-          <select id="edit-categoria" onchange="onCategoriaChange('edit')"><option value="" disabled selected>Selecione</option></select>
-          <label class="active">Categoria *</label>
+          <select id="edit-categoria" onchange="onCategoriaChange('edit')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="active obrigatorio">Categoria</label>
         </div>
-        <div class="input-field col s12 campo-outro" id="edit-outro-categoria-container">
-          <input type="text" id="edit-outro-categoria" placeholder="Digite a categoria">
-          <label for="edit-outro-categoria">Outra categoria</label>
+        <div class="input-field col s6" id="edit-marca-container">
+          <select id="edit-marca" onchange="onMarcaChange('edit')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="active obrigatorio">Marca</label>
         </div>
-        <div class="input-field col s6">
-          <select id="edit-marca" onchange="onMarcaChange('edit')"><option value="" disabled selected>Selecione</option></select>
-          <label class="active">Marca *</label>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="edit-marca-text-container" style="display:none;">
+          <input type="text" id="edit-marca-text"><label for="edit-marca-text" class="active obrigatorio">Marca</label>
+        </div>
+        <div class="input-field col s6" id="edit-modelo-container">
+          <select id="edit-modelo" onchange="onModeloChange('edit')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="active obrigatorio">Modelo</label>
+        </div>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="edit-modelo-text-container" style="display:none;">
+          <input type="text" id="edit-modelo-text" onchange="onModeloTextChange('edit')"><label for="edit-modelo-text"
+            class="active obrigatorio">Modelo</label>
         </div>
         <div class="input-field col s12 campo-outro" id="edit-outro-marca-container">
-          <input type="text" id="edit-outro-marca" placeholder="Digite a marca">
-          <label for="edit-outro-marca">Outra marca</label>
-        </div>
-        <div class="input-field col s6">
-          <select id="edit-modelo"><option value="" disabled selected>Selecione</option></select>
-          <label class="active">Modelo *</label>
+          <input type="text" id="edit-outro-marca" placeholder="Digite a marca"><label for="edit-outro-marca">Outra
+            marca</label>
         </div>
         <div class="input-field col s12 campo-outro" id="edit-outro-modelo-container">
-          <input type="text" id="edit-outro-modelo" placeholder="Digite o modelo">
-          <label for="edit-outro-modelo">Outro modelo</label>
+          <input type="text" id="edit-outro-modelo" placeholder="Digite o modelo"><label for="edit-outro-modelo">Outro
+            modelo</label>
         </div>
-        <div class="input-field col s6">
-          <input type="text" id="edit-patrimonio">
-          <label for="edit-patrimonio" class="active">Patrimônio *</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="edit-patrimonio"><label for="edit-patrimonio"
+            class="active obrigatorio">Patrimônio</label></div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
-          <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea>
-          <label for="edit-justificativaPatrimonio" class="active">Justificativa para ausência de Patrimônio *</label>
+          <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea><label
+            for="edit-justificativaPatrimonio" class="active obrigatorio">Justificativa para ausência de
+            Patrimônio</label>
         </div>
-        <div class="input-field col s6">
-          <input type="text" id="edit-numeroSerie">
-          <label for="edit-numeroSerie" class="active">Número de série *</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="edit-numeroSerie"><label for="edit-numeroSerie"
+            class="active obrigatorio">Número de série</label></div>
         <div class="input-field col s12" id="campo-justificativa-serie-edit" style="display:none;">
-          <textarea id="edit-justificativaNumeroSerie" class="materialize-textarea"></textarea>
-          <label for="edit-justificativaNumeroSerie" class="active">Justificativa para ausência de Número de Série *</label>
+          <textarea id="edit-justificativaNumeroSerie" class="materialize-textarea"></textarea><label
+            for="edit-justificativaNumeroSerie" class="active obrigatorio">Justificativa para ausência de Número de
+            Série</label>
         </div>
         <div class="input-field col s6">
           <select id="edit-status" onchange="atualizarCamposCondicionais()">
@@ -327,63 +860,41 @@
             <option value="Extraviado">Extraviado</option>
             <option value="Inservível">Inservível</option>
             <option value="Em verificação">Em verificação</option>
+            <option value="Quebrado">Quebrado</option>
           </select>
-          <label>Status *</label>
+          <label class="active obrigatorio">Status</label>
         </div>
-        <div class="input-field col s6">
-          <select id="edit-vinculadoBlueMonitor">
-            <option value="Não">Não</option>
-            <option value="Sim">Sim</option>
-          </select>
-          <label>Vinculado no BlueMonitor?</label>
-        </div>
-
         <div class="input-field col s12" id="campo-chamado" style="display:none;">
-          <input type="text" id="edit-numeroChamadoManutencao">
-          <label for="edit-numeroChamadoManutencao" class="active">Nº do chamado de manutenção</label>
+          <input type="text" id="edit-numeroChamadoManutencao"><label for="edit-numeroChamadoManutencao"
+            class="active obrigatorio">Nº do chamado de manutenção</label>
         </div>
         <div class="input-field col s12" id="campo-bo" style="display:none;">
-          <input type="text" id="edit-boletimOcorrencia">
-          <label for="edit-boletimOcorrencia" class="active">Nº do Boletim de Ocorrência</label>
-          <div style="margin-top:10px;">
-            <label style="font-size:.8rem;color:var(--sce-muted);">Anexar B.O. (obrigatório)</label>
-            <input type="file" id="edit-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
-            <span id="anexo-bo-existente" style="font-size:.78rem;"></span>
+          <input type="text" id="edit-boletimOcorrencia"><label for="edit-boletimOcorrencia"
+            class="active obrigatorio">Nº do Boletim de Ocorrência</label>
+          <div style="margin-top:10px;"><label style="font-size:.8rem;color:var(--sce-muted);"
+              class="obrigatorio">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="edit-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png"><span id="anexo-bo-existente"
+              style="font-size:.78rem;"></span>
           </div>
         </div>
-        <div class="input-field col s12" id="campo-justificativa" style="display:none;">
-          <textarea id="edit-justificativaVerificacao" class="materialize-textarea"></textarea>
-          <label for="edit-justificativaVerificacao" class="active">Justificativa da verificação</label>
+        <div class="input-field col s12" id="campo-quebrado" style="display:none;">
+          <textarea id="edit-descricaoQuebrado" class="materialize-textarea"></textarea>
+          <label for="edit-descricaoQuebrado" class="active obrigatorio">Descrição da avaria (obrigatório)</label>
         </div>
-
-        <div class="input-field col s6">
-          <input type="text" id="edit-sistemaOperacional">
-          <label for="edit-sistemaOperacional" class="active">Sistema operacional</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="edit-processador">
-          <label for="edit-processador" class="active">Processador</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="edit-memoriaRAM">
-          <label for="edit-memoriaRAM" class="active">Memória RAM</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="edit-armazenamento">
-          <label for="edit-armazenamento" class="active">Armazenamento</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="edit-tamanhoTela">
-          <label for="edit-tamanhoTela" class="active">Tamanho da tela</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="edit-responsavelAtual">
-          <label for="edit-responsavelAtual" class="active">Responsável atual</label>
-        </div>
-        <div class="input-field col s12">
-          <textarea id="edit-observacoes" class="materialize-textarea"></textarea>
-          <label for="edit-observacoes" class="active">Observações</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="edit-sistemaOperacional"><label
+            for="edit-sistemaOperacional" class="active">Sistema operacional</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-processador"><label for="edit-processador"
+            class="active">Processador</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-memoriaRAM"><label for="edit-memoriaRAM"
+            class="active">Memória RAM</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-armazenamento"><label for="edit-armazenamento"
+            class="active">Armazenamento</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-tamanhoTela"><label for="edit-tamanhoTela"
+            class="active">Tamanho da tela</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-responsavelAtual"><label for="edit-responsavelAtual"
+            class="active">Responsável atual</label></div>
+        <div class="input-field col s12"><textarea id="edit-observacoes" class="materialize-textarea"></textarea><label
+            for="edit-observacoes" class="active">Observações</label></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -395,7 +906,8 @@
   <!-- Modal de histórico -->
   <div id="modal-historico" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">history</i>Histórico de alterações</h5>
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">history</i>Histórico de
+        alterações</h5>
       <p><strong>Equipamento:</strong> <span id="historico-patrimonio"></span> – <span id="historico-modelo"></span></p>
       <table class="striped" id="tabela-historico">
         <thead>
@@ -410,57 +922,60 @@
         <tbody></tbody>
       </table>
     </div>
+    <div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div>
+  </div>
+
+  <!-- Modal de confirmação de remoção individual (ESTAVA FALTANDO — botão "Excluir" de cada linha dependia dele) -->
+  <div id="modal-confirmar-remocao" class="modal">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5>
+      <p>Esta ação marcará o item como removido. Deseja continuar?</p>
+    </div>
     <div class="modal-footer">
-      <a class="modal-close btn-flat">Fechar</a>
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn red" id="btn-confirmar-remocao">Remover</a>
     </div>
   </div>
 
-  <!-- Modal de gerenciamento de usuários (AdminFilial/Matriz) -->
+  <!-- Modal de gerenciamento de usuários -->
   <? if (session.nivel === 'AdminFilial' || session.nivel === 'Matriz') { ?>
   <div id="modal-gerenciar-usuarios" class="modal modal-fixed-footer">
     <div class="modal-content">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">people</i>Gerenciar usuários</h5>
-
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">people</i>Gerenciar
+        usuários</h5>
       <div style="margin-bottom:20px;">
-        <button class="btn waves-effect" id="btn-novo-usuario">
-          <i class="material-icons left">person_add</i>Novo usuário
-        </button>
-        <button class="btn-flat" id="btn-atualizar-usuarios">
-          <i class="material-icons left">refresh</i>Atualizar
-        </button>
+        <button class="btn waves-effect" id="btn-novo-usuario"><i class="material-icons left">person_add</i>Novo
+          usuário</button>
+        <button class="btn-flat" id="btn-atualizar-usuarios"><i
+            class="material-icons left">refresh</i>Atualizar</button>
       </div>
-
       <table class="striped" id="tabela-usuarios">
         <thead>
           <tr>
-            <th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Ações</th>
+            <th>E-mail</th>
+            <th>Nome</th>
+            <th>Nível</th>
+            <th>Filial</th>
+            <th>Status</th>
+            <th>Ações</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
-    <div class="modal-footer">
-      <a class="modal-close btn-flat">Fechar</a>
-    </div>
+    <div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div>
   </div>
 
-  <!-- Modal de edição/cadastro de usuário (simplificado para AdminFilial) -->
   <div id="modal-editar-usuario" class="modal">
     <div class="modal-content">
       <h5 id="titulo-modal-usuario">Adicionar usuário</h5>
       <input type="hidden" id="usuario-email-original">
-
       <div class="row">
-        <div class="input-field col s12">
-          <input type="email" id="usuario-email">
-          <label for="usuario-email">E-mail</label>
-        </div>
-        <div class="input-field col s12">
-          <input type="text" id="usuario-nome">
-          <label for="usuario-nome">Nome</label>
+        <div class="input-field col s12"><input type="email" id="usuario-email"><label
+            for="usuario-email">E-mail</label></div>
+        <div class="input-field col s12"><input type="text" id="usuario-nome"><label for="usuario-nome">Nome</label>
         </div>
         <? if (session.nivel === 'Matriz') { ?>
-        <!-- Para Matriz: exibe os campos completos -->
         <div class="input-field col s6">
           <select id="usuario-nivel">
             <option value="Matriz">Matriz</option>
@@ -470,12 +985,9 @@
           </select>
           <label>Nível</label>
         </div>
-        <div class="input-field col s6">
-          <input type="text" id="usuario-filial" value="<?= session.filial ?>">
-          <label for="usuario-filial">Filial</label>
-        </div>
+        <div class="input-field col s6"><input type="text" id="usuario-filial" value="<?= session.filial ?>"><label
+            for="usuario-filial">Filial</label></div>
         <? } else { ?>
-        <!-- Para AdminFilial: campos ocultos e fixos -->
         <input type="hidden" id="usuario-nivel" value="Filial">
         <input type="hidden" id="usuario-filial" value="<?= session.filial ?>">
         <? } ?>
@@ -489,12 +1001,16 @@
   <? } ?>
 
   <footer class="sce-footer">
-    <div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;">
+    <div class="sce-container"
+      style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;">
       <span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span>
-      <a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a>
-      <a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a>
-      <a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a>
-      <span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.1.0</span>
+      <a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank"
+        style="margin-left:12px;color:var(--sce-primary);">Lenovo</a>
+      <a href="https://www.multilaser.com.br/suporte" target="_blank"
+        style="margin-left:12px;color:var(--sce-primary);">Multilaser</a>
+      <a href="https://www.positivotecnologia.com.br/suporte" target="_blank"
+        style="margin-left:12px;color:var(--sce-primary);">Positivo</a>
+      <span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.9.0</span>
     </div>
   </footer>
 
@@ -502,1388 +1018,1846 @@
 
 <script>
   // ================================================================
-  // TOKEN E VARIÁVEIS GLOBAIS
+  // FUNÇÕES DE LOADING (FALLBACK)
   // ================================================================
-  (function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = urlParams.get('token');
+  if (typeof sceShowLoading !== 'function') {
+    window.sceShowLoading = function () {
+      var el = document.getElementById('sce-loading-overlay');
+      if (el) el.classList.add('active');
+    };
+  }
+  if (typeof sceHideLoading !== 'function') {
+    window.sceHideLoading = function () {
+      var el = document.getElementById('sce-loading-overlay');
+      if (el) el.classList.remove('active');
+    };
+  }
+
+  // ================================================================
+  // TOKEN E AUTENTICAÇÃO
+  // ================================================================
+  (function () {
+    console.log('🔍 Iniciando captura de token...');
+    var urlParams = new URLSearchParams(window.location.search);
+    var tokenFromUrl = urlParams.get('token');
+    var tokenFromStorage = localStorage.getItem('sce_token');
+    var token = null;
+
     if (tokenFromUrl) {
-      localStorage.setItem('sce_token', tokenFromUrl);
-      console.log('✅ Token salvo no localStorage a partir da URL:', tokenFromUrl);
+      token = tokenFromUrl;
+      localStorage.setItem('sce_token', token);
+      console.log('✅ Token salvo do localStorage a partir da URL:', token);
+    } else if (tokenFromStorage) {
+      token = tokenFromStorage;
+      console.log('✅ Token carregado do localStorage:', token);
     } else {
-      console.warn('⚠️ Nenhum token encontrado na URL. Usando localStorage existente.');
+      console.error('❌ Nenhum token encontrado. Redirecionando...');
+      document.body.innerHTML = '<div style="text-align:center;padding:50px;font-family:sans-serif;"><h2>Sessão expirada</h2><p>Redirecionando para o login...</p></div>';
+      setTimeout(function () {
+        window.location.href = window.location.href.split('?')[0];
+      }, 2000);
+      return;
     }
+
+    window.SCE_TOKEN = token;
+    console.log('🔑 SCE_TOKEN definido:', window.SCE_TOKEN);
   })();
 
-  const SCE_TOKEN = localStorage.getItem('sce_token');
-  console.log('🔑 SCE_TOKEN:', SCE_TOKEN);
+  if (typeof window.SCE_TOKEN === 'undefined' || !window.SCE_TOKEN) {
+    console.warn('⏳ Token não disponível. Aguardando redirecionamento...');
+  } else {
+    (function () {
+      var SCE_TOKEN = window.SCE_TOKEN;
+      var USER_LEVEL = <?!= JSON.stringify(session.nivel || '') ?>;
+      var SESSION_EMAIL = <?!= JSON.stringify(session.email || '') ?>;
+      var SESSION_FILIAL = <?!= JSON.stringify(session.filial || '') ?>;
+      console.log('👤 Nível:', USER_LEVEL, '📧 Email:', SESSION_EMAIL);
 
-  if (!SCE_TOKEN) {
-    console.error('❌ Nenhum token encontrado. Redirecionando para login...');
-    M.toast({ html: 'Sessão expirada. Faça login novamente.' });
-    setTimeout(function() { window.location.href = window.location.href.split('?')[0]; }, 2000);
-  }
-
-  const USER_LEVEL = <?!= JSON.stringify(session.nivel || '') ?>;
-  const SESSION_EMAIL = <?!= JSON.stringify(session.email || '') ?>;
-  const SESSION_FILIAL = <?!= JSON.stringify(session.filial || '') ?>;
-  console.log('👤 Nível:', USER_LEVEL, '📧 Email:', SESSION_EMAIL);
-
-  // ================================================================
-  // VARIÁVEIS GLOBAIS
-  // ================================================================
-  let equipamentosCache = [];
-  let modalEdicaoInstance = null;
-  let modalCadastroInstance = null;
-  let modalEmprestimoInstance = null;
-  let modalUsuariosInstance = null;
-  let modalEditarUsuarioInstance = null;
-  let modalHistoricoInstance = null;
-  let equipamentosFiltrados = [];
-  let paginaAtual = 1;
-  const ITENS_POR_PAGINA = 25;
-  let sceChartStatus = null;
-  let itemEmEdicaoOriginal = null;
-
-  let ordemAtual = 'asc';
-  let campoOrdenacao = null;
-  let listasCache = null; // será populado com os dados processados da aba Listas
-
-  const CAMPOS_EDITAVEIS = [
-    'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
-    'numeroChamadoManutencao', 'boletimOcorrencia', 'justificativaVerificacao',
-    'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
-    'tamanhoTela', 'responsavelAtual', 'observacoes',
-    'justificativaPatrimonio', 'justificativaNumeroSerie'
-  ];
-
-  const CAMPOS_CADASTRO = [
-    'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
-    'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
-    'tamanhoTela', 'responsavelAtual', 'observacoes',
-    'justificativaPatrimonio', 'justificativaNumeroSerie'
-  ];
-
-  // ================================================================
-  // CARREGAR LISTAS (CATEGORIA, MARCA, MODELO) - CASCATA + "OUTRO"
-  // ================================================================
-  function carregarListasCadastro() {
-    console.log('🟢 carregarListasCadastro() iniciado...');
-    google.script.run
-      .withSuccessHandler(function (dados) {
-        console.log('✅ Listas recebidas:', dados);
-        processarListas(dados);
-        preencherSelectCategoria('new');
-        preencherSelectCategoria('edit');
-      })
-      .withFailureHandler(function (err) {
-        console.error('❌ Erro ao carregar listas:', err.message);
-        M.toast({ html: 'Erro ao carregar listas. Recarregue a página.' });
-      })
-      .getListasCadastro(SCE_TOKEN);
-  }
-
-  function processarListas(combinacoes) {
-    const categorias = new Set();
-    const marcasPorCategoria = {};
-    const modelosPorCategoriaMarca = {};
-
-    combinacoes.forEach(item => {
-      const cat = item.categoria;
-      const marca = item.marca;
-      const modelo = item.modelo;
-      if (!cat || !marca || !modelo) return;
-      categorias.add(cat);
-      if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
-      marcasPorCategoria[cat].add(marca);
-      if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};
-      if (!modelosPorCategoriaMarca[cat][marca]) modelosPorCategoriaMarca[cat][marca] = new Set();
-      modelosPorCategoriaMarca[cat][marca].add(modelo);
-    });
-
-    listasCache = {
-      combinacoes: combinacoes,
-      categorias: Array.from(categorias).sort(),
-      marcasPorCategoria: marcasPorCategoria,
-      modelosPorCategoriaMarca: modelosPorCategoriaMarca
-    };
-  }
-
-  function preencherSelectCategoria(prefixo) {
-    const select = document.getElementById(prefixo + '-categoria');
-    if (!select || !listasCache) return;
-    const valorAtual = select.value;
-    select.innerHTML = '<option value="" disabled selected>Selecione</option>' +
-      listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
-      '<option value="__outro__">Outro (digitar)</option>';
-    if (valorAtual && listasCache.categorias.includes(valorAtual)) {
-      select.value = valorAtual;
-    } else if (valorAtual && valorAtual !== '__outro__') {
-      select.value = '__outro__';
-      const input = document.getElementById(prefixo + '-outro-categoria');
-      if (input) input.value = valorAtual;
-      toggleOutroCampo(prefixo, 'categoria');
-    } else {
-      select.value = valorAtual;
-      toggleOutroCampo(prefixo, 'categoria');
-    }
-    M.FormSelect.init(select);
-    if (select.value && select.value !== '__outro__') {
-      popularMarcas(prefixo, select.value);
-      limparModelo(prefixo);
-    } else {
-      limparMarcaModelo(prefixo);
-    }
-  }
-
-  function popularMarcas(prefixo, categoria) {
-    const selectMarca = document.getElementById(prefixo + '-marca');
-    if (!selectMarca || !listasCache) return;
-    const marcasSet = listasCache.marcasPorCategoria[categoria] || new Set();
-    const marcas = Array.from(marcasSet).sort();
-    const valorAtual = selectMarca.value;
-    selectMarca.innerHTML = '<option value="" disabled selected>Selecione uma marca</option>' +
-      marcas.map(m => `<option value="${m}">${m}</option>`).join('') +
-      '<option value="__outro__">Outro (digitar)</option>';
-    if (valorAtual && marcas.includes(valorAtual)) {
-      selectMarca.value = valorAtual;
-    } else if (valorAtual && valorAtual !== '__outro__') {
-      selectMarca.value = '__outro__';
-      const input = document.getElementById(prefixo + '-outro-marca');
-      if (input) input.value = valorAtual;
-      toggleOutroCampo(prefixo, 'marca');
-    } else {
-      selectMarca.value = valorAtual;
-      toggleOutroCampo(prefixo, 'marca');
-    }
-    M.FormSelect.init(selectMarca);
-    if (selectMarca.value && selectMarca.value !== '__outro__') {
-      popularModelos(prefixo, categoria, selectMarca.value);
-    } else {
-      limparModelo(prefixo);
-    }
-  }
-
-  function popularModelos(prefixo, categoria, marca) {
-    const selectModelo = document.getElementById(prefixo + '-modelo');
-    if (!selectModelo || !listasCache) return;
-    const modelosSet = listasCache.modelosPorCategoriaMarca[categoria]?.[marca] || new Set();
-    const modelos = Array.from(modelosSet).sort();
-    const valorAtual = selectModelo.value;
-    selectModelo.innerHTML = '<option value="" disabled selected>Selecione um modelo</option>' +
-      modelos.map(m => `<option value="${m}">${m}</option>`).join('') +
-      '<option value="__outro__">Outro (digitar)</option>';
-    if (valorAtual && modelos.includes(valorAtual)) {
-      selectModelo.value = valorAtual;
-    } else if (valorAtual && valorAtual !== '__outro__') {
-      selectModelo.value = '__outro__';
-      const input = document.getElementById(prefixo + '-outro-modelo');
-      if (input) input.value = valorAtual;
-      toggleOutroCampo(prefixo, 'modelo');
-    } else {
-      selectModelo.value = valorAtual;
-      toggleOutroCampo(prefixo, 'modelo');
-    }
-    M.FormSelect.init(selectModelo);
-  }
-
-  function limparMarcaModelo(prefixo) {
-    const selectMarca = document.getElementById(prefixo + '-marca');
-    if (selectMarca) {
-      selectMarca.innerHTML = '<option value="" disabled selected>Selecione a categoria</option>';
-      M.FormSelect.init(selectMarca);
-    }
-    limparModelo(prefixo);
-  }
-
-  function limparModelo(prefixo) {
-    const selectModelo = document.getElementById(prefixo + '-modelo');
-    if (selectModelo) {
-      selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
-      M.FormSelect.init(selectModelo);
-    }
-  }
-
-  function toggleOutroCampo(prefixo, tipo) {
-    const select = document.getElementById(prefixo + '-' + tipo);
-    const container = document.getElementById(prefixo + '-outro-' + tipo + '-container');
-    const input = document.getElementById(prefixo + '-outro-' + tipo);
-    if (!select || !container || !input) return;
-    if (select.value === '__outro__') {
-      container.style.display = 'block';
-      input.focus();
-    } else {
-      container.style.display = 'none';
-      input.value = '';
-    }
-  }
-
-  // Eventos de cascata
-  function onCategoriaChange(prefixo) {
-    const select = document.getElementById(prefixo + '-categoria');
-    toggleOutroCampo(prefixo, 'categoria');
-    if (select && select.value && select.value !== '__outro__') {
-      popularMarcas(prefixo, select.value);
-      limparModelo(prefixo);
-    } else {
-      limparMarcaModelo(prefixo);
-    }
-  }
-
-  function onMarcaChange(prefixo) {
-    const selectMarca = document.getElementById(prefixo + '-marca');
-    const selectCategoria = document.getElementById(prefixo + '-categoria');
-    toggleOutroCampo(prefixo, 'marca');
-    if (selectMarca && selectCategoria && selectMarca.value && selectMarca.value !== '__outro__' && selectCategoria.value && selectCategoria.value !== '__outro__') {
-      popularModelos(prefixo, selectCategoria.value, selectMarca.value);
-    } else {
-      limparModelo(prefixo);
-    }
-  }
-
-  // ================================================================
-  // FUNÇÕES DE JUSTIFICATIVA
-  // ================================================================
-  function configurarJustificativas(prefixo) {
-    const campoPat = document.getElementById(prefixo + '-patrimonio');
-    const campoSerie = document.getElementById(prefixo + '-numeroSerie');
-    const justPatContainer = document.getElementById('campo-justificativa-patrimonio' + (prefixo === 'edit' ? '-edit' : ''));
-    const justSerieContainer = document.getElementById('campo-justificativa-serie' + (prefixo === 'edit' ? '-edit' : ''));
-    const justPatInput = document.getElementById(prefixo + '-justificativaPatrimonio');
-    const justSerieInput = document.getElementById(prefixo + '-justificativaNumeroSerie');
-
-    if (!campoPat || !campoSerie || !justPatContainer || !justSerieContainer) return;
-
-    function verificarPatrimonio() {
-      if (campoPat.value.trim() === '') {
-        justPatContainer.style.display = 'block';
-        justPatInput.required = true;
-      } else {
-        justPatContainer.style.display = 'none';
-        justPatInput.value = '';
-        justPatInput.required = false;
-      }
-    }
-
-    function verificarSerie() {
-      if (campoSerie.value.trim() === '') {
-        justSerieContainer.style.display = 'block';
-        justSerieInput.required = true;
-      } else {
-        justSerieContainer.style.display = 'none';
-        justSerieInput.value = '';
-        justSerieInput.required = false;
-      }
-    }
-
-    campoPat.addEventListener('input', verificarPatrimonio);
-    campoSerie.addEventListener('input', verificarSerie);
-    verificarPatrimonio();
-    verificarSerie();
-  }
-
-  // ================================================================
-  // CARREGAR EQUIPAMENTOS
-  // ================================================================
-  function carregarEquipamentos() {
-    console.log('🟢 carregarEquipamentos() INICIADA');
-    if (!SCE_TOKEN) {
-      console.error('❌ Token não encontrado.');
-      M.toast({ html: 'Token não encontrado. Faça login novamente.' });
-      return;
-    }
-    sceShowLoading();
-    google.script.run
-      .withSuccessHandler(function (equipamentos) {
-        console.log('✅ equipamentos recebidos:', equipamentos ? equipamentos.length : 0);
-        equipamentosCache = equipamentos || [];
-        equipamentosCache.forEach(function(item) {
-          if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
-            const hoje = new Date();
-            const prevista = new Date(item.dataPrevistaDevolucao);
-            item.emAtraso = prevista < hoje;
-          } else {
-            item.emAtraso = false;
-          }
-        });
-        atualizarFiltrosOpcoes(equipamentosCache);
-        aplicarFiltros();
-        sceHideLoading();
-      })
-      .withFailureHandler(function (err) {
-        console.error('❌ Erro na chamada:', err);
-        M.toast({ html: 'Erro ao carregar: ' + err.message });
-        sceHideLoading();
-      })
-      .getEquipamentosDaFilial(SCE_TOKEN);
-  }
-
-  // ================================================================
-  // FILTROS RÁPIDOS
-  // ================================================================
-  function inicializarFiltrosRapidos() {
-    const botoes = document.querySelectorAll('.btn-filtro');
-    botoes.forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        botoes.forEach(function(b) { b.classList.remove('ativo'); });
-        this.classList.add('ativo');
-        const filtro = this.dataset.filtro;
-        const selectStatus = document.getElementById('filtro-status');
-        if (filtro === 'todos') {
-          selectStatus.value = '';
-        } else {
-          selectStatus.value = filtro;
+      // ================================================================
+      // FUNÇÕES DE VERIFICAÇÃO DE TOKEN E TRATAMENTO DE ERRO
+      // ================================================================
+      function verificarToken() {
+        if (!SCE_TOKEN) {
+          M.toast({ html: 'Sessão expirada. Faça login novamente.' });
+          setTimeout(function () { window.location.href = window.location.href.split('?')[0]; }, 2000);
+          return false;
         }
-        M.FormSelect.init(selectStatus);
-        aplicarFiltros();
-      });
-    });
-  }
-
-  // ================================================================
-  // ORDENAÇÃO
-  // ================================================================
-  function ordenarTabela(campo) {
-    if (campoOrdenacao === campo) {
-      ordemAtual = ordemAtual === 'asc' ? 'desc' : 'asc';
-    } else {
-      campoOrdenacao = campo;
-      ordemAtual = 'asc';
-    }
-
-    equipamentosFiltrados.sort(function (a, b) {
-      const valA = (a[campo] || '').toString().toLowerCase();
-      const valB = (b[campo] || '').toString().toLowerCase();
-      if (valA < valB) return ordemAtual === 'asc' ? -1 : 1;
-      if (valA > valB) return ordemAtual === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    document.querySelectorAll('.sortable').forEach(function(th) {
-      const icon = th.querySelector('.material-icons');
-      if (icon) icon.textContent = 'unfold_more';
-    });
-    const thAtual = document.querySelector('[data-sort="' + campo + '"]');
-    if (thAtual) {
-      const icon = thAtual.querySelector('.material-icons');
-      if (icon) icon.textContent = ordemAtual === 'asc' ? 'arrow_upward' : 'arrow_downward';
-    }
-
-    paginaAtual = 1;
-    renderTabelaEquipamentos(equipamentosFiltrados);
-  }
-
-  // ================================================================
-  // APLICAR FILTROS
-  // ================================================================
-  function aplicarFiltros() {
-    const busca = document.getElementById('filtro-busca').value.trim().toLowerCase();
-    const status = document.getElementById('filtro-status').value;
-    const categoria = document.getElementById('filtro-categoria').value;
-    equipamentosFiltrados = equipamentosCache.filter(function (item) {
-      if (status && item.status !== status) return false;
-      if (categoria && item.categoria !== categoria) return false;
-      if (!busca) return true;
-      return [item.patrimonio, item.numeroSerie, item.modelo].join(' ').toLowerCase().indexOf(busca) !== -1;
-    });
-    paginaAtual = 1;
-    renderTabelaEquipamentos(equipamentosFiltrados);
-    atualizarKpisEGrafico(equipamentosFiltrados);
-  }
-
-  // ================================================================
-  // RENDERIZAÇÃO
-  // ================================================================
-  function renderTabelaEquipamentos(equipamentos) {
-    const tbody = document.querySelector('#tabela-equipamentos tbody');
-    tbody.innerHTML = '';
-
-    if (!equipamentos || equipamentos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
-      document.getElementById('pagina-info').innerText = 'Página 0 de 0 - 0 itens';
-      return;
-    }
-
-    const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
-    const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
-    pagina.forEach(function (item) {
-      const tr = document.createElement('tr');
-      const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
-      tr.className = statusClass;
-
-      let badgeManutencao = '-';
-      if (item.statusManutencao) {
-        const statusManut = item.statusManutencao.toLowerCase().replace(/ /g, '-');
-        let badgeClass = 'badge-manutencao ';
-        if (statusManut === 'pendente') badgeClass += 'badge-pendente';
-        else if (statusManut === 'em-andamento') badgeClass += 'badge-em-andamento';
-        else if (statusManut === 'concluído') badgeClass += 'badge-concluído';
-        badgeManutencao = `<span class="${badgeClass}">${item.statusManutencao}</span>`;
+        return true;
       }
 
-      let indicadorAtraso = '-';
-      if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
-        const hoje = new Date();
-        const prevista = new Date(item.dataPrevistaDevolucao);
-        const atrasado = prevista < hoje;
-        const label = atrasado ? 'Atrasado' : 'Em dia';
-        const cls = atrasado ? 'badge-atrasado' : 'badge-em-dia';
-        indicadorAtraso = `<span class="badge-atraso ${cls}">${label}</span>`;
+      function tratarErroToken(err) {
+        console.error('❌ Erro:', err);
+        var msg = err.message || '';
+        if (msg.includes('Token inválido') || msg.includes('sessão expirada') || msg.includes('401')) {
+          M.toast({ html: 'Sessão expirada. Faça login novamente.' });
+          localStorage.removeItem('sce_token');
+          setTimeout(function () { window.location.href = window.location.href.split('?')[0]; }, 2000);
+          return true;
+        }
+        return false;
       }
 
-      tr.innerHTML =
-        '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
-        '<td>' + (item.categoria || '') + '</td>' +
-        '<td>' + (item.marca || '') + '</td>' +
-        '<td>' + (item.modelo || '') + '</td>' +
-        '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
-        '<td><strong>' + (item.status || '') + '</strong></td>' +
-        '<td>' + badgeManutencao + '</td>' +
-        '<td>' + indicadorAtraso + '</td>' +
-        '<td class="no-print">' +
-          '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
-          '<a class="btn-small waves-effect" onclick="abrirHistorico(\'' + item.id + '\')" title="Histórico"><i class="material-icons">history</i></a> ' +
-        '</td>';
-      tbody.appendChild(tr);
-    });
-    const totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));
-    document.getElementById('pagina-info').innerText = 'Página ' + paginaAtual + ' de ' + totalPaginas + ' - ' + equipamentos.length + ' itens';
-  }
+      // ================================================================
+      // VARIÁVEIS GLOBAIS
+      // ================================================================
+      var equipamentosCache = [];
+      var equipamentosFiltrados = [];
+      var paginaAtual = 1;
+      var ITENS_POR_PAGINA = 25;
+      var chartStatus = null;
+      var chartCategoria = null;
+      var ordemAtual = 'asc';
+      var campoOrdenacao = null;
+      var listasCache = null;
+      var especificacoesCache = {};
 
-  // ================================================================
-  // HISTÓRICO
-  // ================================================================
-  function abrirHistorico(equipamentoId) {
-    const item = equipamentosCache.find(e => e.id === equipamentoId);
-    if (!item) { M.toast({ html: 'Equipamento não encontrado.' }); return; }
+      var modalEdicaoInstance = null;
+      var modalCadastroInstance = null;
+      var modalTipoEmprestimoInstance = null;
+      var modalEmprestimoInstance = null;
+      var modalUsuariosInstance = null;
+      var modalEditarUsuarioInstance = null;
+      var modalHistoricoInstance = null;
+      var itemEmEdicaoOriginal = null;
 
-    document.getElementById('historico-patrimonio').innerText = item.patrimonio || 'Sem patrimônio';
-    document.getElementById('historico-modelo').innerText = item.modelo || 'Sem modelo';
+      var CAMPOS_EDITAVEIS = [
+        'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+        'numeroChamadoManutencao', 'boletimOcorrencia', 'descricaoQuebrado',
+        'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+        'tamanhoTela', 'responsavelAtual', 'observacoes',
+        'justificativaPatrimonio', 'justificativaNumeroSerie'
+      ];
 
-    const tbody = document.querySelector('#tabela-historico tbody');
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>';
+      var CAMPOS_CADASTRO = [
+        'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
+        'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+        'tamanhoTela', 'responsavelAtual', 'observacoes',
+        'justificativaPatrimonio', 'justificativaNumeroSerie', 'descricaoQuebrado'
+      ];
 
-    if (!modalHistoricoInstance) {
-      modalHistoricoInstance = M.Modal.init(document.getElementById('modal-historico'));
-    }
-    modalHistoricoInstance.open();
+      // ================================================================
+      // EXPORTA FUNÇÕES PARA O ESCOPO GLOBAL (ONCHANGE)
+      // ================================================================
+      window.onCategoriaChange = function (prefixo) {
+        var select = document.getElementById(prefixo + '-categoria');
+        var categoria = select.value;
+        toggleCamposMarcaModelo(prefixo);
+        if (categoria && categoria !== 'TV' && categoria !== 'Projetor') {
+          popularMarcas(prefixo, categoria);
+          limparModelo(prefixo);
+        } else {
+          limparMarcaModelo(prefixo);
+          document.getElementById(prefixo + '-outro-marca-container').style.display = 'none';
+          document.getElementById(prefixo + '-outro-modelo-container').style.display = 'none';
+        }
+        if (categoria === 'TV' || categoria === 'Projetor') {
+          limparCamposEspecificacao(prefixo);
+        }
+      };
 
-    google.script.run
-      .withSuccessHandler(function (registros) {
-        tbody.innerHTML = '';
-        if (!registros || registros.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sce-muted);">Nenhuma alteração registrada.</td></tr>';
+      window.onMarcaChange = function (prefixo) {
+        var selectMarca = document.getElementById(prefixo + '-marca');
+        var selectCategoria = document.getElementById(prefixo + '-categoria');
+        toggleOutroCampo(prefixo, 'marca');
+        if (selectMarca && selectCategoria && selectMarca.value && selectMarca.value !== '__outro__' && selectCategoria.value && selectCategoria.value !== 'TV' && selectCategoria.value !== 'Projetor') {
+          popularModelos(prefixo, selectCategoria.value, selectMarca.value);
+        } else {
+          limparModelo(prefixo);
+          limparCamposEspecificacao(prefixo);
+        }
+      };
+
+      window.onModeloChange = function (prefixo) {
+        var selectModelo = document.getElementById(prefixo + '-modelo');
+        var valor = selectModelo.value;
+        if (valor && valor !== '__outro__') {
+          preencherEspecificacoes(prefixo, valor);
+        } else {
+          limparCamposEspecificacao(prefixo);
+        }
+        if (valor === '__outro__') {
+          limparCamposEspecificacao(prefixo);
+        }
+      };
+
+      window.onModeloTextChange = function (prefixo) {
+        var input = document.getElementById(prefixo + '-modelo-text');
+        var valor = input.value.trim();
+        if (valor) {
+          preencherEspecificacoes(prefixo, valor);
+        } else {
+          limparCamposEspecificacao(prefixo);
+        }
+      };
+
+      // Novas funções chamadas via onchange/onclick no HTML precisam estar em window.*
+      window.atualizarCamposCondicionaisCadastro = function () {
+        atualizarCamposCondicionaisCadastro();
+      };
+      window.atualizarCamposCondicionais = function () {
+        atualizarCamposCondicionais();
+      };
+      window.editarEquipamento = function (id) {
+        editarEquipamento(id);
+      };
+      window.abrirHistorico = function (equipamentoId) {
+        abrirHistorico(equipamentoId);
+      };
+      window.abrirModalRemocao = function (id) {
+        abrirModalRemocao(id);
+      };
+      window.editarUsuarioUI = function (email) {
+        editarUsuarioUI(email);
+      };
+      window.removerUsuarioUI = function (email) {
+        removerUsuarioUI(email);
+      };
+      window.selecionarTipoEmprestimo = function (tipo) {
+        selecionarTipoEmprestimo(tipo);
+      };
+
+      function limparCamposEspecificacao(prefixo) {
+        var campos = ['sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento', 'tamanhoTela'];
+        campos.forEach(function (campo) {
+          var el = document.getElementById(prefixo + '-' + campo);
+          if (el) el.value = '';
+        });
+        M.updateTextFields();
+      }
+
+      function preencherEspecificacoes(prefixo, modelo) {
+        if (!modelo) return;
+        if (especificacoesCache[modelo]) {
+          console.log('📦 Especificações do modelo em cache:', modelo);
+          aplicarEspecificacoes(prefixo, especificacoesCache[modelo]);
           return;
         }
-        registros.forEach(function (r) {
-          const tr = document.createElement('tr');
-          tr.innerHTML =
-            '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
-            '<td>' + (r.autor || '') + '</td>' +
-            '<td><strong>' + (r.campo || '') + '</strong></td>' +
-            '<td>' + (r.valorAntigo || '-') + '</td>' +
-            '<td>' + (r.valorNovo || '-') + '</td>';
-          tbody.appendChild(tr);
+        console.log('🔍 Buscando especificações para o modelo:', modelo);
+        sceShowLoading();
+        google.script.run
+          .withSuccessHandler(function (dados) {
+            sceHideLoading();
+            console.log('✅ Especificações recebidas:', dados);
+            if (dados) {
+              especificacoesCache[modelo] = dados;
+              aplicarEspecificacoes(prefixo, dados);
+            } else {
+              limparCamposEspecificacao(prefixo);
+            }
+          })
+          .withFailureHandler(function (err) {
+            sceHideLoading();
+            console.error('❌ Erro ao buscar especificações:', err);
+            limparCamposEspecificacao(prefixo);
+          })
+          .getEspecificacoesModelo(modelo, SCE_TOKEN);
+      }
+
+      function aplicarEspecificacoes(prefixo, dados) {
+        if (!dados) return;
+        var campos = ['sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento', 'tamanhoTela'];
+        campos.forEach(function (campo) {
+          var el = document.getElementById(prefixo + '-' + campo);
+          if (el) el.value = dados[campo] || '';
         });
-      })
-      .withFailureHandler(function (err) {
-        tbody.innerHTML = '<tr><td colspan="5" style="color:#d32f2f;">Erro: ' + err.message + '</td></tr>';
-      })
-      .getHistoricoEquipamento(SCE_TOKEN, equipamentoId);
-  }
-
-  // ================================================================
-  // KPIS E GRÁFICOS
-  // ================================================================
-  function kpiCard_(icone, valor, label, extraClass) {
-    return '<div class="col s12 m3">' +
-      '<div class="sce-kpi ' + (extraClass || '') + '">' +
-        '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
-        '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
-      '</div></div>';
-  }
-
-  function atualizarKpisEGrafico(equipamentos) {
-    const porStatus = {};
-    equipamentos.forEach(function (item) {
-      const s = item.status || 'Não definido';
-      porStatus[s] = (porStatus[s] || 0) + 1;
-    });
-    const total = equipamentos.length;
-    const disponiveis = porStatus['Disponível'] || 0;
-    const manutencao = porStatus['Manutenção'] || 0;
-    const quebrados = porStatus['Quebrado'] || 0;
-    const inserviveis = porStatus['Inservível'] || 0;
-    const extraviado = porStatus['Extraviado'] || 0;
-    const emVerificacao = porStatus['Em verificação'] || 0;
-
-    document.getElementById('kpis').innerHTML =
-      kpiCard_('devices', total, 'Total', 'kpi-total') +
-      kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
-      kpiCard_('build', manutencao, 'Manutenção', 'kpi-manutencao') +
-      kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados') +
-      kpiCard_('close', inserviveis, 'Inservíveis', 'kpi-inserviveis') +
-      kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado') +
-      kpiCard_('search', emVerificacao, 'Em verificação', 'kpi-emVerificacao');
-
-    renderGraficoStatus(porStatus);
-  }
-
-  function renderGraficoStatus(porStatus) {
-    const canvas = document.getElementById('canvas-chart-status');
-    const labels = Object.keys(porStatus);
-    const valores = labels.map(function (l) { return porStatus[l]; });
-    if (sceChartStatus) { sceChartStatus.destroy(); }
-    sceChartStatus = new Chart(canvas.getContext('2d'), {
-      type: 'pie',
-      data: {
-        labels: labels,
-        datasets: [{
-          data: valores,
-          backgroundColor: ['#1565c0', '#43a047', '#ef6c00', '#d32f2f', '#8e24aa', '#00838f', '#795548', '#607d8b']
-        }]
-      },
-      options: { responsive: true, maintainAspectRatio: false }
-    });
-  }
-
-  // ================================================================
-  // FILTROS (selects)
-  // ================================================================
-  function atualizarFiltrosOpcoes(equipamentos) {
-    preencherSelectFiltro('filtro-status', equipamentos.map(function (e) { return e.status; }), 'Todos os status');
-    preencherSelectFiltro('filtro-categoria', equipamentos.map(function (e) { return e.categoria; }), 'Todas as categorias');
-  }
-
-  function preencherSelectFiltro(id, valores, label) {
-    const select = document.getElementById(id);
-    const atual = select.value;
-    const unicos = valores.filter(Boolean).filter(function (v, i, arr) { return arr.indexOf(v) === i; }).sort();
-    select.innerHTML = '<option value="">' + label + '</option>' + unicos.map(function (v) {
-      return '<option value="' + v + '">' + v + '</option>';
-    }).join('');
-    select.value = atual;
-    M.FormSelect.init(select);
-  }
-
-  function getIdsSelecionados() {
-    return Array.prototype.slice.call(document.querySelectorAll('.check-equipamento:checked')).map(function (el) {
-      return el.value;
-    });
-  }
-
-  // ================================================================
-  // EXPORTAÇÃO
-  // ================================================================
-  function exportarCSVUI() {
-    const btn = document.getElementById('btn-exportar-csv');
-    if (btn.dataset.loading === '1') return;
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-    google.script.run
-      .withSuccessHandler(function (res) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        if (!res.ok) { M.toast({ html: 'Erro ao exportar: ' + (res.error || '') }); return; }
-        sceBaixarCsv(res.csv, 'sce-equipamentos-' + Date.now() + '.csv');
-      })
-      .withFailureHandler(function (err) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Erro ao exportar: ' + err.message });
-      })
-      .exportarCSV(SCE_TOKEN);
-  }
-
-  function sceExportarPDF() {
-    M.toast({ html: 'Função de PDF em desenvolvimento...' });
-  }
-
-  function sceBaixarCsv(csv, nome) {
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = nome;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
-  // ================================================================
-  // FUNÇÃO PARA OBTER VALOR DO SELECT OU "OUTRO"
-  // ================================================================
-  function obterValorSelectOuOutro(prefixo, tipo) {
-    const select = document.getElementById(prefixo + '-' + tipo);
-    if (!select) return '';
-    if (select.value === '__outro__') {
-      const input = document.getElementById(prefixo + '-outro-' + tipo);
-      return input ? input.value.trim() : '';
-    }
-    return select.value;
-  }
-
-  // ================================================================
-  // CADASTRO
-  // ================================================================
-  function abrirCadastroEquipamento() {
-    CAMPOS_CADASTRO.forEach(function (campo) {
-      const el = document.getElementById('new-' + campo);
-      if (el) {
-        if (campo === 'status') { el.value = 'Disponível'; return; }
-        if (campo === 'vinculadoBlueMonitor') { el.value = 'Não'; return; }
-        el.value = '';
+        M.updateTextFields();
       }
-    });
-    // Limpar campos "Outro"
-    ['categoria', 'marca', 'modelo'].forEach(tipo => {
-      const input = document.getElementById('new-outro-' + tipo);
-      if (input) input.value = '';
-      const container = document.getElementById('new-outro-' + tipo + '-container');
-      if (container) container.style.display = 'none';
-    });
-    document.getElementById('new-anexoBoletim').value = '';
-    document.getElementById('campo-justificativa-patrimonio').style.display = 'none';
-    document.getElementById('campo-justificativa-serie').style.display = 'none';
-    configurarJustificativas('new');
 
-    if (listasCache) {
-      preencherSelectCategoria('new');
-    } else {
-      carregarListasCadastro();
-      setTimeout(function() { preencherSelectCategoria('new'); }, 500);
-    }
-
-    atualizarCamposCondicionaisCadastro();
-    M.FormSelect.init(document.querySelectorAll('#modal-cadastrar-equipamento select'));
-    M.updateTextFields();
-
-    if (!modalCadastroInstance) {
-      modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
-    }
-    modalCadastroInstance.open();
-  }
-
-  function atualizarCamposCondicionaisCadastro() {
-    const status = document.getElementById('new-status').value;
-    const campoBo = document.getElementById('campo-bo-cadastro');
-    if (status === 'Extraviado') {
-      campoBo.style.display = 'block';
-    } else {
-      campoBo.style.display = 'none';
-      document.getElementById('new-anexoBoletim').value = '';
-    }
-  }
-
-  function salvarCadastro() {
-    const btn = document.getElementById('btn-salvar-cadastro');
-    if (btn.dataset.loading === '1') return;
-
-    const dados = {};
-    CAMPOS_CADASTRO.forEach(function (campo) {
-      if (campo === 'categoria' || campo === 'marca' || campo === 'modelo') {
-        const valor = obterValorSelectOuOutro('new', campo);
-        if (valor) dados[campo] = valor;
-        return;
+      // ================================================================
+      // FUNÇÕES DE CARREGAMENTO DE LISTAS
+      // ================================================================
+      function carregarListasCadastro() {
+        if (!verificarToken()) return;
+        console.log('🟢 carregarListasCadastro() iniciado...');
+        sceShowLoading();
+        google.script.run
+          .withSuccessHandler(function (dados) {
+            sceHideLoading();
+            console.log('✅ Listas recebidas:', dados);
+            processarListas(dados);
+            preencherSelectCategoria('new');
+            preencherSelectCategoria('edit');
+            // Popula os filtros de categoria/marca/modelo da tabela com a mesma fonte (Listas)
+            popularFiltroCategoria();
+            popularFiltroMarca('');
+            popularFiltroModelo('', '');
+          })
+          .withFailureHandler(function (err) {
+            sceHideLoading();
+            if (tratarErroToken(err)) return;
+            console.error('❌ Erro ao carregar listas:', err.message);
+            M.toast({ html: 'Erro ao carregar listas. Recarregue a página.' });
+          })
+          .getListasCadastro(SCE_TOKEN);
       }
-      const el = document.getElementById('new-' + campo);
-      if (el && el.value) dados[campo] = el.value;
-    });
 
-    // --- VALIDAÇÕES ---
-    if (!dados.categoria || !dados.marca || !dados.modelo) {
-      M.toast({ html: 'Preencha Categoria, Marca e Modelo.' });
-      return;
-    }
-    if (!dados.status) {
-      M.toast({ html: 'Selecione um status.' });
-      return;
-    }
+      function processarListas(combinacoes) {
+        var categorias = new Set();
+        var marcasPorCategoria = {};
+        var modelosPorCategoriaMarca = {};
 
-    const patrimonio = dados.patrimonio || '';
-    const justifPat = dados.justificativaPatrimonio || '';
-    if (!patrimonio && !justifPat) {
-      M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
-      return;
-    }
-    const serie = dados.numeroSerie || '';
-    const justifSerie = dados.justificativaNumeroSerie || '';
-    if (!serie && !justifSerie) {
-      M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
-      return;
-    }
+        combinacoes.forEach(function (item) {
+          var cat = item.categoria;
+          var marca = item.marca;
+          var modelo = item.modelo;
+          if (!cat || !marca || !modelo) return;
+          if (cat === 'Monitor') return;
+          categorias.add(cat);
+          if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
+          marcasPorCategoria[cat].add(marca);
+          if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};
+          if (!modelosPorCategoriaMarca[cat][marca]) modelosPorCategoriaMarca[cat][marca] = new Set();
+          modelosPorCategoriaMarca[cat][marca].add(modelo);
+        });
 
-    const status = dados.status;
-    const fileInput = document.getElementById('new-anexoBoletim');
+        if (!categorias.has('TV')) categorias.add('TV');
+        if (!categorias.has('Projetor')) categorias.add('Projetor');
 
-    if (status === 'Manutenção') {
-      const chamado = document.getElementById('new-numeroChamadoManutencao');
-      if (chamado && !chamado.value.trim()) {
-        M.toast({ html: 'Preencha o Nº do chamado de manutenção.' });
-        return;
+        listasCache = {
+          combinacoes: combinacoes,
+          categorias: Array.from(categorias).sort(),
+          marcasPorCategoria: marcasPorCategoria,
+          modelosPorCategoriaMarca: modelosPorCategoriaMarca
+        };
       }
-    }
-    if (status === 'Extraviado') {
-      if (!fileInput || fileInput.files.length === 0) {
-        M.toast({ html: 'Para o status "Extraviado", anexe o Boletim de Ocorrência.' });
-        return;
-      }
-    }
-    if (status === 'Em verificação') {
-      const justif = document.getElementById('new-justificativaVerificacao');
-      if (justif && !justif.value.trim()) {
-        M.toast({ html: 'Preencha a justificativa da verificação.' });
-        return;
-      }
-    }
-    // --- FIM VALIDAÇÕES ---
 
-    if (patrimonio) delete dados.justificativaPatrimonio;
-    if (serie) delete dados.justificativaNumeroSerie;
-
-    if (status === 'Extraviado') {
-      const file = fileInput.files[0];
-      if (file.size > 8 * 1024 * 1024) {
-        M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = function () {
-        const base64 = reader.result.split(',')[1];
-        dados._anexoBoletim = { base64: base64, mimeType: file.type, fileName: file.name };
-        enviarCadastro(dados, btn);
-      };
-      reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
-      reader.readAsDataURL(file);
-    } else {
-      enviarCadastro(dados, btn);
-    }
-  }
-
-  function enviarCadastro(dados, btn) {
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-
-    google.script.run
-      .withSuccessHandler(function () {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Equipamento cadastrado.' });
-        modalCadastroInstance.close();
-        carregarEquipamentos();
-      })
-      .withFailureHandler(function (err) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Erro ao cadastrar: ' + err.message });
-      })
-      .createEquipamento(SCE_TOKEN, dados);
-  }
-
-  // ================================================================
-  // EDIÇÃO
-  // ================================================================
-  function editarEquipamento(id) {
-    const item = equipamentosCache.filter(function (e) { return e.id === id; })[0];
-    if (!item) { M.toast({ html: 'Item não encontrado.' }); return; }
-
-    itemEmEdicaoOriginal = item;
-    document.getElementById('edit-id').value = item.id;
-
-    CAMPOS_EDITAVEIS.forEach(function (campo) {
-      const el = document.getElementById('edit-' + campo);
-      if (el) el.value = item[campo] || '';
-    });
-
-    configurarJustificativas('edit');
-    if (!item.patrimonio) {
-      document.getElementById('campo-justificativa-patrimonio-edit').style.display = 'block';
-    }
-    if (!item.numeroSerie) {
-      document.getElementById('campo-justificativa-serie-edit').style.display = 'block';
-    }
-
-    const anexoExistente = document.getElementById('anexo-bo-existente');
-    if (item.boletimOcorrenciaAnexoUrl) {
-      anexoExistente.innerText = '📎 Anexo atual: ' + item.boletimOcorrenciaAnexoUrl;
-    } else {
-      anexoExistente.innerText = '';
-    }
-
-    // Preencher selects com cascata e suporte a "Outro"
-    if (listasCache) {
-      const selectCat = document.getElementById('edit-categoria');
-      selectCat.innerHTML = '<option value="" disabled selected>Selecione</option>' +
-        listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
-        '<option value="__outro__">Outro (digitar)</option>';
-      if (item.categoria && listasCache.categorias.includes(item.categoria)) {
-        selectCat.value = item.categoria;
-      } else if (item.categoria) {
-        selectCat.value = '__outro__';
-        const input = document.getElementById('edit-outro-categoria');
-        if (input) input.value = item.categoria;
-        document.getElementById('edit-outro-categoria-container').style.display = 'block';
-      } else {
-        selectCat.value = '';
-      }
-      M.FormSelect.init(selectCat);
-
-      if (selectCat.value && selectCat.value !== '__outro__') {
-        popularMarcas('edit', selectCat.value);
-        setTimeout(() => {
-          const selectMarca = document.getElementById('edit-marca');
-          if (selectMarca) {
-            const marcasSet = listasCache.marcasPorCategoria[selectCat.value] || new Set();
-            if (item.marca && marcasSet.has(item.marca)) {
-              selectMarca.value = item.marca;
-            } else if (item.marca) {
-              selectMarca.value = '__outro__';
-              const input = document.getElementById('edit-outro-marca');
-              if (input) input.value = item.marca;
-              document.getElementById('edit-outro-marca-container').style.display = 'block';
-            } else {
-              selectMarca.value = '';
-            }
-            M.FormSelect.init(selectMarca);
-            if (selectMarca.value && selectMarca.value !== '__outro__') {
-              popularModelos('edit', selectCat.value, selectMarca.value);
-              setTimeout(() => {
-                const selectModelo = document.getElementById('edit-modelo');
-                if (selectModelo) {
-                  const modelosSet = listasCache.modelosPorCategoriaMarca[selectCat.value]?.[selectMarca.value] || new Set();
-                  if (item.modelo && modelosSet.has(item.modelo)) {
-                    selectModelo.value = item.modelo;
-                  } else if (item.modelo) {
-                    selectModelo.value = '__outro__';
-                    const input = document.getElementById('edit-outro-modelo');
-                    if (input) input.value = item.modelo;
-                    document.getElementById('edit-outro-modelo-container').style.display = 'block';
-                  } else {
-                    selectModelo.value = '';
-                  }
-                  M.FormSelect.init(selectModelo);
-                }
-              }, 50);
-            } else {
-              limparModelo('edit');
-            }
-          }
-        }, 50);
-      } else {
-        limparMarcaModelo('edit');
-      }
-    } else {
-      // Se listasCache ainda não carregou, carrega e tenta novamente
-      carregarListasCadastro();
-      setTimeout(function() { editarEquipamento(id); }, 500);
-      return;
-    }
-
-    atualizarCamposCondicionais();
-    M.FormSelect.init(document.querySelectorAll('#modal-editar-equipamento select'));
-    M.updateTextFields();
-
-    if (!modalEdicaoInstance) {
-      modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
-    }
-    modalEdicaoInstance.open();
-  }
-
-  function atualizarCamposCondicionais() {
-    const status = document.getElementById('edit-status').value;
-    document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
-    document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
-    document.getElementById('campo-justificativa').style.display = (status === 'Em verificação') ? 'block' : 'none';
-
-    const fileInput = document.getElementById('edit-anexoBoletim');
-    if (fileInput && status !== 'Extraviado') fileInput.value = '';
-  }
-
-  function salvarEdicao() {
-    const btn = document.getElementById('btn-salvar-edicao');
-    if (btn.dataset.loading === '1') return;
-
-    const id = document.getElementById('edit-id').value;
-    const status = document.getElementById('edit-status').value;
-    const camposAlterados = {};
-
-    CAMPOS_EDITAVEIS.forEach(function (campo) {
-      if (campo === 'categoria' || campo === 'marca' || campo === 'modelo') {
-        const valor = obterValorSelectOuOutro('edit', campo);
-        const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
-        if (String(valor) !== String(valorAntigo)) {
-          camposAlterados[campo] = valor;
+      function preencherSelectCategoria(prefixo) {
+        var select = document.getElementById(prefixo + '-categoria');
+        if (!select || !listasCache) return;
+        var valorAtual = select.value;
+        select.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+          listasCache.categorias.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+        if (valorAtual && listasCache.categorias.indexOf(valorAtual) !== -1) {
+          select.value = valorAtual;
+        } else {
+          select.value = '';
         }
-        return;
-      }
-      const el = document.getElementById('edit-' + campo);
-      if (!el) return;
-      const valorNovo = el.value;
-      const valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
-      if (String(valorNovo) !== String(valorAntigo)) {
-        camposAlterados[campo] = valorNovo;
-      }
-    });
-
-    // --- VALIDAÇÕES ---
-    const patrimonio = document.getElementById('edit-patrimonio').value.trim();
-    const justifPat = document.getElementById('edit-justificativaPatrimonio').value.trim();
-    if (!patrimonio && !justifPat) {
-      M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
-      return;
-    }
-    const serie = document.getElementById('edit-numeroSerie').value.trim();
-    const justifSerie = document.getElementById('edit-justificativaNumeroSerie').value.trim();
-    if (!serie && !justifSerie) {
-      M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
-      return;
-    }
-    const catFinal = camposAlterados.categoria !== undefined ? camposAlterados.categoria : (itemEmEdicaoOriginal.categoria || '');
-    const marcaFinal = camposAlterados.marca !== undefined ? camposAlterados.marca : (itemEmEdicaoOriginal.marca || '');
-    const modeloFinal = camposAlterados.modelo !== undefined ? camposAlterados.modelo : (itemEmEdicaoOriginal.modelo || '');
-    if (!catFinal || !marcaFinal || !modeloFinal) {
-      M.toast({ html: 'Preencha Categoria, Marca e Modelo.' });
-      return;
-    }
-    if (patrimonio) delete camposAlterados.justificativaPatrimonio;
-    if (serie) delete camposAlterados.justificativaNumeroSerie;
-    // --- FIM VALIDAÇÕES ---
-
-    const regrasStatus = {
-      'Manutenção': 'numeroChamadoManutencao',
-      'Extraviado': 'boletimOcorrencia',
-      'Em verificação': 'justificativaVerificacao'
-    };
-    const campoObrigatorio = regrasStatus[status];
-    if (campoObrigatorio) {
-      const valorFinal = camposAlterados[campoObrigatorio] !== undefined
-        ? camposAlterados[campoObrigatorio]
-        : (itemEmEdicaoOriginal[campoObrigatorio] || '');
-      if (!valorFinal) {
-        M.toast({ html: 'Preencha o campo obrigatório para o status "' + status + '".' });
-        return;
-      }
-    }
-
-    const fileInput = document.getElementById('edit-anexoBoletim');
-    const jaTemAnexo = itemEmEdicaoOriginal && itemEmEdicaoOriginal.boletimOcorrenciaAnexoUrl;
-    if (status === 'Extraviado' && (!fileInput || fileInput.files.length === 0) && !jaTemAnexo) {
-      M.toast({ html: 'Anexe o Boletim de Ocorrência antes de salvar.' });
-      return;
-    }
-
-    if (Object.keys(camposAlterados).length === 0 && !(fileInput && fileInput.files.length > 0)) {
-      M.toast({ html: 'Nada foi alterado.' });
-      modalEdicaoInstance.close();
-      return;
-    }
-
-    if (status === 'Extraviado' && fileInput && fileInput.files.length > 0) {
-      const file = fileInput.files[0];
-      if (file.size > 8 * 1024 * 1024) {
-        M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = function () {
-        const base64 = reader.result.split(',')[1];
-        camposAlterados._anexoBoletim = { base64: base64, mimeType: file.type, fileName: file.name };
-        enviarAtualizacaoEquipamento(id, camposAlterados, btn);
-      };
-      reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
-      reader.readAsDataURL(file);
-    } else {
-      enviarAtualizacaoEquipamento(id, camposAlterados, btn);
-    }
-  }
-
-  function enviarAtualizacaoEquipamento(id, camposAlterados, btn) {
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-
-    google.script.run
-      .withSuccessHandler(function () {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Equipamento atualizado.' });
-        modalEdicaoInstance.close();
-        carregarEquipamentos();
-      })
-      .withFailureHandler(function (err) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Erro ao salvar: ' + err.message });
-      })
-      .updateEquipamento(SCE_TOKEN, id, camposAlterados);
-  }
-
-
-
-  // ================================================================
-  // EMPRÉSTIMO
-  // ================================================================
-  function abrirEmprestimoSelecionados() {
-    const ids = getIdsSelecionados();
-    if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
-    if (!modalEmprestimoInstance) {
-      modalEmprestimoInstance = M.Modal.init(document.getElementById('modal-emprestimo'));
-    }
-    modalEmprestimoInstance.open();
-  }
-
-  function confirmarEmprestimo() {
-    const btn = document.getElementById('btn-confirmar-emprestimo');
-    if (btn.dataset.loading === '1') return;
-
-    const ids = getIdsSelecionados();
-    const dados = {
-      responsavel: document.getElementById('emp-responsavel').value.trim(),
-      cpf: document.getElementById('emp-cpf').value.trim(),
-      emailResponsavel: document.getElementById('emp-email').value.trim(),
-      dataPrevistaDevolucao: document.getElementById('emp-prevista').value,
-      observacoes: document.getElementById('emp-observacoes').value.trim()
-    };
-    if (!dados.responsavel) { M.toast({ html: 'Informe o responsável.' }); return; }
-
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: res.message });
-        modalEmprestimoInstance.close();
-        carregarEquipamentos();
-      })
-      .withFailureHandler(function (err) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Erro no empréstimo: ' + err.message });
-      })
-      .registrarEmprestimo(SCE_TOKEN, ids, dados);
-  }
-
-  // ================================================================
-  // DEVOLUÇÃO
-  // ================================================================
-  function devolverSelecionados() {
-    const btn = document.getElementById('btn-devolver-selecionados');
-    if (btn.dataset.loading === '1') return;
-
-    const ids = getIdsSelecionados();
-    if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
-
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: res.message });
-        carregarEquipamentos();
-      })
-      .withFailureHandler(function (err) {
-        btn.dataset.loading = '0';
-        btn.classList.remove('disabled');
-        M.toast({ html: 'Erro na devolução: ' + err.message });
-      })
-      .registrarDevolucao(SCE_TOKEN, ids, '');
-  }
-
-  // ================================================================
-  // EXCLUSÃO EM LOTE (AdminFilial e Matriz)
-  // ================================================================
-  function excluirSelecionados() {
-    if (USER_LEVEL !== 'AdminFilial' && USER_LEVEL !== 'Matriz') {
-      M.toast({ html: 'Você não tem permissão para excluir equipamentos.' });
-      return;
-    }
-    const ids = getIdsSelecionados();
-    if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
-    if (!confirm('Tem certeza que deseja excluir os ' + ids.length + ' equipamento(s) selecionado(s)? Esta ação não pode ser desfeita.')) return;
-
-    const btn = document.getElementById('btn-excluir-selecionados');
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
-
-    let concluidos = 0;
-    ids.forEach(function (id) {
-      google.script.run
-        .withSuccessHandler(function () {
-          concluidos++;
-          if (concluidos === ids.length) {
-            btn.dataset.loading = '0';
-            btn.classList.remove('disabled');
-            M.toast({ html: 'Equipamentos excluídos com sucesso.' });
-            carregarEquipamentos();
+        M.FormSelect.init(select);
+        if (typeof window.onCategoriaChange === 'function') {
+          window.onCategoriaChange(prefixo);
+        } else {
+          if (select.value && select.value !== 'TV' && select.value !== 'Projetor') {
+            popularMarcas(prefixo, select.value);
+          } else {
+            limparMarcaModelo(prefixo);
           }
-        })
-        .withFailureHandler(function (err) {
-          btn.dataset.loading = '0';
-          btn.classList.remove('disabled');
-          M.toast({ html: 'Erro ao excluir: ' + err.message });
-        })
-        .removerEquipamento(SCE_TOKEN, id);
-    });
-  }
-
-    // ================================================================
-  // GERENCIAMENTO DE USUARIOS (AdminFilial e Matriz)
-  // Definido sempre para nao fragilizar o parser de template do GAS.
-  // Os botoes que chamam essas funcoes so existem no HTML para
-  // AdminFilial/Matriz. O backend tambem valida a permissao.
-  // ================================================================
-
-  let usuariosCache = [];
-
-  function abrirGerenciarUsuarios() {
-    if (!modalUsuariosInstance) {
-      modalUsuariosInstance = M.Modal.init(document.getElementById('modal-gerenciar-usuarios'));
-    }
-    modalUsuariosInstance.open();
-    carregarUsuariosUI();
-  }
-
-  function carregarUsuariosUI() {
-    sceShowLoading();
-    google.script.run
-      .withSuccessHandler(function (usuarios) {
-        usuariosCache = usuarios || [];
-        renderTabelaUsuarios(usuariosCache);
-        sceHideLoading();
-      })
-      .withFailureHandler(function (err) {
-        sceHideLoading();
-        M.toast({ html: 'Erro ao carregar usuários: ' + err.message });
-      })
-      .listarUsuarios(SCE_TOKEN);
-  }
-
-  function renderTabelaUsuarios(usuarios) {
-    const tbody = document.querySelector('#tabela-usuarios tbody');
-    tbody.innerHTML = '';
-    if (!usuarios || usuarios.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6">Nenhum usuário cadastrado.</td></tr>';
-      return;
-    }
-    usuarios.forEach(function (u) {
-      const isSelf = u.email === SESSION_EMAIL;
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td>' + (u.email || '') + '</td>' +
-        '<td>' + (u.nome || '') + '</td>' +
-        '<td>' + (u.nivel || '') + '</td>' +
-        '<td>' + (u.filial || '') + '</td>' +
-        '<td>' + (u.status || '') + '</td>' +
-        '<td>' +
-          (isSelf ? '' :
-            '<a class="btn-small waves-effect" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
-            '<a class="btn-small red waves-effect" onclick="removerUsuarioUI(\'' + u.email + '\')" title="Remover"><i class="material-icons">delete</i></a>'
-          ) +
-        '</td>';
-      tbody.appendChild(tr);
-    });
-  }
-
-  function abrirNovoUsuario() {
-    document.getElementById('titulo-modal-usuario').innerText = 'Adicionar usuário';
-    document.getElementById('usuario-email-original').value = '';
-    document.getElementById('usuario-email').value = '';
-    document.getElementById('usuario-email').disabled = false;
-    document.getElementById('usuario-nome').value = '';
-
-    if (USER_LEVEL === 'Matriz') {
-      const nivelEl = document.getElementById('usuario-nivel');
-      const filialEl = document.getElementById('usuario-filial');
-      if (nivelEl && filialEl) {
-        nivelEl.value = 'Filial';
-        filialEl.value = '';
-        M.updateTextFields();
-        M.FormSelect.init(nivelEl);
+        }
       }
-    }
 
-    if (!modalEditarUsuarioInstance) {
-      modalEditarUsuarioInstance = M.Modal.init(document.getElementById('modal-editar-usuario'));
-    }
-    modalEditarUsuarioInstance.open();
-  }
+      function toggleCamposMarcaModelo(prefixo) {
+        var categoria = document.getElementById(prefixo + '-categoria').value;
+        var isEspecial = (categoria === 'TV' || categoria === 'Projetor');
 
-  function editarUsuarioUI(email) {
-    const usuario = usuariosCache.filter(function (u) { return u.email === email; })[0];
-    if (!usuario) { M.toast({ html: 'Usuário não encontrado.' }); return; }
-    document.getElementById('titulo-modal-usuario').innerText = 'Editar usuário';
-    document.getElementById('usuario-email-original').value = email;
-    document.getElementById('usuario-email').value = email;
-    document.getElementById('usuario-email').disabled = true;
-    document.getElementById('usuario-nome').value = usuario.nome || '';
+        var marcaSelectContainer = document.getElementById(prefixo + '-marca-container');
+        var modeloSelectContainer = document.getElementById(prefixo + '-modelo-container');
+        var marcaTextContainer = document.getElementById(prefixo + '-marca-text-container');
+        var modeloTextContainer = document.getElementById(prefixo + '-modelo-text-container');
 
-    if (USER_LEVEL === 'Matriz') {
-      const nivelEl = document.getElementById('usuario-nivel');
-      const filialEl = document.getElementById('usuario-filial');
-      if (nivelEl && filialEl) {
-        nivelEl.value = usuario.nivel || 'Filial';
-        filialEl.value = usuario.filial || '';
-        M.updateTextFields();
-        M.FormSelect.init(nivelEl);
+        if (isEspecial) {
+          if (marcaSelectContainer) marcaSelectContainer.style.display = 'none';
+          if (modeloSelectContainer) modeloSelectContainer.style.display = 'none';
+          if (marcaTextContainer) marcaTextContainer.style.display = 'block';
+          if (modeloTextContainer) modeloTextContainer.style.display = 'block';
+          document.getElementById(prefixo + '-outro-marca-container').style.display = 'none';
+          document.getElementById(prefixo + '-outro-modelo-container').style.display = 'none';
+        } else {
+          if (marcaSelectContainer) marcaSelectContainer.style.display = 'block';
+          if (modeloSelectContainer) modeloSelectContainer.style.display = 'block';
+          if (marcaTextContainer) marcaTextContainer.style.display = 'none';
+          if (modeloTextContainer) modeloTextContainer.style.display = 'none';
+        }
       }
-    }
 
-    if (!modalEditarUsuarioInstance) {
-      modalEditarUsuarioInstance = M.Modal.init(document.getElementById('modal-editar-usuario'));
-    }
-    modalEditarUsuarioInstance.open();
-  }
+      function popularMarcas(prefixo, categoria) {
+        var selectMarca = document.getElementById(prefixo + '-marca');
+        if (!selectMarca || !listasCache) return;
+        var marcasSet = listasCache.marcasPorCategoria[categoria] || new Set();
+        var marcas = Array.from(marcasSet).sort();
+        var valorAtual = selectMarca.value;
+        selectMarca.innerHTML = '<option value="" disabled selected>Selecione uma marca</option>' +
+          marcas.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') +
+          '<option value="__outro__">Outro (digitar)</option>';
+        if (valorAtual && marcas.indexOf(valorAtual) !== -1) {
+          selectMarca.value = valorAtual;
+        } else if (valorAtual && valorAtual !== '__outro__') {
+          selectMarca.value = '__outro__';
+          var input = document.getElementById(prefixo + '-outro-marca');
+          if (input) input.value = valorAtual;
+          toggleOutroCampo(prefixo, 'marca');
+        } else {
+          selectMarca.value = valorAtual;
+          toggleOutroCampo(prefixo, 'marca');
+        }
+        M.FormSelect.init(selectMarca);
+        if (selectMarca.value && selectMarca.value !== '__outro__') {
+          popularModelos(prefixo, categoria, selectMarca.value);
+        } else {
+          limparModelo(prefixo);
+          limparCamposEspecificacao(prefixo);
+        }
+      }
 
-  // Nota: para AdminFilial, nível fica travado em 'Filial' e a filial é a
-  // própria unidade (SESSION_FILIAL) — igual ao backend (adicionarUsuario/
-  // atualizarUsuario em Code.gs, que também travam isso do lado servidor).
-  function salvarUsuario() {
-    const btn = document.getElementById('btn-salvar-usuario');
-    if (btn.dataset.loading === '1') return;
-    const email = document.getElementById('usuario-email').value.trim();
-    const nome = document.getElementById('usuario-nome').value.trim();
+      function popularModelos(prefixo, categoria, marca) {
+        var selectModelo = document.getElementById(prefixo + '-modelo');
+        if (!selectModelo || !listasCache) return;
+        var modelosSet = listasCache.modelosPorCategoriaMarca[categoria] && listasCache.modelosPorCategoriaMarca[categoria][marca] || new Set();
+        var modelos = Array.from(modelosSet).sort();
+        var valorAtual = selectModelo.value;
+        selectModelo.innerHTML = '<option value="" disabled selected>Selecione um modelo</option>' +
+          modelos.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') +
+          '<option value="__outro__">Outro (digitar)</option>';
+        if (valorAtual && modelos.indexOf(valorAtual) !== -1) {
+          selectModelo.value = valorAtual;
+        } else if (valorAtual && valorAtual !== '__outro__') {
+          selectModelo.value = '__outro__';
+          var input = document.getElementById(prefixo + '-outro-modelo');
+          if (input) input.value = valorAtual;
+          toggleOutroCampo(prefixo, 'modelo');
+        } else {
+          selectModelo.value = valorAtual;
+          toggleOutroCampo(prefixo, 'modelo');
+        }
+        M.FormSelect.init(selectModelo);
+        if (selectModelo.value && selectModelo.value !== '__outro__') {
+          preencherEspecificacoes(prefixo, selectModelo.value);
+        } else {
+          limparCamposEspecificacao(prefixo);
+        }
+      }
 
-    let nivel, filial;
-    if (USER_LEVEL === 'Matriz') {
-      nivel = document.getElementById('usuario-nivel').value;
-      filial = document.getElementById('usuario-filial').value.trim();
-    } else {
-      nivel = 'Filial';
-      filial = SESSION_FILIAL;
-    }
+      function limparMarcaModelo(prefixo) {
+        var selectMarca = document.getElementById(prefixo + '-marca');
+        if (selectMarca) {
+          selectMarca.innerHTML = '<option value="" disabled selected>Selecione a categoria</option>';
+          M.FormSelect.init(selectMarca);
+        }
+        limparModelo(prefixo);
+        limparCamposEspecificacao(prefixo);
+      }
 
-    if (!email) { M.toast({ html: 'E-mail é obrigatório.' }); return; }
-    if (!nome) { M.toast({ html: 'Nome é obrigatório.' }); return; }
-    if (!filial) { M.toast({ html: 'Filial é obrigatória.' }); return; }
+      function limparModelo(prefixo) {
+        var selectModelo = document.getElementById(prefixo + '-modelo');
+        if (selectModelo) {
+          selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
+          M.FormSelect.init(selectModelo);
+        }
+        limparCamposEspecificacao(prefixo);
+      }
 
-    const dados = { email: email, nome: nome, nivel: nivel, filial: filial };
-    const emailOriginal = document.getElementById('usuario-email-original').value;
+      function toggleOutroCampo(prefixo, tipo) {
+        var select = document.getElementById(prefixo + '-' + tipo);
+        var container = document.getElementById(prefixo + '-outro-' + tipo + '-container');
+        var input = document.getElementById(prefixo + '-outro-' + tipo);
+        if (!select || !container || !input) return;
+        if (select.value === '__outro__') {
+          container.style.display = 'block';
+          input.focus();
+        } else {
+          container.style.display = 'none';
+          input.value = '';
+        }
+      }
 
-    btn.dataset.loading = '1';
-    btn.classList.add('disabled');
+      // ================================================================
+      // FILTROS DE CATEGORIA / MARCA / MODELO DA TABELA
+      // (usam a MESMA fonte — listasCache — que o modal de cadastro,
+      //  em vez de derivar apenas dos equipamentos já existentes)
+      // ================================================================
+      function popularFiltroCategoria() {
+        var select = document.getElementById('filtro-categoria');
+        if (!select || !listasCache) return;
+        var valorAtual = select.value;
+        select.innerHTML = '<option value="">Todas</option>' +
+          listasCache.categorias.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+        select.value = (valorAtual && listasCache.categorias.indexOf(valorAtual) !== -1) ? valorAtual : '';
+      }
 
-    if (emailOriginal) {
-      google.script.run
-        .withSuccessHandler(function () {
-          btn.dataset.loading = '0';
-          btn.classList.remove('disabled');
-          M.toast({ html: 'Usuário atualizado.' });
-          modalEditarUsuarioInstance.close();
-          carregarUsuariosUI();
-        })
-        .withFailureHandler(function (err) {
-          btn.dataset.loading = '0';
-          btn.classList.remove('disabled');
-          M.toast({ html: 'Erro ao atualizar: ' + err.message });
-        })
-        .atualizarUsuario(SCE_TOKEN, emailOriginal, dados);
-    } else {
-      google.script.run
-        .withSuccessHandler(function () {
-          btn.dataset.loading = '0';
-          btn.classList.remove('disabled');
-          M.toast({ html: 'Usuário adicionado.' });
-          modalEditarUsuarioInstance.close();
-          carregarUsuariosUI();
-        })
-        .withFailureHandler(function (err) {
-          btn.dataset.loading = '0';
-          btn.classList.remove('disabled');
-          M.toast({ html: 'Erro ao adicionar: ' + err.message });
-        })
-        .adicionarUsuario(SCE_TOKEN, dados);
-    }
-  }
+      function popularFiltroMarca(categoria) {
+        var select = document.getElementById('filtro-marca');
+        if (!select || !listasCache) return;
+        var valorAtual = select.value;
+        var marcas;
+        if (categoria) {
+          marcas = Array.from(listasCache.marcasPorCategoria[categoria] || new Set()).sort();
+        } else {
+          var todas = new Set();
+          Object.keys(listasCache.marcasPorCategoria).forEach(function (cat) {
+            listasCache.marcasPorCategoria[cat].forEach(function (m) { todas.add(m); });
+          });
+          marcas = Array.from(todas).sort();
+        }
+        select.innerHTML = '<option value="">Todas</option>' +
+          marcas.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+        select.value = (valorAtual && marcas.indexOf(valorAtual) !== -1) ? valorAtual : '';
+      }
 
-  function removerUsuarioUI(email) {
-    if (!confirm('Tem certeza que deseja remover o usuário ' + email + '?')) return;
-    sceShowLoading();
-    google.script.run
-      .withSuccessHandler(function () {
-        sceHideLoading();
-        M.toast({ html: 'Usuário removido.' });
-        carregarUsuariosUI();
-      })
-      .withFailureHandler(function (err) {
-        sceHideLoading();
-        M.toast({ html: 'Erro ao remover: ' + err.message });
-      })
-      .removerUsuario(SCE_TOKEN, email);
-  }
+      function popularFiltroModelo(categoria, marca) {
+        var select = document.getElementById('filtro-modelo');
+        if (!select || !listasCache) return;
+        var valorAtual = select.value;
+        var modelos = [];
+        var mapa = listasCache.modelosPorCategoriaMarca;
 
-  // ================================================================
-  // INICIALIZAÇÃO
-  // ================================================================
-  document.addEventListener('DOMContentLoaded', function() {
-    console.log('🟢 Inicializando dashboard Filial...');
+        if (categoria && marca) {
+          modelos = Array.from((mapa[categoria] && mapa[categoria][marca]) || new Set()).sort();
+        } else if (!categoria && marca) {
+          var todos = new Set();
+          Object.keys(mapa).forEach(function (cat) {
+            if (mapa[cat][marca]) mapa[cat][marca].forEach(function (m) { todos.add(m); });
+          });
+          modelos = Array.from(todos).sort();
+        } else if (categoria && !marca) {
+          var todos2 = new Set();
+          if (mapa[categoria]) {
+            Object.keys(mapa[categoria]).forEach(function (mk) {
+              mapa[categoria][mk].forEach(function (m) { todos2.add(m); });
+            });
+          }
+          modelos = Array.from(todos2).sort();
+        } else {
+          var todos3 = new Set();
+          Object.keys(mapa).forEach(function (cat) {
+            Object.keys(mapa[cat]).forEach(function (mk) {
+              mapa[cat][mk].forEach(function (m) { todos3.add(m); });
+            });
+          });
+          modelos = Array.from(todos3).sort();
+        }
 
-    M.FormSelect.init(document.querySelectorAll('select'));
-    inicializarFiltrosRapidos();
-    carregarListasCadastro();
-    carregarEquipamentos();
+        select.innerHTML = '<option value="">Todos</option>' +
+          modelos.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+        select.value = (valorAtual && modelos.indexOf(valorAtual) !== -1) ? valorAtual : '';
+      }
 
-    // Botões principais
-    document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
-    document.getElementById('btn-abrir-emprestimo').addEventListener('click', abrirEmprestimoSelecionados);
-    document.getElementById('btn-devolver-selecionados').addEventListener('click', devolverSelecionados);
-    document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
-    document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
-    document.getElementById('btn-exportar-pdf').addEventListener('click', sceExportarPDF);
-    document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
-    document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
-    document.getElementById('btn-confirmar-emprestimo').addEventListener('click', confirmarEmprestimo);
+      // ================================================================
+      // FUNÇÕES DE JUSTIFICATIVA
+      // ================================================================
+      function configurarJustificativas(prefixo) {
+        var campoPat = document.getElementById(prefixo + '-patrimonio');
+        var campoSerie = document.getElementById(prefixo + '-numeroSerie');
+        var justPatContainer = document.getElementById('campo-justificativa-patrimonio' + (prefixo === 'edit' ? '-edit' : ''));
+        var justSerieContainer = document.getElementById('campo-justificativa-serie' + (prefixo === 'edit' ? '-edit' : ''));
+        var justPatInput = document.getElementById(prefixo + '-justificativaPatrimonio');
+        var justSerieInput = document.getElementById(prefixo + '-justificativaNumeroSerie');
 
-    // Botões condicionais (AdminFilial/Matriz)
-    const btnExcluir = document.getElementById('btn-excluir-selecionados');
-    if (btnExcluir) btnExcluir.addEventListener('click', excluirSelecionados);
+        if (!campoPat || !campoSerie || !justPatContainer || !justSerieContainer) return;
 
-    const btnGerenciarUsuarios = document.getElementById('btn-gerenciar-usuarios');
-    if (btnGerenciarUsuarios) btnGerenciarUsuarios.addEventListener('click', abrirGerenciarUsuarios);
+        function verificarPatrimonio() {
+          if (campoPat.value.trim() === '') {
+            justPatContainer.style.display = 'block';
+            justPatInput.required = true;
+          } else {
+            justPatContainer.style.display = 'none';
+            justPatInput.value = '';
+            justPatInput.required = false;
+          }
+        }
 
-    const btnNovoUsuario = document.getElementById('btn-novo-usuario');
-    if (btnNovoUsuario) btnNovoUsuario.addEventListener('click', abrirNovoUsuario);
+        function verificarSerie() {
+          if (campoSerie.value.trim() === '') {
+            justSerieContainer.style.display = 'block';
+            justSerieInput.required = true;
+          } else {
+            justSerieContainer.style.display = 'none';
+            justSerieInput.value = '';
+            justSerieInput.required = false;
+          }
+        }
 
-    const btnAtualizarUsuarios = document.getElementById('btn-atualizar-usuarios');
-    if (btnAtualizarUsuarios) btnAtualizarUsuarios.addEventListener('click', carregarUsuariosUI);
+        campoPat.addEventListener('input', verificarPatrimonio);
+        campoSerie.addEventListener('input', verificarSerie);
+        verificarPatrimonio();
+        verificarSerie();
+      }
 
-    const btnSalvarUsuario = document.getElementById('btn-salvar-usuario');
-    if (btnSalvarUsuario) btnSalvarUsuario.addEventListener('click', salvarUsuario);
+      // ================================================================
+      // CARREGAR EQUIPAMENTOS
+      // ================================================================
+      function carregarEquipamentos() {
+        if (!verificarToken()) return;
+        console.log('🟢 carregarEquipamentos() INICIADA');
+        sceShowLoading();
+        google.script.run
+          .withSuccessHandler(function (equipamentos) {
+            console.log('✅ equipamentos recebidos:', equipamentos ? equipamentos.length : 0);
+            equipamentosCache = equipamentos || [];
+            equipamentosCache.forEach(function (item) {
+              if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+                var hoje = new Date();
+                var prevista = new Date(item.dataPrevistaDevolucao);
+                item.emAtraso = prevista < hoje;
+              } else {
+                item.emAtraso = false;
+              }
+            });
+            aplicarFiltros();
+            atualizarGraficos(equipamentosCache);
+            sceHideLoading();
+          })
+          .withFailureHandler(function (err) {
+            sceHideLoading();
+            if (tratarErroToken(err)) return;
+            console.error('❌ Erro na chamada:', err);
+            M.toast({ html: 'Erro ao carregar: ' + err.message });
+          })
+          .getEquipamentosDaFilial(SCE_TOKEN);
+      }
 
-    // Filtros
-    document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
-    document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
-    document.getElementById('filtro-categoria').addEventListener('change', aplicarFiltros);
+      // ================================================================
+      // APLICAR FILTROS
+      // ================================================================
+      function aplicarFiltros() {
+        console.log('🔍 aplicarFiltros() chamado');
+        var buscaEl = document.getElementById('filtro-busca');
+        var statusEl = document.getElementById('filtro-status');
+        var categoriaEl = document.getElementById('filtro-categoria');
+        var marcaEl = document.getElementById('filtro-marca');
+        var modeloEl = document.getElementById('filtro-modelo');
 
-    // Ordenação
-    document.querySelectorAll('.sortable').forEach(function(th) {
-      th.addEventListener('click', function() {
-        const campo = this.dataset.sort;
-        if (campo) ordenarTabela(campo);
-      });
-    });
+        if (!buscaEl || !statusEl || !categoriaEl) {
+          console.warn('⚠️ Elementos de filtro não encontrados');
+          return;
+        }
 
-    // Check-all
-    document.getElementById('check-todos').addEventListener('change', function() {
-      const checked = this.checked;
-      document.querySelectorAll('.check-equipamento').forEach(function(el) { el.checked = checked; });
-    });
+        var busca = buscaEl.value.trim().toLowerCase();
+        var status = statusEl.value;
+        var categoria = categoriaEl.value;
+        var marca = marcaEl ? marcaEl.value : '';
+        var modelo = modeloEl ? modeloEl.value : '';
 
-    // Paginação
-    document.getElementById('btn-pagina-anterior').addEventListener('click', function() {
-      if (paginaAtual > 1) { paginaAtual--; renderTabelaEquipamentos(equipamentosFiltrados); }
-    });
-    document.getElementById('btn-proxima-pagina').addEventListener('click', function() {
-      if (paginaAtual < Math.ceil(equipamentosFiltrados.length / ITENS_POR_PAGINA)) {
-        paginaAtual++;
+        console.log('📊 Filtros: busca="' + busca + '", status="' + status + '", categoria="' + categoria + '", marca="' + marca + '", modelo="' + modelo + '"');
+
+        equipamentosFiltrados = equipamentosCache.filter(function (item) {
+          var match = true;
+          if (status && item.status !== status) match = false;
+          if (categoria && item.categoria !== categoria) match = false;
+          if (marca && item.marca !== marca) match = false;
+          if (modelo && item.modelo !== modelo) match = false;
+          if (busca) {
+            var searchable = [item.patrimonio, item.numeroSerie, item.modelo, item.unidade].join(' ').toLowerCase();
+            if (searchable.indexOf(busca) === -1) match = false;
+          }
+          return match;
+        });
+
+        console.log('📊 Resultados filtrados: ' + equipamentosFiltrados.length + ' de ' + equipamentosCache.length);
+
+        paginaAtual = 1;
+        renderTabelaEquipamentos(equipamentosFiltrados);
+        atualizarKpis(equipamentosFiltrados);
+      }
+
+      // ================================================================
+      // KPIs
+      // ================================================================
+      function kpiCard_(icone, valor, label, extraClass) {
+        return '<div class="sce-kpi ' + (extraClass || '') + '">' +
+          '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
+          '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
+          '</div>';
+      }
+
+      function atualizarKpis(equipamentos) {
+        var porStatus = {};
+        equipamentos.forEach(function (item) {
+          var s = item.status || 'Não definido';
+          porStatus[s] = (porStatus[s] || 0) + 1;
+        });
+        var total = equipamentos.length;
+        var disponiveis = porStatus['Disponível'] || 0;
+        var manutencao = porStatus['Manutenção'] || 0;
+        var quebrados = porStatus['Quebrado'] || 0;
+        var extraviado = porStatus['Extraviado'] || 0;
+
+        document.getElementById('kpis').innerHTML =
+          kpiCard_('devices', total, 'Total', 'kpi-total') +
+          kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
+          kpiCard_('build', manutencao, 'Manutenção', 'kpi-manutencao') +
+          kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados') +
+          kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado');
+      }
+
+      // ================================================================
+      // GRÁFICOS
+      // ================================================================
+      function atualizarGraficos(equipamentos) {
+        var porStatus = {};
+        equipamentos.forEach(function (item) {
+          var s = item.status || 'Não definido';
+          porStatus[s] = (porStatus[s] || 0) + 1;
+        });
+        renderGraficoStatus(porStatus);
+
+        var porCategoria = {};
+        equipamentos.forEach(function (item) {
+          var c = item.categoria || 'Sem categoria';
+          if (c === 'Monitor') return;
+          porCategoria[c] = (porCategoria[c] || 0) + 1;
+        });
+        renderGraficoCategoria(porCategoria);
+      }
+
+      function renderGraficoStatus(porStatus) {
+        var canvas = document.getElementById('canvas-chart-status');
+        if (!canvas) return;
+        var labels = Object.keys(porStatus);
+        var valores = labels.map(function (l) { return porStatus[l]; });
+        var cores = ['#1565c0', '#43a047', '#ef6c00', '#d32f2f', '#8e24aa', '#00838f', '#795548', '#607d8b'];
+        if (chartStatus) { chartStatus.destroy(); }
+        chartStatus = new Chart(canvas.getContext('2d'), {
+          type: 'pie',
+          data: { labels: labels, datasets: [{ data: valores, backgroundColor: cores.slice(0, labels.length) }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } } }
+        });
+      }
+
+      function renderGraficoCategoria(porCategoria) {
+        var canvas = document.getElementById('canvas-chart-categoria');
+        if (!canvas) return;
+        var labels = Object.keys(porCategoria);
+        var dados = labels.map(function (l) { return porCategoria[l]; });
+        var cores = ['#4a148c', '#6a1b9a', '#7b1fa2', '#8e24aa', '#9c27b0', '#ab47bc', '#ba68c8', '#ce93d8', '#e1bee7', '#f3e5f5'];
+        if (chartCategoria) { chartCategoria.destroy(); }
+        if (labels.length === 0) {
+          var ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#999';
+          ctx.font = '16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Nenhuma categoria disponível', canvas.width / 2, canvas.height / 2);
+          return;
+        }
+        chartCategoria = new Chart(canvas.getContext('2d'), {
+          type: 'pie',
+          data: { labels: labels, datasets: [{ data: dados, backgroundColor: cores.slice(0, labels.length) }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } } }
+        });
+      }
+
+      // ================================================================
+      // ORDENAÇÃO
+      // ================================================================
+      function ordenarTabela(campo) {
+        if (campoOrdenacao === campo) {
+          ordemAtual = ordemAtual === 'asc' ? 'desc' : 'asc';
+        } else {
+          campoOrdenacao = campo;
+          ordemAtual = 'asc';
+        }
+        equipamentosFiltrados.sort(function (a, b) {
+          var valA = (a[campo] || '').toString().toLowerCase();
+          var valB = (b[campo] || '').toString().toLowerCase();
+          if (valA < valB) return ordemAtual === 'asc' ? -1 : 1;
+          if (valA > valB) return ordemAtual === 'asc' ? 1 : -1;
+          return 0;
+        });
+        document.querySelectorAll('.sortable').forEach(function (th) {
+          var icon = th.querySelector('.material-icons');
+          if (icon) icon.textContent = 'unfold_more';
+        });
+        var thAtual = document.querySelector('[data-sort="' + campo + '"]');
+        if (thAtual) {
+          var icon = thAtual.querySelector('.material-icons');
+          if (icon) icon.textContent = ordemAtual === 'asc' ? 'arrow_upward' : 'arrow_downward';
+        }
+        paginaAtual = 1;
         renderTabelaEquipamentos(equipamentosFiltrados);
       }
-    });
 
-    console.log('✅ Filial inicializada com sucesso!');
-  });
+      // ================================================================
+      // RENDERIZAÇÃO DA TABELA (COM BOTÃO EXCLUIR POR LINHA)
+      // ================================================================
+      function renderTabelaEquipamentos(equipamentos) {
+        var tbody = document.querySelector('#tabela-equipamentos tbody');
+        tbody.innerHTML = '';
+        if (!equipamentos || equipamentos.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
+          document.getElementById('pagina-info').innerText = 'Página 0 de 0 - 0 itens';
+          document.getElementById('btn-pagina-anterior').disabled = true;
+          document.getElementById('btn-proxima-pagina').disabled = true;
+          return;
+        }
+        var podeExcluir = (USER_LEVEL === 'AdminFilial');
+        var inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+        var pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
+        pagina.forEach(function (item) {
+          var tr = document.createElement('tr');
+          var statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
+          tr.className = statusClass;
+          var badgeManutencao = '-';
+          if (item.statusManutencao) {
+            var statusManut = item.statusManutencao.toLowerCase().replace(/ /g, '-');
+            var badgeClass = 'badge-manutencao ';
+            if (statusManut === 'pendente') badgeClass += 'badge-pendente';
+            else if (statusManut === 'em-andamento') badgeClass += 'badge-em-andamento';
+            else if (statusManut === 'concluído') badgeClass += 'badge-concluído';
+            badgeManutencao = '<span class="' + badgeClass + '">' + item.statusManutencao + '</span>';
+          }
+          var indicadorAtraso = '-';
+          if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+            var hoje = new Date();
+            var prevista = new Date(item.dataPrevistaDevolucao);
+            var atrasado = prevista < hoje;
+            var label = atrasado ? 'Atrasado' : 'Em dia';
+            var cls = atrasado ? 'badge-atrasado' : 'badge-em-dia';
+            indicadorAtraso = '<span class="badge-atraso ' + cls + '">' + label + '</span>';
+          }
+
+          // Botão de excluir — ícone circular vermelho, mesmo padrão dos demais botões de ação
+          var btnExcluir = podeExcluir
+            ? '<button class="btn-acao-excluir" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Excluir"><i class="material-icons">delete</i></button> '
+            : '';
+
+          tr.innerHTML =
+            '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
+            '<td>' + (item.categoria || '') + '</td>' +
+            '<td>' + (item.marca || '') + '</td>' +
+            '<td>' + (item.modelo || '') + '</td>' +
+            '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
+            '<td><strong>' + (item.status || '') + '</strong></td>' +
+            '<td>' + badgeManutencao + '</td>' +
+            '<td>' + indicadorAtraso + '</td>' +
+            '<td class="no-print" style="text-align:center;">' +
+            '<button class="btn-acao" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></button> ' +
+            '<button class="btn-acao" onclick="abrirHistorico(\'' + item.id + '\')" title="Histórico"><i class="material-icons">history</i></button> ' +
+            btnExcluir +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+        var totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));
+        document.getElementById('pagina-info').innerText = 'Página ' + paginaAtual + ' de ' + totalPaginas + ' - ' + equipamentos.length + ' itens';
+        document.getElementById('btn-pagina-anterior').disabled = (paginaAtual <= 1);
+        document.getElementById('btn-proxima-pagina').disabled = (paginaAtual >= totalPaginas);
+      }
+
+      // ================================================================
+      // HISTÓRICO
+      // ================================================================
+      function abrirHistorico(equipamentoId) {
+        if (!verificarToken()) return;
+        var item = equipamentosCache.find(function (e) { return e.id === equipamentoId; });
+        if (!item) { M.toast({ html: 'Equipamento não encontrado.' }); return; }
+
+        document.getElementById('historico-patrimonio').innerText = item.patrimonio || 'Sem patrimônio';
+        document.getElementById('historico-modelo').innerText = item.modelo || 'Sem modelo';
+
+        var tbody = document.querySelector('#tabela-historico tbody');
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Carregando...</td></tr>';
+
+        if (!modalHistoricoInstance) {
+          modalHistoricoInstance = M.Modal.init(document.getElementById('modal-historico'));
+        }
+        modalHistoricoInstance.open();
+
+        sceShowLoading();
+        google.script.run
+          .withSuccessHandler(function (registros) {
+            sceHideLoading();
+            tbody.innerHTML = '';
+            if (!registros || registros.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sce-muted);">Nenhuma alteração registrada.</td></tr>';
+              return;
+            }
+            registros.forEach(function (r) {
+              var tr = document.createElement('tr');
+              tr.innerHTML =
+                '<td>' + new Date(r.data).toLocaleString('pt-BR') + '</td>' +
+                '<td>' + (r.autor || '') + '</td>' +
+                '<td><strong>' + (r.campo || '') + '</strong></td>' +
+                '<td>' + (r.valorAntigo || '-') + '</td>' +
+                '<td>' + (r.valorNovo || '-') + '</td>';
+              tbody.appendChild(tr);
+            });
+          })
+          .withFailureHandler(function (err) {
+            sceHideLoading();
+            if (tratarErroToken(err)) { modalHistoricoInstance.close(); return; }
+            tbody.innerHTML = '<tr><td colspan="5" style="color:#d32f2f;">Erro: ' + err.message + '</td></tr>';
+          })
+          .getHistoricoEquipamento(SCE_TOKEN, equipamentoId);
+      }
+
+      // ================================================================
+      // FUNÇÕES AUXILIARES
+      // ================================================================
+      function getIdsSelecionados() {
+        return Array.prototype.slice.call(document.querySelectorAll('.check-equipamento:checked')).map(function (el) {
+          return el.value;
+        });
+      }
+
+      function obterValorMarcaModelo(prefixo, tipo) {
+        var categoria = document.getElementById(prefixo + '-categoria').value;
+        var isEspecial = (categoria === 'TV' || categoria === 'Projetor');
+        if (isEspecial) {
+          var input = document.getElementById(prefixo + '-' + tipo + '-text');
+          return input ? input.value.trim() : '';
+        } else {
+          var select = document.getElementById(prefixo + '-' + tipo);
+          if (!select) return '';
+          if (select.value === '__outro__') {
+            var inputOutro = document.getElementById(prefixo + '-outro-' + tipo);
+            return inputOutro ? inputOutro.value.trim() : '';
+          }
+          return select.value;
+        }
+      }
+
+      function obterValorSelectOuOutro(prefixo, tipo) {
+        if (tipo === 'categoria') {
+          var select = document.getElementById(prefixo + '-categoria');
+          return select ? select.value : '';
+        } else {
+          return obterValorMarcaModelo(prefixo, tipo);
+        }
+      }
+
+      // ================================================================
+      // CADASTRO (MODAL)
+      // ================================================================
+      function abrirCadastroEquipamento() {
+        if (!verificarToken()) return;
+        CAMPOS_CADASTRO.forEach(function (campo) {
+          var el = document.getElementById('new-' + campo);
+          if (el) {
+            if (campo === 'status') { el.value = 'Disponível'; return; }
+            if (campo === 'marca' || campo === 'modelo') return;
+            el.value = '';
+          }
+        });
+        document.getElementById('new-marca-text').value = '';
+        document.getElementById('new-modelo-text').value = '';
+        document.getElementById('new-outro-marca').value = '';
+        document.getElementById('new-outro-modelo').value = '';
+        document.getElementById('new-outro-marca-container').style.display = 'none';
+        document.getElementById('new-outro-modelo-container').style.display = 'none';
+        document.getElementById('new-marca-text-container').style.display = 'none';
+        document.getElementById('new-modelo-text-container').style.display = 'none';
+        document.getElementById('new-marca-container').style.display = 'block';
+        document.getElementById('new-modelo-container').style.display = 'block';
+        limparCamposEspecificacao('new');
+
+        document.getElementById('new-anexoBoletim').value = '';
+        document.getElementById('campo-justificativa-patrimonio').style.display = 'none';
+        document.getElementById('campo-justificativa-serie').style.display = 'none';
+        configurarJustificativas('new');
+
+        if (listasCache) {
+          preencherSelectCategoria('new');
+        } else {
+          carregarListasCadastro();
+          setTimeout(function () { preencherSelectCategoria('new'); }, 500);
+        }
+
+        atualizarCamposCondicionaisCadastro();
+        M.FormSelect.init(document.querySelectorAll('#modal-cadastrar-equipamento select'));
+        M.updateTextFields();
+
+        if (!modalCadastroInstance) {
+          modalCadastroInstance = M.Modal.init(document.getElementById('modal-cadastrar-equipamento'));
+        }
+        modalCadastroInstance.open();
+      }
+
+      function atualizarCamposCondicionaisCadastro() {
+        var status = document.getElementById('new-status').value;
+        var campoBo = document.getElementById('campo-bo-cadastro');
+        campoBo.style.display = (status === 'Extraviado') ? 'block' : 'none';
+        if (status !== 'Extraviado') document.getElementById('new-anexoBoletim').value = '';
+        var campoQuebrado = document.getElementById('campo-quebrado-cadastro');
+        campoQuebrado.style.display = (status === 'Quebrado') ? 'block' : 'none';
+        if (status !== 'Quebrado') {
+          var inputQuebrado = document.getElementById('new-descricaoQuebrado');
+          if (inputQuebrado) inputQuebrado.value = '';
+        }
+      }
+
+      function salvarCadastro() {
+        var btn = document.getElementById('btn-salvar-cadastro');
+        if (btn.dataset.loading === '1') return;
+        if (!verificarToken()) return;
+
+        var dados = {};
+        CAMPOS_CADASTRO.forEach(function (campo) {
+          if (campo === 'categoria') {
+            dados.categoria = document.getElementById('new-categoria').value;
+            return;
+          }
+          if (campo === 'marca' || campo === 'modelo') {
+            var valor = obterValorMarcaModelo('new', campo);
+            if (valor) dados[campo] = valor;
+            return;
+          }
+          var el = document.getElementById('new-' + campo);
+          if (el && el.value) dados[campo] = el.value;
+        });
+
+        if (!dados.categoria || !dados.marca || !dados.modelo) {
+          M.toast({ html: 'Preencha Categoria, Marca e Modelo.' });
+          return;
+        }
+        if (!dados.status) {
+          M.toast({ html: 'Selecione um status.' });
+          return;
+        }
+
+        var patrimonio = dados.patrimonio || '';
+        var justifPat = dados.justificativaPatrimonio || '';
+        if (!patrimonio && !justifPat) {
+          M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
+          return;
+        }
+        var serie = dados.numeroSerie || '';
+        var justifSerie = dados.justificativaNumeroSerie || '';
+        if (!serie && !justifSerie) {
+          M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
+          return;
+        }
+
+        var status = dados.status;
+        var fileInput = document.getElementById('new-anexoBoletim');
+
+        if (status === 'Manutenção') {
+          var chamado = document.getElementById('new-numeroChamadoManutencao');
+          if (chamado && !chamado.value.trim()) {
+            M.toast({ html: 'Preencha o Nº do chamado de manutenção.' });
+            return;
+          }
+        }
+        if (status === 'Extraviado') {
+          if (!fileInput || fileInput.files.length === 0) {
+            M.toast({ html: 'Para o status "Extraviado", anexe o Boletim de Ocorrência.' });
+            return;
+          }
+        }
+        if (status === 'Quebrado') {
+          var descQuebrado = document.getElementById('new-descricaoQuebrado');
+          if (!descQuebrado || !descQuebrado.value.trim()) {
+            M.toast({ html: 'Para o status "Quebrado", descreva a avaria.' });
+            return;
+          }
+        }
+
+        if (patrimonio) delete dados.justificativaPatrimonio;
+        if (serie) delete dados.justificativaNumeroSerie;
+
+        if (status === 'Extraviado') {
+          var file = fileInput.files[0];
+          if (file.size > 8 * 1024 * 1024) {
+            M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' });
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            var base64 = reader.result.split(',')[1];
+            dados._anexoBoletim = { base64: base64, mimeType: file.type, fileName: file.name };
+            enviarCadastro(dados, btn);
+          };
+          reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
+          reader.readAsDataURL(file);
+        } else {
+          enviarCadastro(dados, btn);
+        }
+      }
+
+      function enviarCadastro(dados, btn) {
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+
+        google.script.run
+          .withSuccessHandler(function () {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            M.toast({ html: 'Equipamento cadastrado.' });
+            modalCadastroInstance.close();
+            carregarEquipamentos();
+          })
+          .withFailureHandler(function (err) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (tratarErroToken(err)) { modalCadastroInstance.close(); return; }
+            M.toast({ html: 'Erro ao cadastrar: ' + err.message });
+          })
+          .createEquipamento(SCE_TOKEN, dados);
+      }
+
+      // ================================================================
+      // EDIÇÃO (MODAL)
+      // ================================================================
+      function editarEquipamento(id) {
+        if (!verificarToken()) return;
+        var item = equipamentosCache.find(function (e) { return e.id === id; });
+        if (!item) { M.toast({ html: 'Item não encontrado.' }); return; }
+
+        itemEmEdicaoOriginal = item;
+        document.getElementById('edit-id').value = item.id;
+
+        CAMPOS_EDITAVEIS.forEach(function (campo) {
+          if (campo === 'marca' || campo === 'modelo') return;
+          var el = document.getElementById('edit-' + campo);
+          if (el) el.value = item[campo] || '';
+        });
+
+        var catSelect = document.getElementById('edit-categoria');
+        catSelect.value = item.categoria || '';
+        M.FormSelect.init(catSelect);
+
+        var categoria = item.categoria || '';
+        var isEspecial = (categoria === 'TV' || categoria === 'Projetor');
+        if (isEspecial) {
+          document.getElementById('edit-marca-text').value = item.marca || '';
+          document.getElementById('edit-modelo-text').value = item.modelo || '';
+          document.getElementById('edit-marca-text-container').style.display = 'block';
+          document.getElementById('edit-modelo-text-container').style.display = 'block';
+          document.getElementById('edit-marca-container').style.display = 'none';
+          document.getElementById('edit-modelo-container').style.display = 'none';
+          document.getElementById('edit-outro-marca-container').style.display = 'none';
+          document.getElementById('edit-outro-modelo-container').style.display = 'none';
+          if (item.modelo) {
+            preencherEspecificacoes('edit', item.modelo);
+          }
+        } else {
+          document.getElementById('edit-marca-container').style.display = 'block';
+          document.getElementById('edit-modelo-container').style.display = 'block';
+          document.getElementById('edit-marca-text-container').style.display = 'none';
+          document.getElementById('edit-modelo-text-container').style.display = 'none';
+          if (listasCache) {
+            popularMarcas('edit', categoria);
+            setTimeout(function () {
+              var selectMarca = document.getElementById('edit-marca');
+              if (selectMarca) {
+                var marcasSet = listasCache.marcasPorCategoria[categoria] || new Set();
+                if (item.marca && marcasSet.has(item.marca)) {
+                  selectMarca.value = item.marca;
+                } else if (item.marca) {
+                  selectMarca.value = '__outro__';
+                  var input = document.getElementById('edit-outro-marca');
+                  if (input) input.value = item.marca;
+                  document.getElementById('edit-outro-marca-container').style.display = 'block';
+                } else {
+                  selectMarca.value = '';
+                }
+                M.FormSelect.init(selectMarca);
+                if (selectMarca.value && selectMarca.value !== '__outro__') {
+                  popularModelos('edit', categoria, selectMarca.value);
+                  setTimeout(function () {
+                    var selectModelo = document.getElementById('edit-modelo');
+                    if (selectModelo) {
+                      var modelosSet = listasCache.modelosPorCategoriaMarca[categoria] && listasCache.modelosPorCategoriaMarca[categoria][selectMarca.value] || new Set();
+                      if (item.modelo && modelosSet.has(item.modelo)) {
+                        selectModelo.value = item.modelo;
+                      } else if (item.modelo) {
+                        selectModelo.value = '__outro__';
+                        var input2 = document.getElementById('edit-outro-modelo');
+                        if (input2) input2.value = item.modelo;
+                        document.getElementById('edit-outro-modelo-container').style.display = 'block';
+                      } else {
+                        selectModelo.value = '';
+                      }
+                      M.FormSelect.init(selectModelo);
+                      if (selectModelo.value && selectModelo.value !== '__outro__') {
+                        preencherEspecificacoes('edit', selectModelo.value);
+                      }
+                    }
+                  }, 50);
+                } else {
+                  limparModelo('edit');
+                }
+              }
+            }, 50);
+          } else {
+            carregarListasCadastro();
+            setTimeout(function () { editarEquipamento(id); }, 500);
+            return;
+          }
+        }
+
+        configurarJustificativas('edit');
+        if (!item.patrimonio) {
+          document.getElementById('campo-justificativa-patrimonio-edit').style.display = 'block';
+        }
+        if (!item.numeroSerie) {
+          document.getElementById('campo-justificativa-serie-edit').style.display = 'block';
+        }
+
+        var anexoExistente = document.getElementById('anexo-bo-existente');
+        anexoExistente.innerText = item.boletimOcorrenciaAnexoUrl ? '📎 Anexo atual: ' + item.boletimOcorrenciaAnexoUrl : '';
+
+        atualizarCamposCondicionais();
+        M.FormSelect.init(document.querySelectorAll('#modal-editar-equipamento select'));
+        M.updateTextFields();
+
+        if (!modalEdicaoInstance) {
+          modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
+        }
+        modalEdicaoInstance.open();
+      }
+
+      function atualizarCamposCondicionais() {
+        var status = document.getElementById('edit-status').value;
+        document.getElementById('campo-chamado').style.display = (status === 'Manutenção') ? 'block' : 'none';
+        document.getElementById('campo-bo').style.display = (status === 'Extraviado') ? 'block' : 'none';
+        document.getElementById('campo-quebrado').style.display = (status === 'Quebrado') ? 'block' : 'none';
+        var fileInput = document.getElementById('edit-anexoBoletim');
+        if (fileInput && status !== 'Extraviado') fileInput.value = '';
+        if (status !== 'Quebrado') {
+          var inputQuebrado = document.getElementById('edit-descricaoQuebrado');
+          if (inputQuebrado) inputQuebrado.value = '';
+        }
+      }
+
+      function salvarEdicao() {
+        var btn = document.getElementById('btn-salvar-edicao');
+        if (btn.dataset.loading === '1') return;
+        if (!verificarToken()) return;
+
+        var id = document.getElementById('edit-id').value;
+        var status = document.getElementById('edit-status').value;
+        var camposAlterados = {};
+
+        CAMPOS_EDITAVEIS.forEach(function (campo) {
+          if (campo === 'categoria') {
+            var val = document.getElementById('edit-categoria').value;
+            if (val !== (itemEmEdicaoOriginal.categoria || '')) {
+              camposAlterados.categoria = val;
+            }
+            return;
+          }
+          if (campo === 'marca' || campo === 'modelo') {
+            var val = obterValorMarcaModelo('edit', campo);
+            var oldVal = itemEmEdicaoOriginal[campo] || '';
+            if (val !== oldVal) {
+              camposAlterados[campo] = val;
+            }
+            return;
+          }
+          var el = document.getElementById('edit-' + campo);
+          if (!el) return;
+          var valorNovo = el.value;
+          var valorAntigo = itemEmEdicaoOriginal ? (itemEmEdicaoOriginal[campo] || '') : '';
+          if (String(valorNovo) !== String(valorAntigo)) {
+            camposAlterados[campo] = valorNovo;
+          }
+        });
+
+        var patrimonio = document.getElementById('edit-patrimonio').value.trim();
+        var justifPat = document.getElementById('edit-justificativaPatrimonio').value.trim();
+        if (!patrimonio && !justifPat) {
+          M.toast({ html: 'Preencha o Patrimônio ou justifique sua ausência.' });
+          return;
+        }
+        var serie = document.getElementById('edit-numeroSerie').value.trim();
+        var justifSerie = document.getElementById('edit-justificativaNumeroSerie').value.trim();
+        if (!serie && !justifSerie) {
+          M.toast({ html: 'Preencha o Número de Série ou justifique sua ausência.' });
+          return;
+        }
+        var catFinal = camposAlterados.categoria !== undefined ? camposAlterados.categoria : (itemEmEdicaoOriginal.categoria || '');
+        var marcaFinal = camposAlterados.marca !== undefined ? camposAlterados.marca : (itemEmEdicaoOriginal.marca || '');
+        var modeloFinal = camposAlterados.modelo !== undefined ? camposAlterados.modelo : (itemEmEdicaoOriginal.modelo || '');
+        if (!catFinal || !marcaFinal || !modeloFinal) {
+          M.toast({ html: 'Preencha Categoria, Marca e Modelo.' });
+          return;
+        }
+        if (patrimonio) delete camposAlterados.justificativaPatrimonio;
+        if (serie) delete camposAlterados.justificativaNumeroSerie;
+
+        if (status === 'Manutenção') {
+          var chamado = document.getElementById('edit-numeroChamadoManutencao').value.trim();
+          if (!chamado) { M.toast({ html: 'Preencha o Nº do chamado de manutenção.' }); return; }
+          camposAlterados.numeroChamadoManutencao = chamado;
+        }
+        if (status === 'Extraviado') {
+          var bo = document.getElementById('edit-boletimOcorrencia').value.trim();
+          if (!bo) { M.toast({ html: 'Preencha o Nº do Boletim de Ocorrência.' }); return; }
+          camposAlterados.boletimOcorrencia = bo;
+        }
+        if (status === 'Quebrado') {
+          var descQuebrado = document.getElementById('edit-descricaoQuebrado');
+          if (!descQuebrado || !descQuebrado.value.trim()) {
+            M.toast({ html: 'Para o status "Quebrado", descreva a avaria.' });
+            return;
+          }
+        }
+
+        var fileInput = document.getElementById('edit-anexoBoletim');
+        var jaTemAnexo = itemEmEdicaoOriginal && itemEmEdicaoOriginal.boletimOcorrenciaAnexoUrl;
+        if (status === 'Extraviado' && (!fileInput || fileInput.files.length === 0) && !jaTemAnexo) {
+          M.toast({ html: 'Anexe o Boletim de Ocorrência antes de salvar.' });
+          return;
+        }
+
+        if (Object.keys(camposAlterados).length === 0 && !(fileInput && fileInput.files.length > 0)) {
+          M.toast({ html: 'Nada foi alterado.' });
+          modalEdicaoInstance.close();
+          return;
+        }
+
+        if (status === 'Extraviado' && fileInput && fileInput.files.length > 0) {
+          var file = fileInput.files[0];
+          if (file.size > 8 * 1024 * 1024) {
+            M.toast({ html: 'Arquivo muito grande. Máximo de 8MB.' });
+            return;
+          }
+          var reader = new FileReader();
+          reader.onload = function () {
+            var base64 = reader.result.split(',')[1];
+            camposAlterados._anexoBoletim = { base64: base64, mimeType: file.type, fileName: file.name };
+            enviarAtualizacaoEquipamento(id, camposAlterados, btn);
+          };
+          reader.onerror = function () { M.toast({ html: 'Erro ao ler o arquivo.' }); };
+          reader.readAsDataURL(file);
+        } else {
+          enviarAtualizacaoEquipamento(id, camposAlterados, btn);
+        }
+      }
+
+      function enviarAtualizacaoEquipamento(id, camposAlterados, btn) {
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+
+        google.script.run
+          .withSuccessHandler(function () {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            M.toast({ html: 'Equipamento atualizado.' });
+            modalEdicaoInstance.close();
+            carregarEquipamentos();
+          })
+          .withFailureHandler(function (err) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (tratarErroToken(err)) { modalEdicaoInstance.close(); return; }
+            M.toast({ html: 'Erro ao salvar: ' + err.message });
+          })
+          .updateEquipamento(SCE_TOKEN, id, camposAlterados);
+      }
+
+      // ================================================================
+      // EMPRÉSTIMO
+      // ================================================================
+      var emprestimoIdsSelecionados = [];
+
+      function abrirEmprestimoSelecionados() {
+        if (!verificarToken()) return;
+        var ids = getIdsSelecionados();
+        if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
+        emprestimoIdsSelecionados = ids;
+        if (!modalTipoEmprestimoInstance) {
+          modalTipoEmprestimoInstance = M.Modal.init(document.getElementById('modal-tipo-emprestimo'));
+        }
+        modalTipoEmprestimoInstance.open();
+      }
+
+      function selecionarTipoEmprestimo(tipo) {
+        if (modalTipoEmprestimoInstance) modalTipoEmprestimoInstance.close();
+        var campoEscola = document.getElementById('emp-campo-escola');
+        var selectEscola = document.getElementById('emp-escola-destino');
+        document.getElementById('emp-tipo').value = tipo;
+
+        if (tipo === 'interestadual') {
+          campoEscola.style.display = 'block';
+          // Carregar escolas da planilha Filiais
+          if (selectEscola.options.length <= 1) {
+            google.script.run
+              .withSuccessHandler(function (filiais) {
+                selectEscola.innerHTML = '<option value="" disabled selected>Selecione a escola de destino</option>' +
+                  filiais.map(function (f) { return '<option value="' + f + '">' + f + '</option>'; }).join('');
+                M.FormSelect.init(selectEscola);
+              })
+              .withFailureHandler(function (err) {
+                console.error('Erro ao carregar filiais:', err);
+              })
+              .getFiliaisParaEmprestimo(SCE_TOKEN);
+          }
+        } else {
+          campoEscola.style.display = 'none';
+          selectEscola.value = '';
+        }
+
+        if (!modalEmprestimoInstance) {
+          modalEmprestimoInstance = M.Modal.init(document.getElementById('modal-emprestimo'));
+        }
+        modalEmprestimoInstance.open();
+      }
+
+      function confirmarEmprestimo() {
+        var btn = document.getElementById('btn-confirmar-emprestimo');
+        if (btn.dataset.loading === '1') return;
+        if (!verificarToken()) return;
+
+        var ids = emprestimoIdsSelecionados;
+        var tipo = document.getElementById('emp-tipo').value;
+        var dados = {
+          responsavel: document.getElementById('emp-responsavel').value.trim(),
+          cpf: document.getElementById('emp-cpf').value.trim(),
+          emailResponsavel: document.getElementById('emp-email').value.trim(),
+          dataPrevistaDevolucao: document.getElementById('emp-prevista').value,
+          observacoes: document.getElementById('emp-observacoes').value.trim(),
+          tipoEmprestimo: tipo
+        };
+        if (!dados.responsavel) { M.toast({ html: 'Informe o responsável.' }); return; }
+        if (tipo === 'interestadual') {
+          var escolaDestino = document.getElementById('emp-escola-destino').value;
+          if (!escolaDestino) { M.toast({ html: 'Selecione a escola de destino.' }); return; }
+          dados.escolaDestino = escolaDestino;
+        }
+
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+
+        google.script.run
+          .withSuccessHandler(function (res) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            M.toast({ html: res.message });
+            modalEmprestimoInstance.close();
+            carregarEquipamentos();
+          })
+          .withFailureHandler(function (err) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (tratarErroToken(err)) { modalEmprestimoInstance.close(); return; }
+            M.toast({ html: 'Erro no empréstimo: ' + err.message });
+          })
+          .registrarEmprestimo(SCE_TOKEN, ids, dados);
+      }
+
+      // ================================================================
+      // DEVOLUÇÃO
+      // ================================================================
+      function devolverSelecionados() {
+        var btn = document.getElementById('btn-devolver-selecionados');
+        if (btn.dataset.loading === '1') return;
+        if (!verificarToken()) return;
+
+        var ids = getIdsSelecionados();
+        if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
+
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+
+        google.script.run
+          .withSuccessHandler(function (res) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            M.toast({ html: res.message });
+            carregarEquipamentos();
+          })
+          .withFailureHandler(function (err) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (tratarErroToken(err)) return;
+            M.toast({ html: 'Erro na devolução: ' + err.message });
+          })
+          .registrarDevolucao(SCE_TOKEN, ids, '');
+      }
+
+      // ================================================================
+      // EXCLUSÃO EM LOTE (APENAS AdminFilial)
+      // ================================================================
+      function excluirSelecionados() {
+        if (USER_LEVEL !== 'AdminFilial') {
+          M.toast({ html: 'Você não tem permissão para excluir equipamentos.' });
+          return;
+        }
+        if (!verificarToken()) return;
+        var ids = getIdsSelecionados();
+        if (ids.length === 0) { M.toast({ html: 'Selecione pelo menos um equipamento.' }); return; }
+        if (!confirm('Tem certeza que deseja excluir os ' + ids.length + ' equipamento(s) selecionado(s)? Esta ação não pode ser desfeita.')) return;
+
+        var btn = document.getElementById('btn-excluir-selecionados');
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+
+        var concluidos = 0;
+        ids.forEach(function (id) {
+          google.script.run
+            .withSuccessHandler(function () {
+              concluidos++;
+              if (concluidos === ids.length) {
+                btn.dataset.loading = '0';
+                btn.classList.remove('disabled');
+                sceHideLoading();
+                M.toast({ html: 'Equipamentos excluídos com sucesso.' });
+                carregarEquipamentos();
+              }
+            })
+            .withFailureHandler(function (err) {
+              btn.dataset.loading = '0';
+              btn.classList.remove('disabled');
+              sceHideLoading();
+              if (tratarErroToken(err)) return;
+              M.toast({ html: 'Erro ao excluir: ' + err.message });
+            })
+            .removerEquipamento(SCE_TOKEN, id);
+        });
+      }
+
+      // ================================================================
+      // REMOÇÃO INDIVIDUAL (ABRIR MODAL)
+      // ================================================================
+      function abrirModalRemocao(id) {
+        if (USER_LEVEL !== 'AdminFilial') {
+          M.toast({ html: 'Você não tem permissão para excluir equipamentos.' });
+          return;
+        }
+        if (!verificarToken()) return;
+        window.idPendenteRemocao = id;
+        if (!window.modalRemocaoInstance) {
+          window.modalRemocaoInstance = M.Modal.init(document.getElementById('modal-confirmar-remocao'));
+        }
+        window.modalRemocaoInstance.open();
+      }
+
+      // ================================================================
+      // CONFIRMAR REMOÇÃO INDIVIDUAL
+      // ================================================================
+      function confirmarRemocao() {
+        var id = window.idPendenteRemocao;
+        if (!id) { M.toast({ html: 'Nenhum item selecionado.' }); return; }
+        var btn = document.getElementById('btn-confirmar-remocao');
+        if (btn.dataset.loading === '1') return;
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+
+        google.script.run
+          .withSuccessHandler(function (res) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            M.toast({ html: res.message || 'Equipamento removido.' });
+            window.modalRemocaoInstance.close();
+            window.idPendenteRemocao = null;
+            carregarEquipamentos();
+          })
+          .withFailureHandler(function (err) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (tratarErroToken(err)) { window.modalRemocaoInstance.close(); return; }
+            M.toast({ html: 'Erro ao remover: ' + err.message });
+          })
+          .removerEquipamento(SCE_TOKEN, id);
+      }
+
+      // ================================================================
+      // GERENCIAMENTO DE USUÁRIOS
+      // ================================================================
+      var usuariosCache = [];
+
+      function abrirGerenciarUsuarios() {
+        if (!verificarToken()) return;
+        if (!modalUsuariosInstance) {
+          modalUsuariosInstance = M.Modal.init(document.getElementById('modal-gerenciar-usuarios'));
+        }
+        modalUsuariosInstance.open();
+        carregarUsuariosUI();
+      }
+
+      function carregarUsuariosUI() {
+        if (!verificarToken()) return;
+        sceShowLoading();
+        google.script.run
+          .withSuccessHandler(function (usuarios) {
+            usuariosCache = usuarios || [];
+            renderTabelaUsuarios(usuariosCache);
+            sceHideLoading();
+          })
+          .withFailureHandler(function (err) {
+            sceHideLoading();
+            if (tratarErroToken(err)) return;
+            M.toast({ html: 'Erro ao carregar usuários: ' + err.message });
+          })
+          .listarUsuarios(SCE_TOKEN);
+      }
+
+      function renderTabelaUsuarios(usuarios) {
+        var tbody = document.querySelector('#tabela-usuarios tbody');
+        tbody.innerHTML = '';
+        if (!usuarios || usuarios.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6">Nenhum usuário cadastrado.</td></tr>';
+          return;
+        }
+        usuarios.forEach(function (u) {
+          var isSelf = u.email === SESSION_EMAIL;
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + (u.email || '') + '</td>' +
+            '<td>' + (u.nome || '') + '</td>' +
+            '<td>' + (u.nivel || '') + '</td>' +
+            '<td>' + (u.filial || '') + '</td>' +
+            '<td>' + (u.status || '') + '</td>' +
+            '<td>' +
+            (isSelf ? '' :
+              '<button class="btn-acao" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></button> ' +
+              '<button class="btn-acao danger" onclick="removerUsuarioUI(\'' + u.email + '\')" title="Remover"><i class="material-icons">delete</i></button>'
+            ) +
+            '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      function abrirNovoUsuario() {
+        if (!verificarToken()) return;
+        document.getElementById('titulo-modal-usuario').innerText = 'Adicionar usuário';
+        document.getElementById('usuario-email-original').value = '';
+        document.getElementById('usuario-email').value = '';
+        document.getElementById('usuario-email').disabled = false;
+        document.getElementById('usuario-nome').value = '';
+
+        if (USER_LEVEL === 'Matriz') {
+          var nivelEl = document.getElementById('usuario-nivel');
+          var filialEl = document.getElementById('usuario-filial');
+          if (nivelEl && filialEl) {
+            nivelEl.value = 'Filial';
+            filialEl.value = '';
+            M.updateTextFields();
+            M.FormSelect.init(nivelEl);
+          }
+        }
+
+        if (!modalEditarUsuarioInstance) {
+          modalEditarUsuarioInstance = M.Modal.init(document.getElementById('modal-editar-usuario'));
+        }
+        modalEditarUsuarioInstance.open();
+      }
+
+      function editarUsuarioUI(email) {
+        if (!verificarToken()) return;
+        var usuario = usuariosCache.find(function (u) { return u.email === email; });
+        if (!usuario) { M.toast({ html: 'Usuário não encontrado.' }); return; }
+        document.getElementById('titulo-modal-usuario').innerText = 'Editar usuário';
+        document.getElementById('usuario-email-original').value = email;
+        document.getElementById('usuario-email').value = email;
+        document.getElementById('usuario-email').disabled = true;
+        document.getElementById('usuario-nome').value = usuario.nome || '';
+
+        if (USER_LEVEL === 'Matriz') {
+          var nivelEl = document.getElementById('usuario-nivel');
+          var filialEl = document.getElementById('usuario-filial');
+          if (nivelEl && filialEl) {
+            nivelEl.value = usuario.nivel || 'Filial';
+            filialEl.value = usuario.filial || '';
+            M.updateTextFields();
+            M.FormSelect.init(nivelEl);
+          }
+        }
+
+        if (!modalEditarUsuarioInstance) {
+          modalEditarUsuarioInstance = M.Modal.init(document.getElementById('modal-editar-usuario'));
+        }
+        modalEditarUsuarioInstance.open();
+      }
+
+      function salvarUsuario() {
+        var btn = document.getElementById('btn-salvar-usuario');
+        if (btn.dataset.loading === '1') return;
+        if (!verificarToken()) return;
+        var email = document.getElementById('usuario-email').value.trim();
+        var nome = document.getElementById('usuario-nome').value.trim();
+
+        var nivel, filial;
+        if (USER_LEVEL === 'Matriz') {
+          nivel = document.getElementById('usuario-nivel').value;
+          filial = document.getElementById('usuario-filial').value.trim();
+        } else {
+          nivel = 'Filial';
+          filial = SESSION_FILIAL;
+        }
+
+        if (!email) { M.toast({ html: 'E-mail é obrigatório.' }); return; }
+        if (!nome) { M.toast({ html: 'Nome é obrigatório.' }); return; }
+        if (!filial) { M.toast({ html: 'Filial é obrigatória.' }); return; }
+
+        var dados = { email: email, nome: nome, nivel: nivel, filial: filial };
+        var emailOriginal = document.getElementById('usuario-email-original').value;
+
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+
+        var action = emailOriginal ? 'atualizarUsuario' : 'adicionarUsuario';
+        var params = emailOriginal ? [SCE_TOKEN, emailOriginal, dados] : [SCE_TOKEN, dados];
+
+        google.script.run
+          .withSuccessHandler(function () {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            M.toast({ html: emailOriginal ? 'Usuário atualizado.' : 'Usuário adicionado.' });
+            modalEditarUsuarioInstance.close();
+            carregarUsuariosUI();
+          })
+          .withFailureHandler(function (err) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (tratarErroToken(err)) { modalEditarUsuarioInstance.close(); return; }
+            M.toast({ html: 'Erro: ' + err.message });
+          })
+        [action].apply(null, params);
+      }
+
+      function removerUsuarioUI(email) {
+        if (!verificarToken()) return;
+        if (!confirm('Tem certeza que deseja remover o usuário ' + email + '?')) return;
+        sceShowLoading();
+        google.script.run
+          .withSuccessHandler(function () {
+            sceHideLoading();
+            M.toast({ html: 'Usuário removido.' });
+            carregarUsuariosUI();
+          })
+          .withFailureHandler(function (err) {
+            sceHideLoading();
+            if (tratarErroToken(err)) return;
+            M.toast({ html: 'Erro ao remover: ' + err.message });
+          })
+          .removerUsuario(SCE_TOKEN, email);
+      }
+
+      // ================================================================
+      // EXPORTAÇÃO
+      // ================================================================
+      function exportarCSVUI() {
+        var btn = document.getElementById('btn-exportar-csv');
+        if (btn.dataset.loading === '1') return;
+        if (!verificarToken()) return;
+        btn.dataset.loading = '1';
+        btn.classList.add('disabled');
+        sceShowLoading();
+        google.script.run
+          .withSuccessHandler(function (res) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (!res.ok) { M.toast({ html: 'Erro ao exportar: ' + (res.error || '') }); return; }
+            sceBaixarCsv(res.csv, 'sce-equipamentos-' + Date.now() + '.csv');
+          })
+          .withFailureHandler(function (err) {
+            btn.dataset.loading = '0';
+            btn.classList.remove('disabled');
+            sceHideLoading();
+            if (tratarErroToken(err)) return;
+            M.toast({ html: 'Erro ao exportar: ' + err.message });
+          })
+          .exportarCSV(SCE_TOKEN);
+      }
+
+      function sceExportarPDF() {
+        M.toast({ html: 'Função de PDF em desenvolvimento...' });
+      }
+
+      function sceBaixarCsv(csv, nome) {
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = nome;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      // ================================================================
+      // INICIALIZAÇÃO
+      // ================================================================
+      document.addEventListener('DOMContentLoaded', function () {
+        console.log('🟢 Inicializando dashboard Filial v2.9.0...');
+        M.FormSelect.init(document.querySelectorAll('select:not(#filtro-status):not(#filtro-categoria):not(#filtro-marca):not(#filtro-modelo)'));
+        carregarListasCadastro();
+        carregarEquipamentos();
+
+        document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
+        document.getElementById('btn-abrir-emprestimo').addEventListener('click', abrirEmprestimoSelecionados);
+        document.getElementById('btn-devolver-selecionados').addEventListener('click', devolverSelecionados);
+        document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
+        document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
+        document.getElementById('btn-exportar-pdf').addEventListener('click', sceExportarPDF);
+        document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
+        document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
+        document.getElementById('btn-confirmar-emprestimo').addEventListener('click', confirmarEmprestimo);
+
+        var btnExcluir = document.getElementById('btn-excluir-selecionados');
+        if (btnExcluir) btnExcluir.addEventListener('click', excluirSelecionados);
+
+        // Botão confirmar remoção individual (modal)
+        document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
+
+        var btnGerenciarUsuarios = document.getElementById('btn-gerenciar-usuarios');
+        if (btnGerenciarUsuarios) btnGerenciarUsuarios.addEventListener('click', abrirGerenciarUsuarios);
+
+        var btnNovoUsuario = document.getElementById('btn-novo-usuario');
+        if (btnNovoUsuario) btnNovoUsuario.addEventListener('click', abrirNovoUsuario);
+
+        var btnAtualizarUsuarios = document.getElementById('btn-atualizar-usuarios');
+        if (btnAtualizarUsuarios) btnAtualizarUsuarios.addEventListener('click', carregarUsuariosUI);
+
+        var btnSalvarUsuario = document.getElementById('btn-salvar-usuario');
+        if (btnSalvarUsuario) btnSalvarUsuario.addEventListener('click', salvarUsuario);
+
+        document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
+        document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+
+        document.getElementById('filtro-categoria').addEventListener('change', function () {
+          var categoria = this.value;
+          var marcaAtual = document.getElementById('filtro-marca').value;
+          popularFiltroMarca(categoria);
+          // Se a marca atual não existir mais para a nova categoria, o próprio popularFiltroMarca já reseta o valor
+          popularFiltroModelo(categoria, document.getElementById('filtro-marca').value);
+          aplicarFiltros();
+        });
+        document.getElementById('filtro-marca').addEventListener('change', function () {
+          var categoria = document.getElementById('filtro-categoria').value;
+          popularFiltroModelo(categoria, this.value);
+          aplicarFiltros();
+        });
+        document.getElementById('filtro-modelo').addEventListener('change', aplicarFiltros);
+
+        document.querySelectorAll('.sortable').forEach(function (th) {
+          th.addEventListener('click', function () {
+            var campo = this.dataset.sort;
+            if (campo) ordenarTabela(campo);
+          });
+        });
+
+        document.getElementById('check-todos').addEventListener('change', function () {
+          var checked = this.checked;
+          document.querySelectorAll('.check-equipamento').forEach(function (el) { el.checked = checked; });
+        });
+
+        document.getElementById('btn-pagina-anterior').addEventListener('click', function () {
+          if (paginaAtual > 1) { paginaAtual--; renderTabelaEquipamentos(equipamentosFiltrados); }
+        });
+        document.getElementById('btn-proxima-pagina').addEventListener('click', function () {
+          if (paginaAtual < Math.ceil(equipamentosFiltrados.length / ITENS_POR_PAGINA)) {
+            paginaAtual++;
+            renderTabelaEquipamentos(equipamentosFiltrados);
+          }
+        });
+
+        console.log('✅ Filial v2.9.0 inicializada com sucesso!');
+      });
+    })();
+  }
 </script>
+
 </html>
+
+// via clasp 22:49

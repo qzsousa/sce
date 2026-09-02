@@ -1,0 +1,15 @@
+# Ignora tudo primeiro
+**/**
+
+# Libera os arquivos essenciais do Apps Script
+!appsscript.json
+!**/*.gs
+!**/*.js
+!**/*.ts
+!**/*.html
+
+# (Opcional) Bloqueia novamente as pastas que você não quer
+node_modules/
+database/
+package.json
+package-lock.json
