@@ -97,13 +97,30 @@ function getAutenticacaoSheetId_() {
 
 function sheetsApiGetValues_(sheetName) {
   const spreadsheetId = getSpreadsheetIdFor_(sheetName);
-  try {
-    const resp = Sheets.Spreadsheets.Values.get(spreadsheetId, sheetName);
-    return resp.values || [];
-  } catch (e) {
-    throw new Error(
-      'Erro ao ler aba "' + sheetName + '" via Sheets API: ' + e.message,
-    );
+  const maxRetries = 3;
+  const baseDelay = 1000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const resp = Sheets.Spreadsheets.Values.get(spreadsheetId, sheetName);
+      return resp.values || [];
+    } catch (e) {
+      const isTransient =
+        e.message.includes("currently unavailable") ||
+        e.message.includes("rate limit") ||
+        e.message.includes("quota") ||
+        e.message.includes("500") ||
+        e.message.includes("503");
+
+      if (isTransient && attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        Utilities.sleep(delay);
+        continue;
+      }
+      throw new Error(
+        'Erro ao ler aba "' + sheetName + '" via Sheets API: ' + e.message,
+      );
+    }
   }
 }
 
@@ -115,14 +132,37 @@ function sheetsApiBatchGetValues_(sheetNames) {
     porPlanilha[id].push(nome);
   });
   const resultado = {};
+  const maxRetries = 3;
+  const baseDelay = 1000;
+
   Object.keys(porPlanilha).forEach(function (spreadsheetId) {
     const ranges = porPlanilha[spreadsheetId];
-    const resp = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {
-      ranges: ranges,
-    });
-    (resp.valueRanges || []).forEach(function (vr, idx) {
-      resultado[ranges[idx]] = vr.values || [];
-    });
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const resp = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {
+          ranges: ranges,
+        });
+        (resp.valueRanges || []).forEach(function (vr, idx) {
+          resultado[ranges[idx]] = vr.values || [];
+        });
+        break;
+      } catch (e) {
+        const isTransient =
+          e.message.includes("currently unavailable") ||
+          e.message.includes("rate limit") ||
+          e.message.includes("quota") ||
+          e.message.includes("500") ||
+          e.message.includes("503");
+
+        if (isTransient && attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1);
+          Utilities.sleep(delay);
+          continue;
+        }
+        throw e;
+      }
+    }
   });
   return resultado;
 }
@@ -130,10 +170,32 @@ function sheetsApiBatchGetValues_(sheetNames) {
 function sheetsApiAppendRow_(sheetName, rowValues) {
   const spreadsheetId = getSpreadsheetIdFor_(sheetName);
   const resource = { values: [rowValues] };
-  Sheets.Spreadsheets.Values.append(resource, spreadsheetId, sheetName, {
-    valueInputOption: "USER_ENTERED",
-    insertDataOption: "INSERT_ROWS",
-  });
+  const maxRetries = 3;
+  const baseDelay = 1000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      Sheets.Spreadsheets.Values.append(resource, spreadsheetId, sheetName, {
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+      });
+      return;
+    } catch (e) {
+      const isTransient =
+        e.message.includes("currently unavailable") ||
+        e.message.includes("rate limit") ||
+        e.message.includes("quota") ||
+        e.message.includes("500") ||
+        e.message.includes("503");
+
+      if (isTransient && attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        Utilities.sleep(delay);
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 function columnToLetter_(col) {
@@ -159,10 +221,32 @@ function sheetsApiBatchUpdateCells_(sheetName, cellUpdates) {
       values: [[u.value === undefined || u.value === null ? "" : u.value]],
     };
   });
-  Sheets.Spreadsheets.Values.batchUpdate(
-    { valueInputOption: "USER_ENTERED", data: data },
-    spreadsheetId,
-  );
+  const maxRetries = 3;
+  const baseDelay = 1000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      Sheets.Spreadsheets.Values.batchUpdate(
+        { valueInputOption: "USER_ENTERED", data: data },
+        spreadsheetId,
+      );
+      return;
+    } catch (e) {
+      const isTransient =
+        e.message.includes("currently unavailable") ||
+        e.message.includes("rate limit") ||
+        e.message.includes("quota") ||
+        e.message.includes("500") ||
+        e.message.includes("503");
+
+      if (isTransient && attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        Utilities.sleep(delay);
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 const _sheetIdCache_ = {};
