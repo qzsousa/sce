@@ -1810,6 +1810,60 @@ function getHistoricoEquipamento(token, equipamentoId) {
     .reverse();
 }
 
+function getEmprestimosEquipamento(token, equipamentoId) {
+  const session = requireSession_(token);
+  if (
+    session.nivel !== CONFIG.NIVEIS.MATRIZ &&
+    session.nivel !== CONFIG.NIVEIS.ADMIN_FILIAL
+  ) {
+    const equipamentos = getAllEquipamentos_();
+    const item = equipamentos.filter(function (e) {
+      return e.id === equipamentoId;
+    })[0];
+    if (!item || !sessaoTemAcessoAUnidade_(session, item.unidade)) {
+      throw new Error("Você não tem permissão para ver este histórico.");
+    }
+  }
+
+  const data = sheetsApiGetValues_(CONFIG.SHEETS.EMPRESTIMOS);
+  if (!data || data.length < 2) return [];
+
+  const headers = data[0];
+  const equipamentoCol = headers.indexOf("equipamentoId");
+  const idCol = headers.indexOf("id");
+  const patrimonioCol = headers.indexOf("patrimonio");
+  const responsavelCol = headers.indexOf("responsavel");
+  const dataEmprestimoCol = headers.indexOf("dataEmprestimo");
+  const dataPrevistaCol = headers.indexOf("dataPrevistaDevolucao");
+  const dataDevolucaoCol = headers.indexOf("dataDevolucao");
+  const statusCol = headers.indexOf("status");
+  const termoPdfUrlCol = headers.indexOf("termoPdfUrl");
+  const tipoEmprestimoCol = headers.indexOf("tipoEmprestimo");
+  const escolaDestinoCol = headers.indexOf("escolaDestino");
+
+  return data
+    .slice(1)
+    .filter(function (row) {
+      return row[equipamentoCol] === equipamentoId;
+    })
+    .map(function (row) {
+      return {
+        id: row[idCol],
+        equipamentoId: row[equipamentoCol],
+        patrimonio: row[patrimonioCol],
+        responsavel: row[responsavelCol],
+        dataEmprestimo: row[dataEmprestimoCol],
+        dataPrevistaDevolucao: row[dataPrevistaCol],
+        dataDevolucao: row[dataDevolucaoCol],
+        status: row[statusCol],
+        termoPdfUrl: row[termoPdfUrlCol],
+        tipoEmprestimo: row[tipoEmprestimoCol],
+        escolaDestino: row[escolaDestinoCol],
+      };
+    })
+    .reverse();
+}
+
 // ============================================================================
 // REGISTRO DE MANUTENÇÃO
 // ============================================================================
@@ -2028,6 +2082,16 @@ function registrarEmprestimo(token, equipamentoIds, dadosEmprestimo) {
         "Emprestado",
         session.email,
       );
+
+      if (dadosEmprestimo.escolaDestino) {
+        registrarHistorico_(
+          item.id,
+          "escolaDestino",
+          "",
+          dadosEmprestimo.escolaDestino,
+          session.email,
+        );
+      }
     });
 
     registrarAuditoria_("registrarEmprestimo", session.email, {
@@ -2113,6 +2177,31 @@ function registrarDevolucao(token, equipamentoIds, observacoes) {
         "Disponível",
         session.email,
       );
+
+      const emprestimoData = sheetsApiGetValues_(CONFIG.SHEETS.EMPRESTIMOS);
+      const empHeaders = emprestimoData[0];
+      const empEquipCol = empHeaders.indexOf("equipamentoId");
+      const empStatusCol = empHeaders.indexOf("status");
+      const empEscolaCol = empHeaders.indexOf("escolaDestino");
+      for (let i = emprestimoData.length - 1; i >= 1; i--) {
+        if (
+          emprestimoData[i][empEquipCol] === id &&
+          emprestimoData[i][empStatusCol] === "Aberto"
+        ) {
+          const escolaDestino = emprestimoData[i][empEscolaCol] || "";
+          if (escolaDestino) {
+            registrarHistorico_(
+              id,
+              "escolaDestino",
+              escolaDestino,
+              "Devolvido",
+              session.email,
+            );
+          }
+          break;
+        }
+      }
+
       fecharEmprestimoAberto_(id, session.email, now, observacoes || "");
     });
 
