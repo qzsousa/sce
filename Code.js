@@ -493,6 +493,7 @@ function testDriveAccess() {
 
 function doGet(e) {
   try {
+    console.log('[doGet] Called with params:', JSON.stringify(e && e.parameter ? e.parameter : {}));
     cleanupExpiredSessions_();
 
     const params = e && e.parameter ? e.parameter : {};
@@ -500,6 +501,7 @@ function doGet(e) {
     // TEST PAGE: ?paginaTeste=Matriz|AdminFilial|Filial|Tecnico
     const paginaTeste = params.paginaTeste;
     if (paginaTeste) {
+      console.log('[doGet] Test page requested:', paginaTeste);
       return handleTestPage_(paginaTeste, params);
     }
 
@@ -509,6 +511,7 @@ function doGet(e) {
     let session = null;
     if (isDev && params.profile) {
       session = createDevSession_(params);
+      console.log('[doGet] Dev session created:', session.token);
       // Store token for subsequent requests
       const token = session.token;
       const baseUrl = ScriptApp.getService().getUrl();
@@ -519,12 +522,16 @@ function doGet(e) {
     }
 
     const token = params.token || null;
+    console.log('[doGet] Token from URL:', token);
     session = token ? validateSession_(token) : null;
+    console.log('[doGet] Session after validate:', session ? 'VALID' : 'NULL');
 
     if (!session) {
+      console.log('[doGet] No session, rendering Login');
       return renderTemplate_("Login");
     }
 
+    console.log('[doGet] Session valid, nivel:', session.nivel);
     if (session.nivel === CONFIG.NIVEIS.MATRIZ) {
       return renderTemplate_("DashboardMatriz", { session: session });
     }
@@ -908,25 +915,56 @@ function createSession_(usuario) {
 }
 
 function validateSession_(token) {
-  if (!token) return null;
+  if (!token) {
+    console.log('[validateSession_] No token provided');
+    return null;
+  }
+  const tokenStr = String(token).trim();
+  console.log('[validateSession_] Validating token:', tokenStr);
+  
   const data = getSessoesData_();
+  console.log('[validateSession_] Sheet rows:', data.length);
+  if (data.length > 1) {
+    console.log('[validateSession_] First session token:', String(data[1][0] || '').trim());
+    console.log('[validateSession_] First session email:', String(data[1][1] || '').trim());
+    console.log('[validateSession_] First session expiraEm:', data[1][5]);
+  }
+  
   for (let i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] === token) {
-      const expiraEm = Number(data[i][5]);
+    const sheetToken = String(data[i][0] || '').trim();
+    const sheetEmail = String(data[i][1] || '').trim().toLowerCase();
+    const expiraEm = Number(data[i][5]);
+    
+    console.log('[validateSession_] Row', i, '| token match:', sheetToken === tokenStr, '| expired:', Date.now() > expiraEm);
+    
+    if (sheetToken === tokenStr) {
       if (isNaN(expiraEm) || Date.now() > expiraEm) {
+        console.log('[validateSession_] Token expired or invalid expiraEm:', expiraEm);
         return null;
       }
-      const usuario = findUsuarioByEmail_(data[i][1]);
-      if (!usuario || usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO)
+      console.log('[validateSession_] Token found, looking up user:', sheetEmail);
+      const usuario = findUsuarioByEmail_(sheetEmail);
+      if (!usuario) {
+        console.log('[validateSession_] User NOT found in Usuarios sheet for:', sheetEmail);
+        // Debug: list all users
+        const allUsers = sheetsApiGetValues_(CONFIG.SHEETS.USUARIOS);
+        console.log('[validateSession_] All users in sheet:', allUsers.slice(1).map(r => r[0]));
         return null;
+      }
+      if (usuario.status === CONFIG.STATUS_USUARIO.REMOVIDO) {
+        console.log('[validateSession_] User is REMOVIDO:', sheetEmail);
+        return null;
+      }
+      console.log('[validateSession_] SUCCESS - user:', usuario.email, 'nivel:', usuario.nivel);
       return {
-        token: token,
-        email: data[i][1],
+        token: tokenStr,
+        email: sheetEmail,
         nivel: data[i][2],
         filial: data[i][3],
       };
     }
   }
+  console.log('[validateSession_] Token NOT FOUND in sheet. Available tokens:', data.slice(1).map(r => String(r[0] || '').trim()));
   return null;
 }
 
@@ -956,7 +994,9 @@ function cleanupExpiredSessions_() {
 }
 
 function requireSession_(token, niveisPermitidos) {
+  console.log('[requireSession_] Called with token:', token ? String(token).substring(0, 20) + '...' : 'null');
   const session = validateSession_(token);
+  console.log('[requireSession_] validateSession_ returned:', session ? 'VALID' : 'NULL');
   if (!session) {
     throw new Error("Sessão inválida ou expirada. Faça login novamente.");
   }
@@ -965,6 +1005,7 @@ function requireSession_(token, niveisPermitidos) {
       ? niveisPermitidos
       : [niveisPermitidos];
     if (niveis.indexOf(session.nivel) === -1) {
+      console.log('[requireSession_] Permission denied. User level:', session.nivel, 'Required:', niveis);
       throw new Error("Você não tem permissão para executar esta ação.");
     }
   }
