@@ -1,0 +1,20 @@
+/* ============================================================================
+   SCE — Main CSS Entry Point
+   Importa todos os módulos CSS na ordem correta
+   ============================================================================ */
+
+@import './variables.css';
+@import './base.css';
+@import './components.css';
+@import './status.css';
+@import './layout.css';
+
+/* ============================================================================
+   EXTERNAL DEPENDENCIES (via CDN links no HTML)
+   ============================================================================ */
+/*
+  Materialize CSS: https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css
+  Material Icons: https://fonts.googleapis.com/icon?family=Material+Icons
+  Google Fonts Inter: https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap
+  Chart.js: https://cdn.jsdelivr.net/npm/chart.js (carregado via JS)
+*/

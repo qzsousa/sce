@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCE - Dashboard Filial</title>
+  <meta name="api-base-url" content="http://localhost:3000/api">
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  
+  <style>
+    .campo-justificativa { margin-top: 5px; padding: 8px 0; }
+    .campo-outro { margin-top: 0; padding: 0 0 10px 0; display: none; }
+    .campo-outro input { width: 100%; }
+    .obrigatorio::after { content: " *"; color: #d32f2f; font-weight: bold; }
+    .campo-texto-marca-modelo { display: none; }
+  </style>
+  <script type="module" crossorigin src="/assets/filial--trP9SyB.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-XF5DtqH4.js">
+  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-BvTsVKpv.js">
+  <link rel="stylesheet" crossorigin href="/assets/dashboard-base-Cep402Dj.css">
+</head>
+<body class="theme-filial">
+  <div class="sce-container">
+    <div class="sce-page-title">
+      <i class="material-icons">store</i>
+      <div>
+        <h5 style="margin:0;">Painel da Unidade: <span id="nome-unidade">Carregando...</span></h5>
+        <span style="font-size:0.85rem;color:var(--sce-muted);">Perfil: <span id="perfil-usuario">Carregando...</span></span>
+      </div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações rápidas</div>
+      <div class="row" style="margin-bottom:0;display:flex;flex-wrap:wrap;gap:8px;">
+        <button class="btn waves-effect" id="btn-abrir-cadastro"><i class="material-icons left">add</i>Adicionar</button>
+        <button class="btn waves-effect" id="btn-abrir-emprestimo"><i class="material-icons left">assignment_turned_in</i>Emprestar</button>
+        <button class="btn waves-effect" id="btn-devolver-selecionados"><i class="material-icons left">keyboard_return</i>Devolver</button>
+        <button class="btn red waves-effect" id="btn-excluir-selecionados" style="display:none;"><i class="material-icons left">delete</i>Excluir selecionados</button>
+        <button class="btn waves-effect" id="btn-gerenciar-usuarios" style="display:none;"><i class="material-icons left">people</i>Usuários</button>
+        <button class="btn-flat waves-effect" id="btn-atualizar-lista"><i class="material-icons left">refresh</i>Atualizar</button>
+        <button class="btn" id="btn-exportar-csv"><i class="material-icons left">description</i>CSV</button>
+        <button class="btn" id="btn-exportar-pdf"><i class="material-icons left">picture_as_pdf</i>PDF</button>
+      </div>
+    </div>
+
+    <div id="kpis" class="kpi-grid"></div>
+
+    <div class="graficos-wrapper">
+      <div class="grafico-item"><div class="grafico-titulo"><i class="material-icons">pie_chart</i>Distribuição por status</div><div id="chart-status"><canvas id="canvas-chart-status"></canvas></div></div>
+      <div class="grafico-item"><div class="grafico-titulo"><i class="material-icons">category</i>Distribuição por categoria</div><div id="chart-categoria"><canvas id="canvas-chart-categoria"></canvas></div></div>
+    </div>
+
+    <div class="sce-panel" style="padding:0;overflow:hidden;">
+      <div class="filtros-tabela-wrapper">
+        <span class="filtros-titulo">Filtros</span>
+        <div class="campo-filtro campo-busca"><label for="filtro-busca">Buscar</label><input type="text" id="filtro-busca" placeholder="Patrimônio, série ou modelo"></div>
+        <div class="campo-filtro"><label for="filtro-status">Status</label><select id="filtro-status" class="browser-default"><option value="">Todos</option><option value="Disponível">Disponível</option><option value="Manutenção">Manutenção</option><option value="Emprestado">Emprestado</option><option value="Extraviado">Extraviado</option></select></div>
+        <div class="campo-filtro"><label for="filtro-categoria">Categoria</label><select id="filtro-categoria" class="browser-default"><option value="">Todas</option></select></div>
+        <div class="campo-filtro"><label for="filtro-marca">Marca</label><select id="filtro-marca" class="browser-default"><option value="">Todas</option></select></div>
+        <div class="campo-filtro"><label for="filtro-modelo">Modelo</label><select id="filtro-modelo" class="browser-default"><option value="">Todos</option></select></div>
+      </div>
+
+      <div class="tabela-equipamentos">
+        <table class="striped" id="tabela-equipamentos">
+          <thead>
+            <tr>
+              <th class="no-print" style="width:40px;"><label><input type="checkbox" id="check-todos"><span></span></label></th>
+              <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons">unfold_more</i></th>
+              <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons">unfold_more</i></th>
+              <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i class="material-icons">unfold_more</i></th>
+              <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons">unfold_more</i></th>
+              <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons">unfold_more</i></th>
+              <th>Manutenção</th>
+              <th>Devolução</th>
+              <th class="no-print" style="text-align:center;">Ações</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="paginacao">
+        <span class="info" id="pagina-info">Página 1 de 1 - 0 itens</span>
+        <div class="botoes">
+          <button id="btn-pagina-anterior" disabled>◀ Anterior</button>
+          <button id="btn-proxima-pagina">Próxima ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modais (mesmos IDs que o dashboard-base.js espera) -->
+  <div id="modal-tipo-emprestimo" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Tipo de empréstimo</h5><p>Selecione o tipo de empréstimo:</p><div class="row" style="margin-top:20px;"><div class="col s12 m6"><button class="btn waves-effect waves-light" style="width:100%;height:100px;" onclick="selecionarTipoEmprestimo('interno')"><i class="material-icons left" style="font-size:2rem;">business</i><div style="line-height:1.5;">Empréstimo<br>Interno</div><small>Para responsável da mesma unidade</small></button></div><div class="col s12 m6"><button class="btn waves-effect waves-light" style="width:100%;height:100px;background-color:#1a5f7a;" onclick="selecionarTipoEmprestimo('interestadual')"><i class="material-icons left" style="font-size:2rem;">school</i><div style="line-height:1.5;">Empréstimo<br>Inter-escolar</div><small>Para outra unidade/escola</small></button></div></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a></div></div>
+
+  <div id="modal-emprestimo" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Registrar empréstimo</h5><input type="hidden" id="emp-tipo" value="interno"><div class="row"><div class="input-field col s12" id="emp-campo-escola" style="display:none;"><select id="emp-escola-destino" class="browser-default"><option value="" disabled selected>Selecione a escola de destino</option></select><label>Escola de destino *</label></div><div class="input-field col s6"><input type="text" id="emp-responsavel"><label for="emp-responsavel">Responsável</label></div><div class="input-field col s3"><input type="text" id="emp-cpf"><label for="emp-cpf">CPF</label></div><div class="input-field col s3"><input type="email" id="emp-email"><label for="emp-email">E-mail</label></div><div class="input-field col s4"><input type="date" id="emp-prevista"><label for="emp-prevista" class="active">Previsão de devolução</label></div><div class="input-field col s8"><textarea id="emp-observacoes" class="materialize-textarea"></textarea><label for="emp-observacoes">Observações</label></div></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-confirmar-emprestimo">Registrar</a></div></div>
+
+  <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5><div class="row" id="cadastro-fields"></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-cadastro">Salvar</a></div></div>
+
+  <div id="modal-editar-equipamento" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5><input type="hidden" id="edit-id"><div class="row" id="edicao-fields"></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-edicao">Salvar</a></div></div>
+
+  <div id="modal-historico" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">history</i>Histórico de alterações</h5><p><strong>Equipamento:</strong> <span id="historico-patrimonio"></span> – <span id="historico-modelo"></span></p><table class="striped" id="tabela-historico"><thead><tr><th>Data</th><th>Autor</th><th>Campo</th><th>Valor antigo</th><th>Valor novo</th></tr></thead><tbody></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+
+  <div id="modal-confirmar-remocao" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5><p>Esta ação marcará o item como removido. Deseja continuar?</p></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn red" id="btn-confirmar-remocao">Remover</a></div></div>
+
+  <div id="modal-gerenciar-usuarios" class="modal modal-fixed-footer" style="display:none;"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">people</i>Gerenciar usuários</h5><div style="margin-bottom:20px;"><button class="btn waves-effect" id="btn-novo-usuario"><i class="material-icons left">person_add</i>Novo usuário</button><button class="btn-flat" id="btn-atualizar-usuarios"><i class="material-icons left">refresh</i>Atualizar</button></div><table class="striped" id="tabela-usuarios"><thead><tr><th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+
+  <div id="modal-editar-usuario" class="modal" style="display:none;"><div class="modal-content"><h5 id="titulo-modal-usuario">Adicionar usuário</h5><input type="hidden" id="usuario-email-original"><div class="row"><div class="input-field col s12"><input type="email" id="usuario-email"><label for="usuario-email">E-mail</label></div><div class="input-field col s12"><input type="text" id="usuario-nome"><label for="usuario-nome">Nome</label></div><input type="hidden" id="usuario-nivel" value="Filial"><input type="hidden" id="usuario-filial" value=""></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-usuario">Salvar</a></div></div>
+
+  <div id="modal-manutencao" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5><input type="hidden" id="manut-equipamento-id"><div class="row"><div class="input-field col s4"><select id="manut-status"><option value="Pendente">Pendente</option><option value="Em andamento">Em andamento</option><option value="Concluído">Concluído</option></select><label>Status</label></div><div class="input-field col s8"><textarea id="manut-descricao" class="materialize-textarea"></textarea><label for="manut-descricao">O que foi feito / observado</label></div></div><a class="btn waves-effect" id="btn-registrar-manutencao"><i class="material-icons left">add</i>Registrar</a><table class="striped" style="margin-top:20px;"><thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead><tbody id="tabela-manutencao-body"></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+
+  <footer class="sce-footer"><div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;"><span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span><a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a><a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a><a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a><span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.9.0</span></div></footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>

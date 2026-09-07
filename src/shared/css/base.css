@@ -1,0 +1,137 @@
+/* ============================================================================
+   BASE — Reset, tipografia, helpers de layout
+   ============================================================================ */
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--sce-bg);
+  font-family: 'Inter', 'Roboto', -apple-system, sans-serif;
+  color: var(--sce-ink);
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter', 'Roboto', -apple-system, sans-serif;
+  font-weight: 600;
+  color: var(--sce-ink);
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5rem;
+}
+
+/* ---------- Layout helpers ---------- */
+.sce-container {
+  padding: 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.sce-page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.sce-page-title .material-icons {
+  background: var(--sce-primary-light);
+  color: var(--sce-primary-dark);
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 26px;
+}
+
+.sce-page-title h5 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+/* ---------- Cards / panels ---------- */
+.card {
+  border-radius: var(--sce-radius) !important;
+  box-shadow: var(--sce-shadow) !important;
+  border: 1px solid var(--sce-border);
+}
+
+.sce-panel {
+  background: white;
+  border-radius: var(--sce-radius);
+  box-shadow: var(--sce-shadow);
+  border: 1px solid var(--sce-border);
+  padding: 20px 22px;
+  margin-bottom: 22px;
+}
+
+.sce-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--sce-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 14px;
+}
+
+.sce-panel-title .material-icons { font-size: 18px; }
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- Print styles ---------- */
+#sce-print-header { display: none; }
+
+@media print {
+  .sce-header,
+  .sce-page-title,
+  #sce-loading-overlay,
+  .modal,
+  button,
+  .btn,
+  .btn-flat,
+  .btn-small,
+  .no-print,
+  .filtros-rapidos,
+  .paginacao {
+    display: none !important;
+  }
+
+  #sce-print-header {
+    display: block !important;
+    margin-bottom: 16px;
+  }
+
+  #sce-print-header h4 { margin: 0 0 4px; }
+  #sce-print-header p { margin: 0; color: #555; font-size: .85rem; }
+
+  .sce-panel {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  body { background: white !important; }
+  .sce-container { padding: 0 !important; }
+  .theme-matriz, .theme-filial, .theme-tecnico {
+    --sce-bg: white !important;
+  }
+}
+
+/* ---------- Utility classes ---------- */
+.no-print { display: inherit; }
+@media print { .no-print { display: none !important; } }
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-muted { color: var(--sce-muted); }
+.mb-0 { margin-bottom: 0; }
+.mt-0 { margin-top: 0; }
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }

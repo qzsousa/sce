@@ -1,0 +1,314 @@
+/* ============================================================================
+   STATUS & BADGES — Cores de status, badges, filtros rápidos
+   ============================================================================ */
+
+/* Cores de fundo para linhas da tabela por status */
+tr.status-disponível { background-color: var(--status-disponivel) !important; }
+tr.status-manutenção { background-color: var(--status-manutencao) !important; }
+tr.status-emprestado { background-color: var(--status-emprestado) !important; }
+tr.status-extraviado { background-color: var(--status-extraviado) !important; }
+tr.status-inservível { background-color: var(--status-inservivel) !important; }
+tr.status-em-verificação { background-color: var(--status-em-verificacao) !important; }
+tr.status-removido { background-color: var(--status-removido) !important; opacity: 0.7; }
+
+/* Variações com hífen (para compatibilidade) */
+tr.status-manutencao { background-color: var(--status-manutencao) !important; }
+tr.status-em_verificacao { background-color: var(--status-em-verificacao) !important; }
+
+/* Badges de manutenção */
+.badge-manutencao {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badge-pendente {
+  background-color: var(--badge-pendente-bg);
+  color: var(--badge-pendente-text);
+}
+
+.badge-em-andamento {
+  background-color: var(--badge-andamento-bg);
+  color: var(--badge-andamento-text);
+}
+
+.badge-concluído,
+.badge-concluido {
+  background-color: var(--badge-concluido-bg);
+  color: var(--badge-concluido-text);
+}
+
+/* Badge de atraso de devolução */
+.badge-atraso {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-atrasado {
+  background-color: #ffcdd2;
+  color: #b71c1c;
+}
+
+.badge-em-dia {
+  background-color: #c8e6c9;
+  color: #1b5e20;
+}
+
+/* Badge BlueMonitor */
+.badge-blue {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-blue.sim {
+  background-color: #bbdefb;
+  color: #0d47a1;
+}
+
+.badge-blue.nao {
+  background-color: #e0e0e0;
+  color: #616161;
+}
+
+/* Ícone de atraso na tabela */
+.icone-atraso {
+  font-size: 1rem;
+  vertical-align: middle;
+}
+
+.icone-atraso.atrasado { color: #d32f2f; }
+.icone-atraso.em-dia { color: #2e7d32; }
+
+/* ============================================================================
+   FILTROS RÁPIDOS
+   ============================================================================ */
+
+.filtros-rapidos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filtros-rapidos .btn-filtro {
+  background: transparent;
+  border: 1px solid var(--sce-border);
+  border-radius: 20px;
+  padding: 4px 16px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--sce-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.filtros-rapidos .btn-filtro:hover {
+  background: var(--sce-primary-light);
+  border-color: var(--sce-primary);
+  color: var(--sce-primary-dark);
+}
+
+.filtros-rapidos .btn-filtro.ativo {
+  background: var(--sce-primary);
+  border-color: var(--sce-primary);
+  color: white;
+}
+
+/* Filtros de tabela (estilo Filial v2.9) */
+.filtros-tabela-wrapper {
+  background: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+  padding: 16px 20px;
+  border-bottom: 2px solid #e0e0e0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.filtros-tabela-wrapper .filtros-titulo {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--sce-muted);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-right: 8px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--sce-primary);
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.filtros-tabela-wrapper .campo-filtro {
+  flex: 1 1 160px;
+  min-width: 130px;
+}
+
+.filtros-tabela-wrapper .campo-filtro label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--sce-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.filtros-tabela-wrapper .campo-filtro select,
+.filtros-tabela-wrapper .campo-filtro input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.9rem;
+  transition: border-color .2s;
+  height: 40px;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.filtros-tabela-wrapper .campo-filtro select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.filtros-tabela-wrapper .campo-filtro select:focus,
+.filtros-tabela-wrapper .campo-filtro input:focus {
+  border-color: var(--sce-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.15);
+}
+
+.filtros-tabela-wrapper .campo-busca {
+  flex: 2 1 220px;
+}
+
+.filtros-tabela-wrapper .campo-busca input {
+  padding-left: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 12px center;
+}
+
+/* Tabela wrapper */
+.tabela-equipamentos {
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.tabela-equipamentos table { width: 100%; border-collapse: collapse; }
+
+.tabela-equipamentos thead {
+  background: var(--sce-primary);
+  color: #fff;
+}
+
+.tabela-equipamentos thead th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.tabela-equipamentos thead th .material-icons {
+  font-size: 16px;
+  vertical-align: middle;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tabela-equipamentos tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.tabela-equipamentos tbody tr:hover { background: #f5f8fc; }
+
+/* Paginação */
+.paginacao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #fafafa;
+  border-top: 1px solid #eee;
+  border-radius: 0 0 8px 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.paginacao .info {
+  color: var(--sce-muted);
+  font-size: 0.85rem;
+}
+
+.paginacao .botoes { display: flex; gap: 6px; }
+
+.paginacao .botoes button {
+  padding: 6px 16px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all .2s;
+}
+
+.paginacao .botoes button:hover:not(:disabled) {
+  background: var(--sce-primary);
+  color: #fff;
+  border-color: var(--sce-primary);
+}
+
+.paginacao .botoes button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .filtros-tabela-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .filtros-tabela-wrapper .campo-filtro {
+    flex: 1 1 auto;
+    min-width: unset;
+  }
+
+  .paginacao {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .paginacao .botoes { justify-content: center; }
+}

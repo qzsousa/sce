@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCE - Dashboard Matriz</title>
+  <meta name="api-base-url" content="http://localhost:3000/api">
+  
+  <!-- Materialize CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  
+<!-- Shared CSS -->
+<link rel="stylesheet" href="../shared/css/main.css">
+  
+  <style>
+    .campo-justificativa { margin-top: 5px; padding: 8px 0; }
+    .campo-outro { margin-top: 0; padding: 0 0 10px 0; display: none; }
+    .campo-outro input { width: 100%; }
+  </style>
+</head>
+<body class="theme-matriz">
+  <div class="sce-container">
+    <div class="sce-page-title">
+      <i class="material-icons">account_balance</i>
+      <div>
+        <h5 style="margin:0;">Perfil: Matriz – <span id="nome-usuario">Carregando...</span></h5>
+        <span style="font-size:0.85rem;color:var(--sce-muted);">Visualizando <span id="total-unidades">0</span> unidade(s)</span>
+      </div>
+    </div>
+
+    <div class="sce-panel" style="background:var(--sce-primary-light);border-color:var(--sce-primary);">
+      <div class="row" style="margin-bottom:0;align-items:center;">
+        <div class="col s12 m2" style="font-weight:600;color:var(--sce-primary-dark);"><i class="material-icons left" style="vertical-align:middle;">filter_list</i> Unidade:</div>
+        <div class="col s12 m4"><select id="seletor-unidade" class="browser-default" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--sce-border);background:white;"><option value="">Todas as unidades</option></select></div>
+        <div class="col s12 m6" style="text-align:right;font-size:0.85rem;color:var(--sce-muted);">Equipamentos: <span id="contador-equipamentos">0</span></div>
+      </div>
+    </div>
+
+    <div id="kpis" class="row"></div>
+
+    <div class="sce-panel">
+      <div class="row" style="margin-bottom:0;">
+        <div class="col s12 m4"><div class="sce-panel-title" style="font-size:0.9rem;"><i class="material-icons" style="font-size:18px;">pie_chart</i>Por status</div><div id="chart-status" style="width:100%;height:180px;position:relative;"><canvas id="canvas-chart-status"></canvas></div></div>
+        <div class="col s12 m4"><div class="sce-panel-title" style="font-size:0.9rem;"><i class="material-icons" style="font-size:18px;">business</i>Por unidade</div><div id="chart-unidade" style="width:100%;height:180px;position:relative;"><canvas id="canvas-chart-unidade"></canvas></div></div>
+        <div class="col s12 m4"><div class="sce-panel-title" style="font-size:0.9rem;"><i class="material-icons" style="font-size:18px;">category</i>Por categoria</div><div id="chart-categoria" style="width:100%;height:180px;position:relative;"><canvas id="canvas-chart-categoria"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações</div>
+      <div class="row" style="margin-bottom:0;">
+        <button class="btn waves-effect" id="btn-abrir-gestao-usuarios"><i class="material-icons left">group</i>Gerenciar usuários</button>
+        <button class="btn waves-effect" id="btn-abrir-cadastro"><i class="material-icons left">add</i>Adicionar equipamento</button>
+        <button class="btn red waves-effect" id="btn-excluir-selecionados"><i class="material-icons left">delete</i>Excluir selecionados</button>
+        <button class="btn waves-effect" id="btn-alterar-status-lote"><i class="material-icons left">edit</i>Alterar status em lote</button>
+        <button class="btn-flat waves-effect" id="btn-atualizar-lista"><i class="material-icons left">refresh</i>Atualizar</button>
+        <button class="btn" id="btn-exportar-csv"><i class="material-icons left">description</i>CSV</button>
+        <button class="btn" id="btn-exportar-pdf"><i class="material-icons left">picture_as_pdf</i>PDF</button>
+      </div>
+    </div>
+
+    <div class="sce-panel no-print">
+      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros adicionais</div>
+      <div class="filtros-rapidos">
+        <button class="btn-filtro ativo" data-filtro="todos">Todos</button>
+        <button class="btn-filtro" data-filtro="Disponível">Disponíveis</button>
+        <button class="btn-filtro" data-filtro="Manutenção">Manutenção</button>
+        <button class="btn-filtro" data-filtro="Extraviado">Extraviados</button>
+        <button class="btn-filtro" data-filtro="Emprestado">Emprestados</button>
+        <button class="btn-filtro" data-filtro="Inservível">Inservíveis</button>
+        <button class="btn-filtro" data-filtro="Em verificação">Em verificação</button>
+      </div>
+      <div class="row" style="margin-bottom:0;">
+        <div class="input-field col s6"><i class="material-icons prefix" style="color:var(--sce-muted);">search</i><input type="text" id="filtro-busca"><label for="filtro-busca">Buscar por patrimônio, série ou modelo</label></div>
+        <div class="input-field col s6"><select id="filtro-status"><option value="">Todos os status</option></select><label>Status</label></div>
+      </div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos — todas as unidades</div>
+      <table class="striped" id="tabela-equipamentos-global">
+        <thead>
+          <tr>
+            <th class="no-print"><label><input type="checkbox" id="check-todos"><span></span></label></th>
+            <th data-sort="unidade" class="sortable" style="cursor:pointer;">Unidade <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th>Manutenção</th>
+            <th>Devolução</th>
+            <th>BlueMonitor</th>
+            <th class="no-print">Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Modais (cadastro, edição, histórico, usuários, confirmação, manutenção, status lote) -->
+  <!-- Incluem-se aqui os mesmos modais do DashboardMatriz.html original -->
+  <!-- Por brevidade, incluo apenas os IDs necessários; o JS popula dinamicamente -->
+
+  <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5><div class="row" id="cadastro-fields"></div></div>
+    <div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-cadastro">Salvar</a></div>
+  </div>
+
+  <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5><input type="hidden" id="edit-id"><div class="row" id="edicao-fields"></div></div>
+    <div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-edicao">Salvar</a></div>
+  </div>
+
+  <div id="modal-historico" class="modal modal-fixed-footer">
+    <div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">history</i>Histórico de alterações</h5><p><strong>Equipamento:</strong> <span id="historico-patrimonio"></span> – <span id="historico-modelo"></span></p><table class="striped" id="tabela-historico"><thead><tr><th>Data</th><th>Autor</th><th>Campo</th><th>Valor antigo</th><th>Valor novo</th></tr></thead><tbody></tbody></table></div>
+    <div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div>
+  </div>
+
+  <div id="modal-usuarios" class="modal modal-fixed-footer">
+    <div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">group</i>Gerenciar usuários</h5><div class="row" style="margin-bottom:0;"><div class="input-field col s12 m3"><input type="email" id="user-email"><label for="user-email">E-mail</label></div><div class="input-field col s12 m3"><input type="text" id="user-nome"><label for="user-nome">Nome</label></div><div class="input-field col s12 m2"><select id="user-nivel"><option value="Matriz">Matriz</option><option value="AdminFilial">AdminFilial</option><option value="Filial" selected>Filial</option><option value="Tecnico">Técnico</option></select><label>Nível</label></div><div class="input-field col s12 m3"><input type="text" id="user-filial"><label for="user-filial">Filial(is) — separe por vírgula se for Técnico</label></div><div class="col s12 m1" style="display:flex; align-items:center; height:60px;"><button class="btn waves-effect btn-small" id="btn-adicionar-usuario" title="Adicionar" style="width:100%;"><i class="material-icons">add</i></button></div></div><table class="striped" id="tabela-usuarios"><thead><tr><th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+    <div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div>
+  </div>
+
+  <div id="modal-confirmar-remocao" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5><p>Esta ação marcará o item como removido. Deseja continuar?</p></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn red" id="btn-confirmar-remocao">Remover</a></div></div>
+
+  <div id="modal-manutencao" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5><input type="hidden" id="manut-equipamento-id"><div class="row"><div class="input-field col s4"><select id="manut-status"><option value="Pendente">Pendente</option><option value="Em andamento">Em andamento</option><option value="Concluído">Concluído</option></select><label>Status</label></div><div class="input-field col s8"><textarea id="manut-descricao" class="materialize-textarea"></textarea><label for="manut-descricao">O que foi feito / observado</label></div></div><a class="btn waves-effect" id="btn-registrar-manutencao"><i class="material-icons left">add</i>Registrar</a><table class="striped" style="margin-top:20px;"><thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead><tbody id="tabela-manutencao-body"></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+
+  <div id="modal-alterar-status-lote" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Alterar status em lote</h5><p>Selecione o novo status para os <span id="lote-contagem">0</span> equipamento(s) selecionado(s):</p><div class="input-field"><select id="lote-novo-status"><option value="Disponível">Disponível</option><option value="Manutenção">Manutenção</option><option value="Emprestado">Emprestado</option><option value="Extraviado">Extraviado</option><option value="Inservível">Inservível</option><option value="Em verificação">Em verificação</option></select><label>Novo status</label></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-confirmar-alterar-status-lote">Aplicar</a></div></div>
+
+  <footer class="sce-footer"><div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;"><span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span><a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a><a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a><a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a><span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.1.0</span></div></footer>
+
+  <!-- Materialize JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" src="./matriz.js"></script>
+</body>
+</html>

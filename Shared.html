@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 <script src="https://www.gstatic.com/charts/loader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="api.js"></script>
 
 <style>
   :root {
@@ -903,6 +904,26 @@ function getValorCampo(prefixo, campo) {
   const initialProfile = document.getElementById('sce-dev-profile-select').value;
   if (initialProfile === 'AdminFilial' || initialProfile === 'Tecnico') {
     document.getElementById('sce-dev-filial-input').style.display = 'block';
+  }
+})();
+
+// ================================================================
+// CONFIGURAÇÃO DA API (pode ser sobrescrita antes do carregamento)
+// ================================================================
+(function() {
+  // Permite definir API_BASE_URL via:
+  // 1. <meta name="api-base-url" content="https://sua-api.onrender.com/api">
+  // 2. window.ENV = { API_BASE_URL: '...' } antes do carregamento do api.js
+  // 3. Variável de ambiente no build (process.env.API_BASE_URL)
+  const metaApiUrl = document.querySelector('meta[name="api-base-url"]');
+  if (metaApiUrl && metaApiUrl.content) {
+    window.ENV = window.ENV || {};
+    window.ENV.API_BASE_URL = metaApiUrl.content;
+  }
+  // Fallback para desenvolvimento local
+  if (!window.ENV?.API_BASE_URL) {
+    window.ENV = window.ENV || {};
+    window.ENV.API_BASE_URL = 'http://localhost:3001/api';
   }
 })();
 </script>

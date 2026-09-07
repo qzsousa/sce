@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCE - Dashboard Técnico</title>
+  <meta name="api-base-url" content="http://localhost:3000/api">
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../shared/css/main.css">
+  
+  <style>
+    .campo-justificativa { margin-top: 5px; padding: 8px 0; }
+    .campo-outro { margin-top: 0; padding: 0 0 10px 0; display: none; }
+    .campo-outro input { width: 100%; }
+  </style>
+</head>
+<body class="theme-tecnico">
+  <div class="sce-container">
+    <div class="sce-page-title">
+      <i class="material-icons">engineering</i>
+      <div>
+        <h5 style="margin:0;">Perfil de técnico: <span id="nome-tecnico">Carregando...</span></h5>
+        <span style="font-size:0.85rem;color:var(--sce-muted);">Unidades atendidas: <span id="unidades-atendidas"></span></span>
+      </div>
+    </div>
+
+    <div class="sce-panel" style="background:var(--sce-primary-light);border-color:var(--sce-primary);">
+      <div class="row" style="margin-bottom:0;align-items:center;">
+        <div class="col s12 m2" style="font-weight:600;color:var(--sce-primary-dark);"><i class="material-icons left" style="vertical-align:middle;">filter_list</i> Unidade:</div>
+        <div class="col s12 m4"><select id="seletor-unidade" class="browser-default" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--sce-border);background:white;"><option value="">Todas as unidades</option></select></div>
+        <div class="col s12 m6" style="text-align:right;font-size:0.85rem;color:var(--sce-muted);">Equipamentos: <span id="contador-equipamentos">0</span></div>
+      </div>
+    </div>
+
+    <div id="kpis" class="row"></div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">pie_chart</i>Distribuição por status</div>
+      <div id="chart-status" style="width:100%;height:280px;position:relative;"><canvas id="canvas-chart-status"></canvas></div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">bolt</i>Ações rápidas</div>
+      <div class="row" style="margin-bottom:0;">
+        <button class="btn waves-effect" id="btn-abrir-cadastro"><i class="material-icons left">add</i>Adicionar</button>
+        <button class="btn-flat waves-effect" id="btn-atualizar-lista"><i class="material-icons left">refresh</i>Atualizar</button>
+        <button class="btn" id="btn-exportar-csv"><i class="material-icons left">description</i>CSV</button>
+        <button class="btn" id="btn-exportar-pdf"><i class="material-icons left">picture_as_pdf</i>PDF</button>
+      </div>
+    </div>
+
+    <div class="sce-panel no-print">
+      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros adicionais</div>
+      <div class="filtros-rapidos">
+        <button class="btn-filtro ativo" data-filtro="todos">Todos</button>
+        <button class="btn-filtro" data-filtro="Disponível">Disponíveis</button>
+        <button class="btn-filtro" data-filtro="Manutenção">Manutenção</button>
+        <button class="btn-filtro" data-filtro="Extraviado">Extraviados</button>
+        <button class="btn-filtro" data-filtro="Emprestado">Emprestados</button>
+        <button class="btn-filtro" data-filtro="Inservível">Inservíveis</button>
+        <button class="btn-filtro" data-filtro="Em verificação">Em verificação</button>
+      </div>
+      <div class="row" style="margin-bottom:0;">
+        <div class="input-field col s6"><i class="material-icons prefix" style="color:var(--sce-muted);">search</i><input type="text" id="filtro-busca"><label for="filtro-busca">Buscar por patrimônio, série ou modelo</label></div>
+        <div class="input-field col s6"><select id="filtro-status"><option value="">Todos os status</option></select><label>Status</label></div>
+      </div>
+    </div>
+
+    <div class="sce-panel">
+      <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos</div>
+      <table class="striped" id="tabela-equipamentos">
+        <thead>
+          <tr>
+            <th data-sort="unidade" class="sortable" style="cursor:pointer;">Unidade <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th>Manutenção</th>
+            <th>Devolução</th>
+            <th>BlueMonitor</th>
+            <th class="no-print">Ações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="row no-print" style="display:flex;align-items:center;gap:12px;margin-bottom:0;">
+        <button class="btn-flat" id="btn-pagina-anterior"><i class="material-icons left">chevron_left</i>Anterior</button>
+        <span id="pagina-info" style="color:var(--sce-muted);font-size:.9rem;"></span>
+        <button class="btn-flat" id="btn-proxima-pagina">Próxima<i class="material-icons right">chevron_right</i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modais (cadastro, edição, manutenção) -->
+  <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5><div class="row" id="cadastro-fields"></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-cadastro">Salvar</a></div></div>
+
+  <div id="modal-editar-equipamento" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5><input type="hidden" id="edit-id"><div class="row" id="edicao-fields"></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-edicao">Salvar</a></div></div>
+
+  <div id="modal-manutencao" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5><input type="hidden" id="manut-equipamento-id"><div class="row"><div class="input-field col s4"><select id="manut-status"><option value="Pendente">Pendente</option><option value="Em andamento">Em andamento</option><option value="Concluído">Concluído</option></select><label>Status</label></div><div class="input-field col s8"><textarea id="manut-descricao" class="materialize-textarea"></textarea><label for="manut-descricao">O que foi feito / observado</label></div></div><a class="btn waves-effect" id="btn-registrar-manutencao"><i class="material-icons left">add</i>Registrar</a><table class="striped" style="margin-top:20px;"><thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead><tbody id="tabela-manutencao-body"></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+
+  <footer class="sce-footer"><div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;"><span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span><a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a><a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a><a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a><span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.1.0</span></div></footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" src="./tecnico.js"></script>
+</body>
+</html>

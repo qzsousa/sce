@@ -555,23 +555,35 @@
   // TOKEN E AUTENTICAÇÃO
   // ================================================================
   (function() {
+    console.log('🔍 Iniciando captura de token...');
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
+    const tokenFromStorage = localStorage.getItem('sce_token');
+    var token = null;
+
     if (tokenFromUrl) {
-      localStorage.setItem('sce_token', tokenFromUrl);
-      console.log('✅ Token salvo no localStorage a partir da URL:', tokenFromUrl);
+      token = tokenFromUrl;
+      localStorage.setItem('sce_token', token);
+      console.log('✅ Token salvo no localStorage a partir da URL:', token);
+    } else if (tokenFromStorage && tokenFromStorage !== 'null' && tokenFromStorage !== 'undefined') {
+      token = tokenFromStorage;
+      localStorage.setItem('sce_token', token);
+      console.log('✅ Token carregado do localStorage:', token);
     } else {
-      console.warn('⚠️ Nenhum token encontrado na URL. Usando localStorage existente.');
+      console.error('❌ Nenhum token encontrado. Redirecionando...');
+      document.body.innerHTML = '<div style="text-align:center;padding:50px;font-family:sans-serif;"><h2>Sessão expirada</h2><p>Redirecionando para o login...</p></div>';
+      setTimeout(function () {
+        window.location.href = window.location.href.split('?')[0];
+      }, 2000);
+      return;
     }
+
+    window.SCE_TOKEN = token;
+    console.log('🔑 SCE_TOKEN definido:', window.SCE_TOKEN);
   })();
 
-  const SCE_TOKEN = localStorage.getItem('sce_token');
-  console.log('🔑 SCE_TOKEN:', SCE_TOKEN);
-
-  if (!SCE_TOKEN) {
-    console.error('❌ Nenhum token encontrado. Redirecionando para login...');
-    M.toast({ html: 'Sessão expirada. Faça login novamente.' });
-    setTimeout(function() { window.location.href = window.location.href.split('?')[0]; }, 2000);
+  if (typeof window.SCE_TOKEN === 'undefined' || !window.SCE_TOKEN) {
+    console.warn('⏳ Token não disponível. Aguardando redirecionamento...');
   }
 
   // ================================================================
@@ -638,6 +650,7 @@
   // ================================================================
   function carregarListasCadastro() {
     console.log('🟢 carregarListasCadastro() iniciado...');
+    console.log('🔑 SCE_TOKEN at call time:', SCE_TOKEN);
     google.script.run
       .withSuccessHandler(function (dados) {
         console.log('✅ Listas recebidas:', dados);

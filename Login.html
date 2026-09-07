@@ -433,8 +433,28 @@
         .withSuccessHandler(function (res) {
           isValidatingCode = false;
           if (res.ok) {
-            localStorage.setItem('sce_token', res.redirectUrl.split('token=')[1]);
-            top.location.href = res.redirectUrl;
+            const token = res.redirectUrl.split('token=')[1];
+            localStorage.setItem('sce_token', token);
+            console.log('✅ Token saved to localStorage, redirecting to:', res.redirectUrl);
+            
+            // Try multiple redirect methods for iframe compatibility
+            const redirect = function() {
+              try {
+                top.location.href = res.redirectUrl;
+              } catch (e) {
+                console.warn('top.location.href blocked, trying window.location.href');
+                try {
+                  window.location.href = res.redirectUrl;
+                } catch (e2) {
+                  console.warn('window.location.href blocked, trying meta refresh');
+                  const meta = document.createElement('meta');
+                  meta.httpEquiv = 'refresh';
+                  meta.content = '0;url=' + res.redirectUrl;
+                  document.head.appendChild(meta);
+                }
+              }
+            };
+            redirect();
           } else {
             setButtonsDisabled(false);
             setFeedback(res.message, 'error');
@@ -470,8 +490,13 @@
 
     (function tentarSessaoSalva() {
       const token = localStorage.getItem('sce_token');
-      if (token) {
-        top.location.href = window.location.href.split('?')[0] + '?token=' + token;
+      if (token && token !== 'null' && token !== 'undefined') {
+        console.log('🔄 Restoring session from localStorage:', token);
+        try {
+          top.location.href = window.location.href.split('?')[0] + '?token=' + token;
+        } catch (e) {
+          window.location.href = window.location.href.split('?')[0] + '?token=' + token;
+        }
       }
     })();
   </script>

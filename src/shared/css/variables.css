@@ -1,0 +1,74 @@
+/* ============================================================================
+   CSS CUSTOM PROPERTIES — Variáveis globais do SCE
+   ============================================================================ */
+
+:root {
+  /* Cores base (tema padrão = Matriz) */
+  --sce-primary: #0B1E36;
+  --sce-primary-dark: #070f1f;
+  --sce-primary-light: #d6dce5;
+  --sce-accent: #C9A94E;
+  --sce-ink: #1c2733;
+  --sce-muted: #64748b;
+  --sce-border: #c9c9c9;
+  --sce-bg: #fafaf8;
+
+  /* Espaçamento e formas */
+  --sce-radius: 10px;
+  --sce-shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --sce-shadow-md: 0 4px 12px rgba(16,24,40,.08), 0 2px 4px rgba(16,24,40,.06);
+
+  /* Status colors (usados em badges/linhas) */
+  --status-disponivel: #e8f5e9;
+  --status-manutencao: #fff3e0;
+  --status-emprestado: #e3f2fd;
+  --status-extraviado: #ffebee;
+  --status-inservivel: #efebe9;
+  --status-em-verificacao: #f3e5f5;
+  --status-removido: #eceff1;
+
+  /* Badge colors */
+  --badge-pendente-bg: #fff9c4;
+  --badge-pendente-text: #f57f17;
+  --badge-andamento-bg: #bbdefb;
+  --badge-andamento-text: #0d47a1;
+  --badge-concluido-bg: #c8e6c9;
+  --badge-concluido-text: #1b5e20;
+}
+
+/* ============================================================================
+   TEMAS POR PERFIL — Sobrescrevem variáveis base
+   ============================================================================ */
+
+.theme-matriz {
+  --sce-primary: #0B1E36;
+  --sce-primary-dark: #070f1f;
+  --sce-primary-light: #d6dce5;
+  --sce-accent: #C9A94E;
+  --sce-ink: #1c2733;
+  --sce-muted: #64748b;
+  --sce-border: #c9c9c9;
+  --sce-bg: #fafaf8;
+}
+
+.theme-filial {
+  --sce-primary: #1A5F7A;
+  --sce-primary-dark: #0f3d52;
+  --sce-primary-light: #d4e4ed;
+  --sce-accent: #F28C28;
+  --sce-ink: #1c2733;
+  --sce-muted: #64748b;
+  --sce-border: #c3d4de;
+  --sce-bg: #f5fafc;
+}
+
+.theme-tecnico {
+  --sce-primary: #2F3640;
+  --sce-primary-dark: #1a1e24;
+  --sce-primary-light: #d4d6d9;
+  --sce-accent: #E84118;
+  --sce-ink: #1c2733;
+  --sce-muted: #64748b;
+  --sce-border: #cccdcf;
+  --sce-bg: #eef0f2;
+}

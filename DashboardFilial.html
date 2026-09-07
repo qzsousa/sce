@@ -1047,8 +1047,9 @@
       token = tokenFromUrl;
       localStorage.setItem('sce_token', token);
       console.log('✅ Token salvo do localStorage a partir da URL:', token);
-    } else if (tokenFromStorage) {
+    } else if (tokenFromStorage && tokenFromStorage !== 'null' && tokenFromStorage !== 'undefined') {
       token = tokenFromStorage;
+      localStorage.setItem('sce_token', token);
       console.log('✅ Token carregado do localStorage:', token);
     } else {
       console.error('❌ Nenhum token encontrado. Redirecionando...');
