@@ -88,16 +88,14 @@ async function fazerLogin() {
         const page = dashboardMap[nivel] || 'matriz.html';
         console.log('Page:', page);
         
-        // Em dev Vite serve em /pages/, em prod na raiz
-        const isDev = window.location.hostname === 'localhost' && window.location.port === '5173';
-        const basePath = isDev ? '/pages/' : '/';
+        // Vercel serves pages at /pages/
+        const basePath = '/pages/';
         const finalUrl = `${basePath}${page}?token=${encodeURIComponent(token)}`;
         console.log('Final redirect URL:', finalUrl);
         window.location.href = finalUrl;
       } catch (e) {
         console.warn('⚠️ Erro ao buscar perfil, usando matriz.html:', e);
-        const isDev = window.location.hostname === 'localhost' && window.location.port === '5173';
-        const basePath = isDev ? '/pages/' : '/';
+        const basePath = '/pages/';
         const finalUrl = `${basePath}matriz.html?token=${encodeURIComponent(token)}`;
         console.log('Fallback redirect URL:', finalUrl);
         window.location.href = finalUrl;
