@@ -4,16 +4,11 @@
 
 import { loginWithPassword } from '../shared/js/api.js';
 import { toastError, toastSuccess, toastInfo, setButtonLoading, isButtonLoading } from '../shared/js/ui.js';
-import { getToken, setToken, initAuthFromUrl, getScriptUrlBase } from '../shared/js/auth.js';
+import { getToken, setToken, initAuthFromUrl } from '../shared/js/auth.js';
 
 console.log('🔄 Login module loading...');
 
 initAuthFromUrl();
-
-if (getToken()) {
-  console.log('🔄 Token encontrado, redirecionando...');
-  window.location.href = getScriptUrlBase();
-}
 
 const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
