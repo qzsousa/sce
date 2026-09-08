@@ -2,7 +2,7 @@
 // API CLIENT — Cliente HTTP para comunicação com o backend
 // ============================================================================
 
-function getApiBaseUrl() {
+export function getApiBaseUrl() {
   return (typeof process !== 'undefined' && process.env?.API_BASE_URL)
     ? process.env.API_BASE_URL
     : (window.ENV?.API_BASE_URL || 'http://localhost:3000/api');
