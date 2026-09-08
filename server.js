@@ -171,12 +171,12 @@ app.post('/api/login-password', asyncHandler(async (req, res) => {
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
   const dashboardMap = {
-    [niveis.MATRIZ]: 'matriz.html',
-    [niveis.ADMIN_FILIAL]: 'filial.html',
-    [niveis.FILIAL]: 'filial.html',
-    [niveis.TECNICO]: 'tecnico.html',
+    [niveis.MATRIZ]: 'pages/matriz.html',
+    [niveis.ADMIN_FILIAL]: 'pages/filial.html',
+    [niveis.FILIAL]: 'pages/filial.html',
+    [niveis.TECNICO]: 'pages/tecnico.html',
   };
-  const dashboardPage = dashboardMap[usuario.nivel] || 'matriz.html';
+  const dashboardPage = dashboardMap[usuario.nivel] || 'pages/matriz.html';
   const redirectUrl = `${frontendUrl}/${dashboardPage}?token=${encodeURIComponent(token)}`;
   await registrarAuditoria('login', email, { via: 'password' });
 
