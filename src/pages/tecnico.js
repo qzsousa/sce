@@ -98,51 +98,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================================================
 // TOKEN E AUTENTICAÇÃO
 // ============================================================================
-
-(function() {
-  console.log('🔍 Iniciando captura de token...');
-  const urlParams = new URLSearchParams(window.location.search);
-  const tokenFromUrl = urlParams.get('token');
-  const tokenFromStorage = localStorage.getItem('sce_token');
-  let token = null;
-
-  if (tokenFromUrl) {
-    token = tokenFromUrl;
-    localStorage.setItem('sce_token', token);
-    console.log('✅ Token salvo no localStorage a partir da URL:', token);
-  } else if (tokenFromStorage && tokenFromStorage !== 'null' && tokenFromStorage !== 'undefined') {
-    token = tokenFromStorage;
-    localStorage.setItem('sce_token', token);
-    console.log('✅ Token carregado do localStorage:', token);
-  } else {
-    console.error('❌ Nenhum token encontrado. Redirecionando...');
-    document.body.innerHTML = '<div style="text-align:center;padding:50px;font-family:sans-serif;"><h2>Sessão expirada</h2><p>Redirecionando para o login...</p></div>';
-    setTimeout(function () { window.location.href = window.location.href.split('?')[0]; }, 2000);
-    return;
-  }
-
-  window.SCE_TOKEN = token;
-  console.log('🔑 SCE_TOKEN definido:', window.SCE_TOKEN);
-})();
-
-if (typeof window.SCE_TOKEN === 'undefined' || !window.SCE_TOKEN) {
-  console.warn('⏳ Token não disponível. Aguardando redirecionamento...');
-}
- 
-// ============================================================================
-// UNIDADES DO TÉCNICO
-// ============================================================================
- 
-// window.UNIDADES_TECNICO já declarado no topo
-// ============================================================================
 // OBTER NOME DO TÉCNICO
 // ============================================================================
 
-function obterNomeTecnico() {
-  fetch(`${getApiBaseUrl()}/get-nome-usuario?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() })
-    .then(r => r.json()).then(data => {
-      if (data.success) document.getElementById('nome-tecnico').innerText = data.data || 'Técnico';
-    }).catch(() => { document.getElementById('nome-tecnico').innerText = 'Técnico'; });
+async function obterNomeTecnico() {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/get-nome-usuario?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() });
+    const data = await res.json();
+    if (data.success) document.getElementById('nome-tecnico').innerText = data.data || 'Técnico';
+  } catch { document.getElementById('nome-tecnico').innerText = 'Técnico'; }
 }
 
 // ============================================================================

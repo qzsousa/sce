@@ -169,7 +169,7 @@ app.post('/api/login-password', asyncHandler(async (req, res) => {
   await sheets.ensureSheetExists('Sessoes', HEADER_MAP.SESSOES);
   await sheets.appendRow('Sessoes', [token, usuario.email, usuario.nivel, usuario.filial, agora.toISOString(), expiraEm.toISOString()]);
 
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const frontendUrl = process.env.FRONTEND_URL || 'https://sce-ebon.vercel.app';
   const dashboardMap = {
     [niveis.MATRIZ]: 'pages/matriz.html',
     [niveis.ADMIN_FILIAL]: 'pages/filial.html',
@@ -177,10 +177,10 @@ app.post('/api/login-password', asyncHandler(async (req, res) => {
     [niveis.TECNICO]: 'pages/tecnico.html',
   };
   const dashboardPage = dashboardMap[usuario.nivel] || 'pages/matriz.html';
-  const redirectUrl = `${frontendUrl}/${dashboardPage}?token=${encodeURIComponent(token)}`;
+  const redirectUrl = `${frontendUrl}/${dashboardPage}`;
   await registrarAuditoria('login', email, { via: 'password' });
 
-  res.json(standardResponse(true, { message: 'Login realizado com sucesso.', redirectUrl }));
+  res.json(standardResponse(true, { message: 'Login realizado com sucesso.', token, redirectUrl }));
 }));
 
 // ============================================================

@@ -51,50 +51,18 @@ async function fazerLogin() {
     console.log('📥 Resposta login:', res);
     isLoggingIn = false;
 
-    // A API retorna { message, redirectUrl } - não tem res.ok
-    if (res && res.redirectUrl) {
-      const token = res.redirectUrl.split('token=')[1];
-      console.log('🔑 Token extraído:', token);
+    // A API retorna { token, redirectUrl } - não tem res.ok
+    if (res && res.token) {
+      const token = res.token;
+      console.log('🔑 Token recebido:', token);
       setToken(token);
       console.log('✅ Token salvo, redirecionando para dashboard...');
-      console.log('redirectUrl from backend:', res.redirectUrl);
-      console.log('Current location:', window.location.href);
-      console.log('Hostname:', window.location.hostname, 'Port:', window.location.port);
 
-      // Busca perfil do usuário para saber qual dashboard abrir
-      try {
-        const apiBase = window.ENV?.API_BASE_URL || 'http://localhost:3000/api';
-        console.log('Fetching user from:', `${apiBase}/get-nome-usuario?token=${encodeURIComponent(token)}`);
-        const userRes = await fetch(`${apiBase}/get-nome-usuario?token=${encodeURIComponent(token)}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        console.log('User response status:', userRes.status);
-        const userData = await userRes.json();
-        console.log('User data:', userData);
-        const nivel = userData.data?.nivel || 'Matriz';
-        console.log('Nivel:', nivel);
-        
-        const dashboardMap = {
-          'Matriz': 'matriz.html',
-          'AdminFilial': 'filial.html',
-          'Filial': 'filial.html',
-          'Tecnico': 'tecnico.html'
-        };
-        const page = dashboardMap[nivel] || 'matriz.html';
-        console.log('Page:', page);
-        
-        // Vercel serves pages at /pages/
-        const basePath = '/pages/';
-        const finalUrl = `${basePath}${page}?token=${encodeURIComponent(token)}`;
-        console.log('Final redirect URL:', finalUrl);
-        window.location.href = finalUrl;
-      } catch (e) {
-        console.warn('⚠️ Erro ao buscar perfil, usando matriz.html:', e);
-        const basePath = '/pages/';
-        const finalUrl = `${basePath}matriz.html?token=${encodeURIComponent(token)}`;
-        console.log('Fallback redirect URL:', finalUrl);
-        window.location.href = finalUrl;
-      }
+      // Redireciona para a página do dashboard (Vercel serve em /pages/)
+      const basePath = '/pages/';
+      const finalUrl = `${basePath}matriz.html`;
+      console.log('Final redirect URL:', finalUrl);
+      window.location.href = finalUrl;
     } else {
       console.error('❌ Login falhou - resposta inesperada:', res);
       setButtonsDisabled(false);

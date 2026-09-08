@@ -1,5 +1,5 @@
 // ============================================================================
-// AUTH — Gerenciamento de token e sessão
+// AUTH — Gerenciamento de token e sessão (localStorage-only, 24h expiry)
 // ============================================================================
 
 // Initialize API base URL from meta tag
@@ -14,21 +14,47 @@
 const TOKEN_KEY = 'sce_token';
 
 export function getToken() {
-  return window.SCE_TOKEN || localStorage.getItem(TOKEN_KEY) || '';
+  const stored = localStorage.getItem('sce_token');
+  if (!stored) return '';
+  
+  try {
+    const { token, expiresAt } = JSON.parse(stored);
+    if (Date.now() > expiresAt) {
+      clearToken();
+      return '';
+    }
+    return token;
+  } catch {
+    // Legacy format or corrupted - clear and return empty
+    clearToken();
+    return '';
+  }
 }
 
 export function setToken(token) {
+  const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
   window.SCE_TOKEN = token;
-  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem('sce_token', JSON.stringify({ token, expiresAt: Date.now() + 24 * 60 * 60 * 1000 }));
 }
 
 export function clearToken() {
   window.SCE_TOKEN = null;
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem('sce_token');
 }
 
 export function isAuthenticated() {
   return !!getToken();
+}
+
+export function isTokenExpired() {
+  const stored = localStorage.getItem('sce_token');
+  if (!stored) return true;
+  try {
+    const { expiresAt } = JSON.parse(stored);
+    return Date.now() > expiresAt;
+  } catch {
+    return true;
+  }
 }
 
 export function getAuthHeaders(token = null) {
@@ -52,16 +78,21 @@ export function logout() {
   }
 }
 
-// Auto-restore token from URL on page load
+// Auto-restore token from URL on page load (for backward compatibility during transition)
 export function initAuthFromUrl() {
   const urlParams = new URLSearchParams(window.location.search);
   const tokenFromUrl = urlParams.get('token');
   if (tokenFromUrl) {
-    setToken(tokenFromUrl);
-    // Limpa URL sem recarregar
+    const stored = localStorage.getItem('sce_token');
+    if (!stored) {
+      // Only set from URL if no token already in localStorage
+      const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+      localStorage.setItem('sce_token', JSON.stringify({ token: tokenFromUrl, expiresAt: Date.now() + 24 * 60 * 60 * 1000 }));
+    }
+    // Clear URL without reload
     window.history.replaceState({}, document.title, getScriptUrlBase());
   }
 }
 
-// Chama ao carregar
+// Call on load for backward compatibility during transition
 initAuthFromUrl();

@@ -6,7 +6,7 @@ import { getEquipamentosDaFilial, getEquipamentosGlobal, createEquipamento, upda
 import { showLoading, hideLoading, toastSuccess, toastError, toastInfo, setButtonLoading, isButtonLoading, downloadCsv, openModal, closeModal, initModals, initSelects, updateTextFields, fileToBase64, validateFile } from '../shared/js/ui.js';
 import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache } from '../shared/js/lists.js';
 import { formatDate, formatDateShort, getFormData, clearForm, getNested } from '../shared/js/utils.js';
-import { getToken, initAuthFromUrl, logout, getAuthHeaders } from '../shared/js/auth.js';
+import { getToken, initAuthFromUrl, logout, getAuthHeaders, isAuthenticated } from '../shared/js/auth.js';
 
 // ============================================================================
 // CONSTANTES COMPARTILHADAS (exportadas para uso nas páginas)
@@ -38,10 +38,9 @@ export async function initDashboardBase(options = {}) {
   const { perfil, loadEquipamentos = true } = options;
   
   // Verifica autenticação
-  initAuthFromUrl();
   const token = getToken();
-  if (!token) {
-    window.location.href = getScriptUrlBase();
+  if (!token || !isAuthenticated()) {
+    window.location.href = '/login.html';
     return;
   }
 
