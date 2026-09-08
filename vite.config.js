@@ -12,6 +12,7 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
+        index: 'index.html',
         login: 'login.html',
         matriz: 'pages/matriz.html',
         filial: 'pages/filial.html',
