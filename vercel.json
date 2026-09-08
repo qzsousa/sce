@@ -1,5 +1,7 @@
 {
   "buildCommand": "npx vite build",
   "outputDirectory": "dist",
-  "framework": "vite"
+  "framework": "vite",
+  "cleanUrls": true,
+  "trailingSlash": false
 }
