@@ -98,7 +98,7 @@ async function carregarListas() {
     showLoading();
     const dados = await (window.sceLists?.getListasCache ? window.sceLists.getListasCache() : null) 
       || await window.sceApi?.getListasCache?.() 
-      || await fetch('/api/listas-cadastro?token=' + encodeURIComponent(getToken()), { headers: getAuthHeaders() }).then(r => r.json()).then(r => r.data);
+      || await fetch(`${getApiBaseUrl()}/listas-cadastro?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() }).then(r => r.json()).then(r => r.data);
     
     if (dados) {
       setListasCache(dados);

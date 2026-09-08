@@ -243,7 +243,7 @@ function selecionarTipoEmprestimo(tipo) {
   if (tipo === 'interestadual') {
     campoEscola.style.display = 'block';
     if (selectEscola.options.length <= 1) {
-      fetch('/api/filiais-para-emprestimo?token=' + encodeURIComponent(getToken()), { headers: getAuthHeaders() })
+      fetch(`${getApiBaseUrl()}/filiais-para-emprestimo?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() })
         .then(r => r.json()).then(data => {
           if (data.success) {
             selectEscola.innerHTML = '<option value="" disabled selected>Selecione a escola de destino</option>' +
@@ -288,7 +288,7 @@ async function confirmarEmprestimo() {
   setButtonLoading(btn, true);
   try {
     const token = getToken();
-    const res = await fetch('/api/registrar-emprestimo?token=' + encodeURIComponent(token), {
+    const res = await fetch(`${getApiBaseUrl()}/registrar-emprestimo?token=` + encodeURIComponent(token), {
       method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ids, ...dados })
     });
     const data = await res.json();
@@ -314,7 +314,7 @@ async function devolverSelecionados() {
   setButtonLoading(btn, true);
   try {
     const token = getToken();
-    const res = await fetch('/api/registrar-devolucao?token=' + encodeURIComponent(token), {
+    const res = await fetch(`${getApiBaseUrl()}/registrar-devolucao?token=` + encodeURIComponent(token), {
       method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ids, observacao: '' })
     });
     const data = await res.json();
@@ -347,7 +347,7 @@ async function carregarUsuariosUI() {
   showLoading();
   try {
     const token = getToken();
-    const res = await fetch('/api/listar-usuarios?token=' + encodeURIComponent(token), { headers: getAuthHeaders() });
+    const res = await fetch(`${getApiBaseUrl()}/listar-usuarios?token=` + encodeURIComponent(token), { headers: getAuthHeaders() });
     const data = await res.json();
     usuariosCache = data.data || [];
     renderTabelaUsuarios(usuariosCache);
@@ -459,7 +459,7 @@ async function removerUsuarioUI(email) {
   if (!confirm('Tem certeza que deseja remover o usuário ' + email + '?')) return;
   showLoading();
   try {
-    const res = await fetch('/api/remover-usuario?token=' + encodeURIComponent(getToken()), {
+    const res = await fetch(`${getApiBaseUrl()}/remover-usuario?token=` + encodeURIComponent(getToken()), {
       method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ email })
     });
     const data = await res.json();
