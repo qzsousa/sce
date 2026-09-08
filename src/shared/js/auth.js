@@ -1,6 +1,15 @@
 // ============================================================================
-   // AUTH — Gerenciamento de token e sessão
-   // ============================================================================
+// AUTH — Gerenciamento de token e sessão
+// ============================================================================
+
+// Initialize API base URL from meta tag
+(function initApiBaseUrl() {
+  const meta = document.querySelector('meta[name="api-base-url"]');
+  if (meta && meta.content) {
+    window.ENV = window.ENV || {};
+    window.ENV.API_BASE_URL = meta.content;
+  }
+})();
 
 const TOKEN_KEY = 'sce_token';
 
