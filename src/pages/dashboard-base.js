@@ -257,9 +257,11 @@ export function abrirCadastroEquipamento() {
 
   const anexoInput = document.getElementById('new-anexoBoletim');
   if (anexoInput) anexoInput.value = '';
-  document.getElementById('campo-justificativa-patrimonio').style.display = 'none';
-  document.getElementById('campo-justificativa-serie').style.display = 'none';
   configurarJustificativas('new');
+  const justPatContainer = document.getElementById('campo-justificativa-patrimonio');
+  const justSerieContainer = document.getElementById('campo-justificativa-serie');
+  if (justPatContainer) justPatContainer.style.display = 'none';
+  if (justSerieContainer) justSerieContainer.style.display = 'none';
 
   if (listasCache) preencherSelectCategoria('new');
   else { carregarListas(); setTimeout(() => preencherSelectCategoria('new'), 500); }
