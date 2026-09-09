@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SCE - Sistema de Controle de Equipamentos</title>
-  <meta http-equiv="refresh" content="0; url=/login.html">
+  <meta http-equiv="refresh" content="0; url=/login">
 </head>
 <body>
   <script>
     // Redireciona para login se não estiver em uma página válida
-    if (!window.location.pathname.match(/\/(login|matriz|filial|tecnico)\.html$/)) {
-      window.location.href = '/login.html';
+    if (!window.location.pathname.match(/\/(login|matriz|filial|tecnico)(\.html)?$/)) {
+      window.location.href = '/login';
     }
   </script>
   <p>Redirecionando para o login...</p>

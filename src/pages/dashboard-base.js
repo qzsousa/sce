@@ -40,7 +40,7 @@ export async function initDashboardBase(options = {}) {
   // Verifica autenticação
   const token = getToken();
   if (!token || !isAuthenticated()) {
-    window.location.href = '/login.html';
+    window.location.href = '/login';
     return;
   }
 

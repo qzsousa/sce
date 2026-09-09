@@ -52,15 +52,15 @@ async function fazerLogin() {
     isLoggingIn = false;
 
     // A API retorna { token, redirectUrl } - não tem res.ok
-    if (res && res.token) {
-      const token = res.token;
+    // Handle both {token} and {data: {token}} response formats
+    const token = res?.token ?? res?.data?.token;
+    if (token) {
       console.log('🔑 Token recebido:', token);
       setToken(token);
       console.log('✅ Token salvo, redirecionando para dashboard...');
 
-      // Redireciona para a página do dashboard (Vercel serve em /pages/)
-      const basePath = '/pages/';
-      const finalUrl = `${basePath}matriz.html`;
+      // Vercel cleanUrls=true removes .html extension
+      const finalUrl = '/pages/matriz';
       console.log('Final redirect URL:', finalUrl);
       window.location.href = finalUrl;
     } else {
