@@ -102,8 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function carregarEquipamentosGlobal() {
   showLoading();
   try {
-    const token = getToken();
-    const res = await fetch(`${getApiBaseUrl()}/equipamentos-global?token=` + encodeURIComponent(token), {
+    const res = await fetch(`${getApiBaseUrl()}/equipamentos-global`, {
       headers: getAuthHeaders()
     });
     const data = await res.json();
@@ -345,7 +344,7 @@ function excluirSelecionados() {
   let concluidos = 0;
   
   ids.forEach(id => {
-    fetch(`${getApiBaseUrl()}/remover-equipamento?token=` + encodeURIComponent(getToken()), {
+    fetch(`${getApiBaseUrl()}/remover-equipamento`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ id })
@@ -386,7 +385,7 @@ function confirmarAlterarStatusLote() {
   
   ids.forEach(id => {
     const campos = { status: novoStatus };
-    fetch(`${getApiBaseUrl()}/update-equipamento?token=` + encodeURIComponent(getToken()), {
+    fetch(`${getApiBaseUrl()}/update-equipamento`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: JSON.stringify({ id, ...campos })
@@ -420,8 +419,7 @@ async function abrirGestaoUsuarios() {
 
 async function carregarUsuarios() {
   try {
-    const token = getToken();
-    const res = await fetch(`${getApiBaseUrl()}/listar-usuarios?token=` + encodeURIComponent(token), { headers: getAuthHeaders() });
+    const res = await fetch(`${getApiBaseUrl()}/listar-usuarios`, { headers: getAuthHeaders() });
     const data = await res.json();
     usuariosCache = data.data || [];
     renderTabelaUsuarios(usuariosCache);
@@ -462,7 +460,7 @@ function adicionarUsuarioUI() {
   if (!novoUsuario.email || !novoUsuario.nome) { toastError('Informe e-mail e nome.'); return; }
   
   setButtonLoading(btn, true);
-  fetch(`${getApiBaseUrl()}/adicionar-usuario?token=` + encodeURIComponent(getToken()), {
+  fetch(`${getApiBaseUrl()}/adicionar-usuario`, {
     method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(novoUsuario)
   }).then(res => res.json()).then(data => {
     setButtonLoading(btn, false);
@@ -482,7 +480,7 @@ function removerUsuarioUI(email, el) {
   if (!confirm('Remover o usuário ' + email + '?')) return;
   if (el) { setButtonLoading(el, true); }
   
-  fetch(`${getApiBaseUrl()}/remover-usuario?token=` + encodeURIComponent(getToken()), {
+  fetch(`${getApiBaseUrl()}/remover-usuario`, {
     method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ email })
   }).then(res => res.json()).then(data => {
     if (el) setButtonLoading(el, false);
@@ -497,5 +495,18 @@ window.abrirHistorico = abrirHistorico;
 window.abrirModalRemocao = abrirModalRemocao;
 window.editarUsuarioUI = editarUsuarioUI;
 window.removerUsuarioUI = removerUsuarioUI;
+window.abrirCadastroEquipamento = abrirCadastroEquipamento;
+window.carregarEquipamentosGlobal = carregarEquipamentosGlobal;
+window.exportarCSVUI = exportarCSVUI;
+window.exportarPDFUI = exportarPDFUI;
+window.excluirSelecionados = excluirSelecionados;
+window.abrirAlterarStatusLote = abrirAlterarStatusLote;
+window.confirmarAlterarStatusLote = confirmarAlterarStatusLote;
+window.abrirGestaoUsuarios = abrirGestaoUsuarios;
+window.adicionarUsuarioUI = adicionarUsuarioUI;
+window.registrarManutencaoUI = registrarManutencaoUI;
+window.salvarCadastro = salvarCadastro;
+window.salvarEdicao = salvarEdicao;
+window.confirmarRemocao = confirmarRemocao;
 
 console.log('✅ Dashboard Matriz loaded');
