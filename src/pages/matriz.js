@@ -14,7 +14,30 @@ import {
   isButtonLoading,
   downloadCsv,
   getApiBaseUrl,
+  abrirCadastroEquipamento,
+  exportarCSVUI,
+  exportarPDFUI,
 } from './dashboard-base.js';
+
+// Expor funções globais para onclick no HTML (executar imediatamente no load do módulo)
+window.editarEquipamento = editarEquipamento;
+window.abrirHistorico = abrirHistorico;
+window.abrirModalRemocao = abrirModalRemocao;
+window.editarUsuarioUI = editarUsuarioUI;
+window.removerUsuarioUI = removerUsuarioUI;
+window.abrirCadastroEquipamento = abrirCadastroEquipamento;
+window.carregarEquipamentosGlobal = carregarEquipamentosGlobal;
+window.exportarCSVUI = exportarCSVUI;
+window.exportarPDFUI = exportarPDFUI;
+window.excluirSelecionados = excluirSelecionados;
+window.abrirAlterarStatusLote = abrirAlterarStatusLote;
+window.confirmarAlterarStatusLote = confirmarAlterarStatusLote;
+window.abrirGestaoUsuarios = abrirGestaoUsuarios;
+window.adicionarUsuarioUI = adicionarUsuarioUI;
+window.registrarManutencaoUI = registrarManutencaoUI;
+window.salvarCadastro = salvarCadastro;
+window.salvarEdicao = salvarEdicao;
+window.confirmarRemocao = confirmarRemocao;
 
 // ============================================================================
 // ESTADO ESPECÍFICO MATRIZ
@@ -489,24 +512,6 @@ function removerUsuarioUI(email, el) {
   }).catch(err => { if (el) setButtonLoading(el, false); toastError('Erro ao remover: ' + err.message); });
 }
 
-// Expor funções globais para onclick no HTML
-window.editarEquipamento = editarEquipamento;
-window.abrirHistorico = abrirHistorico;
-window.abrirModalRemocao = abrirModalRemocao;
-window.editarUsuarioUI = editarUsuarioUI;
-window.removerUsuarioUI = removerUsuarioUI;
-window.abrirCadastroEquipamento = abrirCadastroEquipamento;
-window.carregarEquipamentosGlobal = carregarEquipamentosGlobal;
-window.exportarCSVUI = exportarCSVUI;
-window.exportarPDFUI = exportarPDFUI;
-window.excluirSelecionados = excluirSelecionados;
-window.abrirAlterarStatusLote = abrirAlterarStatusLote;
-window.confirmarAlterarStatusLote = confirmarAlterarStatusLote;
-window.abrirGestaoUsuarios = abrirGestaoUsuarios;
-window.adicionarUsuarioUI = adicionarUsuarioUI;
-window.registrarManutencaoUI = registrarManutencaoUI;
-window.salvarCadastro = salvarCadastro;
-window.salvarEdicao = salvarEdicao;
-window.confirmarRemocao = confirmarRemocao;
+// Expor funções globais para onclick no HTML (feitas no topo do módulo)
 
 console.log('✅ Dashboard Matriz loaded');

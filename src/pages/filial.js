@@ -23,6 +23,11 @@ import {
   getApiBaseUrl,
 } from './dashboard-base.js';
 
+// Expor funções globais para onclick no HTML
+window.selecionarTipoEmprestimo = selecionarTipoEmprestimo;
+window.editarUsuarioUI = editarUsuarioUI;
+window.removerUsuarioUI = removerUsuarioUI;
+
 // ============================================================================
 // ESTADO ESPECÍFICO FILIAL
 // ============================================================================
@@ -467,10 +472,5 @@ async function removerUsuarioUI(email) {
   } catch (err) { toastError('Erro ao remover: ' + err.message); }
   finally { hideLoading(); }
 }
-
-// Expor para onclick
-window.selecionarTipoEmprestimo = selecionarTipoEmprestimo;
-window.editarUsuarioUI = editarUsuarioUI;
-window.removerUsuarioUI = removerUsuarioUI;
 
 console.log('✅ Dashboard Filial loaded');

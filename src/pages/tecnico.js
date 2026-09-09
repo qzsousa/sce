@@ -17,7 +17,13 @@ import {
   CAMPOS_EDITAVEIS,
   CAMPOS_CADASTRO,
   getApiBaseUrl,
+  editarEquipamento,
+  abrirManutencao,
 } from './dashboard-base.js';
+
+// Expor funções globais para onclick no HTML
+window.editarEquipamento = editarEquipamento;
+window.abrirManutencao = abrirManutencao;
 
 // ============================================================================
 // ESTADO ESPECÍFICO TÉCNICO
