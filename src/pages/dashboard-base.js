@@ -30,6 +30,12 @@ export const CAMPOS_CADASTRO = [
 
 // Cada página deve declarar seu próprio estado (não exportamos estado compartilhado)
 
+let modalCadastroInstance = null;
+let modalEdicaoInstance = null;
+let modalManutencaoInstance = null;
+let modalHistoricoInstance = null;
+let modalRemocaoInstance = null;
+
 /* ============================================================================
    INICIALIZAÇÃO BASE
    ============================================================================ */
@@ -627,7 +633,6 @@ export async function abrirHistorico(equipamentoId) {
    ============================================================================ */
 
 let idPendenteRemocao = null;
-let modalRemocaoInstance = null;
 
 export function abrirModalRemocao(id) {
   idPendenteRemocao = id;
