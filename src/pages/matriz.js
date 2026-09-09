@@ -14,6 +14,7 @@ import {
   isButtonLoading,
   downloadCsv,
 } from './dashboard-base.js';
+import { setupSelectCascata } from '../shared/js/lists.js';
 
 // ============================================================================
 // ESTADO ESPECÍFICO MATRIZ
@@ -47,6 +48,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.M) {
     M.FormSelect.init(document.querySelectorAll('select'));
   }
+  
+  // Inicializa listeners de cascata para categoria/marca/modelo
+  setupSelectCascata('new');
+  setupSelectCascata('edit');
   
   await initDashboardBase({ perfil: 'Matriz', loadEquipamentos: false });
   inicializarFiltrosRapidos();
@@ -483,6 +488,68 @@ function removerUsuarioUI(email, el) {
     carregarUsuarios();
   }).catch(err => { if (el) setButtonLoading(el, false); toastError('Erro ao remover: ' + err.message); });
 }
+
+// Funções para mostrar/ocultar campos condicionais (chamadas via onchange no HTML)
+window.atualizarCamposCondicionaisCadastro = function() {
+  const status = document.getElementById('new-status')?.value;
+  const campoBo = document.getElementById('campo-bo-cadastro');
+  if (campoBo) campoBo.style.display = status === 'Extraviado' ? 'block' : 'none';
+  if (status !== 'Extraviado') document.getElementById('new-anexoBoletim').value = '';
+
+  const campoQuebrado = document.getElementById('campo-quebrado-cadastro');
+  if (campoQuebrado) campoQuebrado.style.display = status === 'Quebrado' ? 'block' : 'none';
+  if (status !== 'Quebrado') {
+    const descInput = document.getElementById('new-descricaoQuebrado');
+    if (descInput) descInput.value = '';
+  }
+};
+
+window.atualizarCamposCondicionais = function() {
+  const status = document.getElementById('edit-status')?.value;
+  document.getElementById('campo-chamado').style.display = status === 'Manutenção' ? 'block' : 'none';
+  document.getElementById('campo-bo').style.display = status === 'Extraviado' ? 'block' : 'none';
+  document.getElementById('campo-justificativa').style.display = status === 'Em verificação' ? 'block' : 'none';
+  document.getElementById('campo-quebrado').style.display = status === 'Quebrado' ? 'block' : 'none';
+  const fileInput = document.getElementById('edit-anexoBoletim');
+  if (fileInput && status !== 'Extraviado') fileInput.value = '';
+  if (status !== 'Quebrado') {
+    const el = document.getElementById('edit-descricaoQuebrado');
+    if (el) el.value = '';
+  }
+};
+
+// Funções de cascata categoria/marca/modelo (chamadas via onchange no HTML)
+window.onCategoriaChange = function(prefixo) {
+  const select = document.getElementById(prefixo + '-categoria');
+  const container = document.getElementById(prefixo + '-outro-categoria-container');
+  const input = document.getElementById(prefixo + '-outro-categoria');
+  if (!select || !container || !input) return;
+  if (select.value === '__outro__') {
+    container.style.display = 'block';
+    input.focus();
+  } else {
+    container.style.display = 'none';
+    input.value = '';
+  }
+  if (select.value && select.value !== '__outro__') {
+    // popularMarcas é do lists.js, mas precisamos importar ou usar a versão local
+    // Por enquanto, deixamos vazio - o setupSelectCascata já configura os listeners
+  }
+};
+
+window.onMarcaChange = function(prefixo) {
+  const selectMarca = document.getElementById(prefixo + '-marca');
+  const container = document.getElementById(prefixo + '-outro-marca-container');
+  const input = document.getElementById(prefixo + '-outro-marca');
+  if (!selectMarca || !container || !input) return;
+  if (selectMarca.value === '__outro__') {
+    container.style.display = 'block';
+    input.focus();
+  } else {
+    container.style.display = 'none';
+    input.value = '';
+  }
+};
 
 // Expor funções globais para onclick no HTML
 window.editarEquipamento = editarEquipamento;
