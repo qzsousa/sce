@@ -25,8 +25,8 @@ import {
   confirmarRemocao,
   atualizarKpis,
   registrarManutencaoUI,
-  getEspecificacoesModelo,
 } from './dashboard-base.js';
+import { getEspecificacoesModelo } from '../shared/js/api.js';
 import { setupSelectCascata, getListasCache } from '../shared/js/lists.js';
 
 // Expor funções globais para onclick no HTML (executar imediatamente no load do módulo)
