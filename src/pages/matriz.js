@@ -17,6 +17,13 @@ import {
   abrirCadastroEquipamento,
   exportarCSVUI,
   exportarPDFUI,
+  editarEquipamento,
+  abrirHistorico,
+  abrirModalRemocao,
+  salvarCadastro,
+  salvarEdicao,
+  confirmarRemocao,
+  registrarManutencaoUI,
 } from './dashboard-base.js';
 
 // Expor funções globais para onclick no HTML (executar imediatamente no load do módulo)

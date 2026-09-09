@@ -718,4 +718,6 @@ export {
   logout,
   getScriptUrlBase,
   getApiBaseUrl,
+  salvarCadastro,
+  salvarEdicao,
 };
