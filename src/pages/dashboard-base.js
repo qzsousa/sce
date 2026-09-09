@@ -188,9 +188,7 @@ function atualizarKpis(equipamentos) {
   const disponiveis = porStatus['Disponível'] || 0;
   const manutencao = porStatus['Manutenção'] || 0;
   const quebrados = porStatus['Quebrado'] || 0;
-  const inserviveis = porStatus['Inservível'] || 0;
   const extraviado = porStatus['Extraviado'] || 0;
-  const emVerificacao = porStatus['Em verificação'] || 0;
 
   const kpisEl = document.getElementById('kpis');
   if (kpisEl) {
@@ -199,9 +197,7 @@ function atualizarKpis(equipamentos) {
       kpiCard_('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
       kpiCard_('build', manutencao, 'Manutenção', 'kpi-manutencao') +
       kpiCard_('report', quebrados, 'Quebrados', 'kpi-quebrados') +
-      kpiCard_('close', inserviveis, 'Inservíveis', 'kpi-inserviveis') +
-      kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado') +
-      kpiCard_('search', emVerificacao, 'Em verificação', 'kpi-emVerificacao');
+      kpiCard_('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado');
   }
 }
 

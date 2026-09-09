@@ -203,7 +203,7 @@ export function getValorFinal(prefixo, tipo) {
    SETUP EVENT LISTENERS (chamar uma vez por prefixo)
    ============================================================================ */
 
-export function setupSelectCascata(prefixo) {
+export function setupSelectCascata(prefixo, onModeloChange) {
   const selectCat = getSelect(prefixo, 'categoria');
   const selectMarca = getSelect(prefixo, 'marca');
   const selectModelo = getSelect(prefixo, 'modelo');
@@ -234,6 +234,9 @@ export function setupSelectCascata(prefixo) {
   if (selectModelo) {
     selectModelo.addEventListener('change', () => {
       toggleOutro(prefixo, 'modelo');
+      if (onModeloChange && selectModelo.value && selectModelo.value !== OUTRO_VALUE) {
+        onModeloChange(selectModelo.value);
+      }
     });
   }
 }

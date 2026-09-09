@@ -25,8 +25,9 @@ import {
   confirmarRemocao,
   atualizarKpis,
   registrarManutencaoUI,
+  getEspecificacoesModelo,
 } from './dashboard-base.js';
-import { setupSelectCascata } from '../shared/js/lists.js';
+import { setupSelectCascata, getListasCache } from '../shared/js/lists.js';
 
 // Expor funções globais para onclick no HTML (executar imediatamente no load do módulo)
 window.editarEquipamento = editarEquipamento;
@@ -88,8 +89,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Inicializa listeners de cascata para categoria/marca/modelo
-  setupSelectCascata('new');
-  setupSelectCascata('edit');
+  setupSelectCascata('new', async (modelo) => {
+    await preencherEspecificacoesModelo('new', modelo);
+  });
+  setupSelectCascata('edit', async (modelo) => {
+    await preencherEspecificacoesModelo('edit', modelo);
+  });
   
   await initDashboardBase({ perfil: 'Matriz', loadEquipamentos: false });
   inicializarFiltrosRapidos();
@@ -115,6 +120,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
   document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+  document.getElementById('filtro-categoria').addEventListener('change', function() {
+    const categoria = this.value;
+    popularFiltroMarca(categoria);
+    popularFiltroModelo(categoria, document.getElementById('filtro-marca').value);
+    aplicarFiltros();
+  });
+  document.getElementById('filtro-marca').addEventListener('change', function() {
+    popularFiltroModelo(document.getElementById('filtro-categoria').value, this.value);
+    aplicarFiltros();
+  });
+  document.getElementById('filtro-modelo').addEventListener('change', aplicarFiltros);
   
   document.querySelectorAll('.sortable').forEach(th => {
     th.addEventListener('click', function() {
@@ -155,6 +171,7 @@ async function carregarEquipamentosGlobal() {
     
     inicializarSeletorUnidade();
     atualizarFiltrosOpcoes(equipamentosCache);
+    popularFiltroCategoria();
     aplicarFiltros();
   } catch (err) {
     console.error('Erro ao carregar:', err);
@@ -199,6 +216,7 @@ function inicializarFiltrosRapidos() {
 
 function atualizarFiltrosOpcoes(equipamentos) {
   preencherSelectFiltro('filtro-status', equipamentos.map(e => e.status), 'Todos os status');
+  preencherSelectFiltro('filtro-categoria', equipamentos.map(e => e.categoria), 'Todas as categorias');
 }
 
 function preencherSelectFiltro(id, valores, label) {
@@ -249,10 +267,16 @@ function aplicarFiltros() {
   const busca = document.getElementById('filtro-busca')?.value?.trim()?.toLowerCase() || '';
   const status = document.getElementById('filtro-status')?.value || '';
   const unidadeSelecionada = document.getElementById('seletor-unidade')?.value || '';
+  const categoria = document.getElementById('filtro-categoria')?.value || '';
+  const marca = document.getElementById('filtro-marca')?.value || '';
+  const modelo = document.getElementById('filtro-modelo')?.value || '';
   
   equipamentosFiltrados = equipamentosCache.filter(item => {
     if (status && item.status !== status) return false;
     if (unidadeSelecionada && item.unidade !== unidadeSelecionada) return false;
+    if (categoria && item.categoria !== categoria) return false;
+    if (marca && item.marca !== marca) return false;
+    if (modelo && item.modelo !== modelo) return false;
     if (!busca) return true;
     return [item.patrimonio, item.numeroSerie, item.modelo, item.unidade].join(' ').toLowerCase().includes(busca);
   });
@@ -262,6 +286,46 @@ function aplicarFiltros() {
   atualizarKpis(equipamentosFiltrados);
   renderGraficos(equipamentosFiltrados);
   document.getElementById('contador-equipamentos').innerText = equipamentosFiltrados.length;
+}
+
+// ============================================================================
+// FILTROS DE CATEGORIA/MARCA/MODELO (usam listasCache)
+// ============================================================================
+
+function popularFiltroCategoria() {
+  const select = document.getElementById('filtro-categoria');
+  const listasCache = getListasCache();
+  if (!select || !listasCache) return;
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="">Todas</option>' + listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+  select.value = (valorAtual && listasCache.categorias.indexOf(valorAtual) !== -1) ? valorAtual : '';
+}
+
+function popularFiltroMarca(categoria) {
+  const select = document.getElementById('filtro-marca');
+  const listasCache = getListasCache();
+  if (!select || !listasCache) return;
+  const valorAtual = select.value;
+  let marcas;
+  if (categoria) { marcas = Array.from(listasCache.marcasPorCategoria[categoria] || new Set()).sort(); }
+  else { const todas = new Set(); Object.keys(listasCache.marcasPorCategoria).forEach(cat => listasCache.marcasPorCategoria[cat].forEach(m => todas.add(m))); marcas = Array.from(todas).sort(); }
+  select.innerHTML = '<option value="">Todas</option>' + marcas.map(m => `<option value="${m}">${m}</option>`).join('');
+  select.value = (valorAtual && marcas.indexOf(valorAtual) !== -1) ? valorAtual : '';
+}
+
+function popularFiltroModelo(categoria, marca) {
+  const select = document.getElementById('filtro-modelo');
+  const listasCache = getListasCache();
+  if (!select || !listasCache) return;
+  const valorAtual = select.value;
+  let modelos = [];
+  const mapa = listasCache.modelosPorCategoriaMarca;
+  if (categoria && marca) modelos = Array.from((mapa[categoria] && mapa[categoria][marca]) || new Set()).sort();
+  else if (!categoria && marca) { const todos = new Set(); Object.keys(mapa).forEach(cat => { if (mapa[cat][marca]) mapa[cat][marca].forEach(m => todos.add(m)); }); modelos = Array.from(todos).sort(); }
+  else if (categoria && !marca) { const todos2 = new Set(); if (mapa[categoria]) { Object.keys(mapa[categoria]).forEach(mk => mapa[categoria][mk].forEach(m => todos2.add(m))); } modelos = Array.from(todos2).sort(); }
+  else { const todos3 = new Set(); Object.keys(mapa).forEach(cat => { Object.keys(mapa[cat]).forEach(mk => mapa[cat][mk].forEach(m => todos3.add(m))); }); modelos = Array.from(todos3).sort(); }
+  select.innerHTML = '<option value="">Todos</option>' + modelos.map(m => `<option value="${m}">${m}</option>`).join('');
+  select.value = (valorAtual && modelos.indexOf(valorAtual) !== -1) ? valorAtual : '';
 }
 
 // ============================================================================
@@ -584,5 +648,28 @@ window.onMarcaChange = function(prefixo) {
 };
 
 // Expor funções globais para onclick no HTML (feitas no topo do módulo)
+
+// Função para buscar e preencher especificações do modelo
+async function preencherEspecificacoesModelo(prefixo, modelo) {
+  try {
+    const token = getToken();
+    const specs = await getEspecificacoesModelo(modelo, token);
+    if (specs) {
+      const campos = {
+        sistemaOperacional: specs.sistema_operacional || '',
+        processador: specs.processador || '',
+        memoriaRAM: specs.memoria_ram || '',
+        armazenamento: specs.armazenamento || '',
+      };
+      Object.entries(campos).forEach(([campo, valor]) => {
+        const el = document.getElementById(prefixo + '-' + campo);
+        if (el && valor) el.value = valor;
+      });
+      if (window.M) M.updateTextFields();
+    }
+  } catch (err) {
+    console.warn('Erro ao buscar especificações do modelo:', err);
+  }
+}
 
 console.log('✅ Dashboard Matriz loaded');

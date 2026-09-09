@@ -62,26 +62,18 @@
       </div>
     </div>
 
-    <div class="sce-panel no-print">
-      <div class="sce-panel-title"><i class="material-icons">filter_alt</i>Filtros adicionais</div>
-      <div class="filtros-rapidos">
-        <button class="btn-filtro ativo" data-filtro="todos">Todos</button>
-        <button class="btn-filtro" data-filtro="Disponível">Disponíveis</button>
-        <button class="btn-filtro" data-filtro="Manutenção">Manutenção</button>
-        <button class="btn-filtro" data-filtro="Extraviado">Extraviados</button>
-        <button class="btn-filtro" data-filtro="Emprestado">Emprestados</button>
-        <button class="btn-filtro" data-filtro="Inservível">Inservíveis</button>
-        <button class="btn-filtro" data-filtro="Em verificação">Em verificação</button>
+    <div class="sce-panel" style="padding:0;overflow:hidden;">
+      <div class="filtros-tabela-wrapper">
+        <span class="filtros-titulo">Filtros</span>
+        <div class="campo-filtro campo-busca"><label for="filtro-busca">Buscar</label><input type="text" id="filtro-busca" placeholder="Patrimônio, série ou modelo"></div>
+        <div class="campo-filtro"><label for="filtro-status">Status</label><select id="filtro-status" class="browser-default"><option value="">Todos</option><option value="Disponível">Disponível</option><option value="Manutenção">Manutenção</option><option value="Emprestado">Emprestado</option><option value="Extraviado">Extraviado</option><option value="Quebrado">Quebrado</option></select></div>
+        <div class="campo-filtro"><label for="filtro-categoria">Categoria</label><select id="filtro-categoria" class="browser-default"><option value="">Todas</option></select></div>
+        <div class="campo-filtro"><label for="filtro-marca">Marca</label><select id="filtro-marca" class="browser-default"><option value="">Todas</option></select></div>
+        <div class="campo-filtro"><label for="filtro-modelo">Modelo</label><select id="filtro-modelo" class="browser-default"><option value="">Todos</option></select></div>
       </div>
-      <div class="row" style="margin-bottom:0;">
-        <div class="input-field col s6"><i class="material-icons prefix" style="color:var(--sce-muted);">search</i><input type="text" id="filtro-busca"><label for="filtro-busca">Buscar por patrimônio, série ou modelo</label></div>
-        <div class="input-field col s6"><select id="filtro-status"><option value="">Todos os status</option></select><label>Status</label></div>
-      </div>
-    </div>
 
-    <div class="sce-panel">
-      <div class="sce-panel-title"><i class="material-icons">devices</i>Equipamentos — todas as unidades</div>
-      <table class="striped" id="tabela-equipamentos-global">
+      <div class="tabela-equipamentos">
+        <table class="striped" id="tabela-equipamentos-global">
         <thead>
           <tr>
             <th class="no-print"><label><input type="checkbox" id="check-todos"><span></span></label></th>
@@ -100,8 +92,8 @@
       </table>
     </div>
   </div>
-
-  <!-- Modal de cadastro -->
+</div>
+</div>
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
       <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
@@ -195,10 +187,6 @@
         <div class="input-field col s6">
           <input type="text" id="new-armazenamento">
           <label for="new-armazenamento">Armazenamento</label>
-        </div>
-        <div class="input-field col s6">
-          <input type="text" id="new-tamanhoTela">
-          <label for="new-tamanhoTela">Tamanho da tela</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-responsavelAtual">
@@ -326,10 +314,6 @@
           <label for="edit-armazenamento" class="active">Armazenamento</label>
         </div>
         <div class="input-field col s6">
-          <input type="text" id="edit-tamanhoTela">
-          <label for="edit-tamanhoTela" class="active">Tamanho da tela</label>
-        </div>
-        <div class="input-field col s6">
           <input type="text" id="edit-responsavelAtual">
           <label for="edit-responsavelAtual" class="active">Responsável atual</label>
         </div>
@@ -359,7 +343,7 @@
 
   <div id="modal-manutencao" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5><input type="hidden" id="manut-equipamento-id"><div class="row"><div class="input-field col s4"><select id="manut-status"><option value="Pendente">Pendente</option><option value="Em andamento">Em andamento</option><option value="Concluído">Concluído</option></select><label>Status</label></div><div class="input-field col s8"><textarea id="manut-descricao" class="materialize-textarea"></textarea><label for="manut-descricao">O que foi feito / observado</label></div></div><a class="btn waves-effect" id="btn-registrar-manutencao"><i class="material-icons left">add</i>Registrar</a><table class="striped" style="margin-top:20px;"><thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead><tbody id="tabela-manutencao-body"></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
 
-  <div id="modal-alterar-status-lote" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Alterar status em lote</h5><p>Selecione o novo status para os <span id="lote-contagem">0</span> equipamento(s) selecionado(s):</p><div class="input-field"><select id="lote-novo-status"><option value="Disponível">Disponível</option><option value="Manutenção">Manutenção</option><option value="Emprestado">Emprestado</option><option value="Extraviado">Extraviado</option><option value="Inservível">Inservível</option><option value="Em verificação">Em verificação</option></select><label>Novo status</label></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-confirmar-alterar-status-lote">Aplicar</a></div></div>
+  <div id="modal-alterar-status-lote" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Alterar status em lote</h5><p>Selecione o novo status para os <span id="lote-contagem">0</span> equipamento(s) selecionado(s):</p><div class="input-field"><select id="lote-novo-status"><option value="Disponível">Disponível</option><option value="Manutenção">Manutenção</option><option value="Emprestado">Emprestado</option><option value="Extraviado">Extraviado</option><option value="Inservível">Inservível</option><option value="Em verificação">Em verificação</option><option value="Quebrado">Quebrado</option></select><label>Novo status</label></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-confirmar-alterar-status-lote">Aplicar</a></div></div>
 
   <footer class="sce-footer"><div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;"><span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span><a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a><a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a><a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a><span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.1.0</span></div></footer>
 
