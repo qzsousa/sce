@@ -13,6 +13,7 @@ import {
   setButtonLoading,
   isButtonLoading,
   downloadCsv,
+  getApiBaseUrl,
 } from './dashboard-base.js';
 
 // ============================================================================
@@ -36,6 +37,12 @@ let usuariosCache = [];
 let chartStatus = null;
 let chartUnidade = null;
 let chartCategoria = null;
+
+let equipamentosCache = [];
+let equipamentosFiltrados = [];
+let campoOrdenacao = 'patrimonio';
+let ordemAtual = 'asc';
+let paginaAtual = 1;
 
 // ============================================================================
 // INICIALIZAÇÃO

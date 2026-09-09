@@ -717,4 +717,5 @@ export {
   initAuthFromUrl,
   logout,
   getScriptUrlBase,
+  getApiBaseUrl,
 };

@@ -20,6 +20,7 @@ import {
   ITENS_POR_PAGINA,
   CAMPOS_EDITAVEIS,
   CAMPOS_CADASTRO,
+  getApiBaseUrl,
 } from './dashboard-base.js';
 
 // ============================================================================
