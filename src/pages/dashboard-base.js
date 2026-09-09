@@ -4,7 +4,7 @@
 
 import { getEquipamentosDaFilial, getEquipamentosGlobal, createEquipamento, updateEquipamento, cloneEquipamento, removerEquipamento, atualizarStatusManutencao, registrarManutencao, getRegistrosManutencao, getHistoricoEquipamento, getEspecificacoesModelo, listarUsuarios, adicionarUsuario, atualizarUsuario, removerUsuario, getFiliaisParaEmprestimo, registrarEmprestimo, registrarDevolucao, exportarCSV, exportarEquipamentosPDF, getNomeUsuario, getApiBaseUrl } from '../shared/js/api.js';
 import { showLoading, hideLoading, toastSuccess, toastError, toastInfo, setButtonLoading, isButtonLoading, downloadCsv, openModal, closeModal, initModals, initSelects, updateTextFields, fileToBase64, validateFile } from '../shared/js/ui.js';
-import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache } from '../shared/js/lists.js';
+import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache, getListasCache } from '../shared/js/lists.js';
 import { formatDate, formatDateShort, getFormData, clearForm, getNested } from '../shared/js/utils.js';
 import { getToken, initAuthFromUrl, logout, getAuthHeaders, isAuthenticated } from '../shared/js/auth.js';
 
@@ -263,7 +263,7 @@ export function abrirCadastroEquipamento() {
   if (justPatContainer) justPatContainer.style.display = 'none';
   if (justSerieContainer) justSerieContainer.style.display = 'none';
 
-  if (listasCache) preencherSelectCategoria('new');
+  if (getListasCache()) preencherSelectCategoria('new');
   else { carregarListas(); setTimeout(() => preencherSelectCategoria('new'), 500); }
 
   atualizarCamposCondicionaisCadastro();
@@ -391,12 +391,13 @@ export async function editarEquipamento(id) {
   const anexoExistente = document.getElementById('anexo-bo-existente');
   if (anexoExistente) anexoExistente.innerText = item.boletimOcorrenciaAnexoUrl ? '📎 Anexo atual: ' + item.boletimOcorrenciaAnexoUrl : '';
 
-  if (listasCache) {
+  const cache = getListasCache();
+  if (cache) {
     const selectCat = document.getElementById('edit-categoria');
     selectCat.innerHTML = '<option value="" disabled selected>Selecione</option>' +
-      listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
+      cache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
       '<option value="__outro__">Outro (digitar)</option>';
-    if (item.categoria && listasCache.categorias.includes(item.categoria)) selectCat.value = item.categoria;
+    if (item.categoria && cache.categorias.includes(item.categoria)) selectCat.value = item.categoria;
     else if (item.categoria) { selectCat.value = '__outro__'; document.getElementById('edit-outro-categoria').value = item.categoria; document.getElementById('edit-outro-categoria-container').style.display = 'block'; }
     if (window.M && M.FormSelect) M.FormSelect.init(selectCat);
 
@@ -404,7 +405,7 @@ export async function editarEquipamento(id) {
       await popularMarcas('edit', selectCat.value);
       const selectMarca = document.getElementById('edit-marca');
       if (selectMarca) {
-        const marcasSet = listasCache.marcasPorCategoria[selectCat.value] || new Set();
+        const marcasSet = cache.marcasPorCategoria[selectCat.value] || new Set();
         if (item.marca && marcasSet.has(item.marca)) selectMarca.value = item.marca;
         else if (item.marca) { selectMarca.value = '__outro__'; document.getElementById('edit-outro-marca').value = item.marca; document.getElementById('edit-outro-marca-container').style.display = 'block'; }
         if (window.M && M.FormSelect) M.FormSelect.init(selectMarca);
@@ -413,7 +414,7 @@ export async function editarEquipamento(id) {
           await popularModelos('edit', selectCat.value, selectMarca.value);
           const selectModelo = document.getElementById('edit-modelo');
           if (selectModelo) {
-            const modelosSet = listasCache.modelosPorCategoriaMarca[selectCat.value]?.[selectMarca.value] || new Set();
+            const modelosSet = cache.modelosPorCategoriaMarca[selectCat.value]?.[selectMarca.value] || new Set();
             if (item.modelo && modelosSet.has(item.modelo)) selectModelo.value = item.modelo;
             else if (item.modelo) { selectModelo.value = '__outro__'; document.getElementById('edit-outro-modelo').value = item.modelo; document.getElementById('edit-outro-modelo-container').style.display = 'block'; }
             if (window.M && M.FormSelect) M.FormSelect.init(selectModelo);
