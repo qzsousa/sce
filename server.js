@@ -111,7 +111,7 @@ async function getAllEquipamentos() {
   const { data, error } = await sheets.supabase
     .from('equipamentos')
     .select('*')
-    .order('dataCadastro', { ascending: false });
+    .order('data_cadastro', { ascending: false });
 
   if (error) throw new Error(`Erro ao buscar equipamentos: ${error.message}`);
   return data || [];
@@ -757,9 +757,9 @@ app.get('/api/especificacoes-modelo', asyncHandler(async (req, res) => {
   // Busca o último equipamento com esse modelo
   const { data, error } = await sheets.supabase
     .from('equipamentos')
-    .select('sistemaOperacional, processador, memoriaRAM, armazenamento, tamanhoTela')
+    .select('sistema_operacional, processador, memoria_ram, armazenamento, tamanho_tela')
     .eq('modelo', modelo)
-    .order('dataCadastro', { ascending: false })
+    .order('data_cadastro', { ascending: false })
     .limit(1);
 
   if (error) throw new Error(`Erro ao buscar especificações: ${error.message}`);

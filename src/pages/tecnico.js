@@ -16,7 +16,14 @@ import {
   ITENS_POR_PAGINA,
   CAMPOS_EDITAVEIS,
   CAMPOS_CADASTRO,
+  getApiBaseUrl,
+  editarEquipamento,
+  abrirManutencao,
 } from './dashboard-base.js';
+
+// Expor funções globais para onclick no HTML
+window.editarEquipamento = editarEquipamento;
+window.abrirManutencao = abrirManutencao;
 
 // ============================================================================
 // ESTADO ESPECÍFICO TÉCNICO
@@ -50,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Captura unidades do técnico (injetado via template ou API)
   window.UNIDADES_TECNICO = [];
   try {
-    const res = await fetch(`${getApiBaseUrl()}/tecnico-unidades?token=` + encodeURIComponent(getToken()), {
+    const res = await fetch(`${getApiBaseUrl()}/tecnico-unidades`, {
       headers: getAuthHeaders()
     });
     const data = await res.json();
@@ -103,7 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function obterNomeTecnico() {
   try {
-    const res = await fetch(`${getApiBaseUrl()}/get-nome-usuario?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() });
+    const res = await fetch(`${getApiBaseUrl()}/get-nome-usuario`, { headers: getAuthHeaders() });
     const data = await res.json();
     if (data.success) document.getElementById('nome-tecnico').innerText = data.data || 'Técnico';
   } catch { document.getElementById('nome-tecnico').innerText = 'Técnico'; }
@@ -129,7 +136,7 @@ function inicializarSeletorUnidade() {
 
 function carregarListasCadastro() {
   console.log('🟢 carregarListasCadastro() iniciado...');
-  fetch(`${getApiBaseUrl()}/listas-cadastro?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() })
+  fetch(`${getApiBaseUrl()}/listas-cadastro`, { headers: getAuthHeaders() })
     .then(r => r.json()).then(data => {
       if (data.success) {
         console.log('✅ Listas recebidas:', data.data);
@@ -299,7 +306,7 @@ async function carregarEquipamentos() {
   if (!getToken()) { toastError('Token não disponível. Recarregue a página.'); return; }
   showLoading();
   try {
-    const res = await fetch(`${getApiBaseUrl()}/equipamentos-da-filial?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() });
+    const res = await fetch(`${getApiBaseUrl()}/equipamentos-da-filial`, { headers: getAuthHeaders() });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     equipamentosCache = data.data || [];

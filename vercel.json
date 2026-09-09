@@ -3,5 +3,8 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/pages/(.*)", "destination": "/pages/$1.html" }
+  ]
 }

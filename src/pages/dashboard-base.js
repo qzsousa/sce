@@ -4,7 +4,7 @@
 
 import { getEquipamentosDaFilial, getEquipamentosGlobal, createEquipamento, updateEquipamento, cloneEquipamento, removerEquipamento, atualizarStatusManutencao, registrarManutencao, getRegistrosManutencao, getHistoricoEquipamento, getEspecificacoesModelo, listarUsuarios, adicionarUsuario, atualizarUsuario, removerUsuario, getFiliaisParaEmprestimo, registrarEmprestimo, registrarDevolucao, exportarCSV, exportarEquipamentosPDF, getNomeUsuario, getApiBaseUrl } from '../shared/js/api.js';
 import { showLoading, hideLoading, toastSuccess, toastError, toastInfo, setButtonLoading, isButtonLoading, downloadCsv, openModal, closeModal, initModals, initSelects, updateTextFields, fileToBase64, validateFile } from '../shared/js/ui.js';
-import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache } from '../shared/js/lists.js';
+import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache, getListasCache } from '../shared/js/lists.js';
 import { formatDate, formatDateShort, getFormData, clearForm, getNested } from '../shared/js/utils.js';
 import { getToken, initAuthFromUrl, logout, getAuthHeaders, isAuthenticated } from '../shared/js/auth.js';
 
@@ -30,6 +30,12 @@ export const CAMPOS_CADASTRO = [
 
 // Cada página deve declarar seu próprio estado (não exportamos estado compartilhado)
 
+let modalCadastroInstance = null;
+let modalEdicaoInstance = null;
+let modalManutencaoInstance = null;
+let modalHistoricoInstance = null;
+let modalRemocaoInstance = null;
+
 /* ============================================================================
    INICIALIZAÇÃO BASE
    ============================================================================ */
@@ -40,7 +46,7 @@ export async function initDashboardBase(options = {}) {
   // Verifica autenticação
   const token = getToken();
   if (!token || !isAuthenticated()) {
-    window.location.href = '/login.html';
+    window.location.href = '/login';
     return;
   }
 
@@ -97,7 +103,7 @@ async function carregarListas() {
     showLoading();
     const dados = await (window.sceLists?.getListasCache ? window.sceLists.getListasCache() : null) 
       || await window.sceApi?.getListasCache?.() 
-      || await fetch(`${getApiBaseUrl()}/listas-cadastro?token=` + encodeURIComponent(getToken()), { headers: getAuthHeaders() }).then(r => r.json()).then(r => r.data);
+      || await fetch(`${getApiBaseUrl()}/listas-cadastro`, { headers: getAuthHeaders() }).then(r => r.json()).then(r => r.data);
     
     if (dados) {
       setListasCache(dados);
@@ -257,11 +263,13 @@ export function abrirCadastroEquipamento() {
 
   const anexoInput = document.getElementById('new-anexoBoletim');
   if (anexoInput) anexoInput.value = '';
-  document.getElementById('campo-justificativa-patrimonio').style.display = 'none';
-  document.getElementById('campo-justificativa-serie').style.display = 'none';
   configurarJustificativas('new');
+  const justPatContainer = document.getElementById('campo-justificativa-patrimonio');
+  const justSerieContainer = document.getElementById('campo-justificativa-serie');
+  if (justPatContainer) justPatContainer.style.display = 'none';
+  if (justSerieContainer) justSerieContainer.style.display = 'none';
 
-  if (listasCache) preencherSelectCategoria('new');
+  if (getListasCache()) preencherSelectCategoria('new');
   else { carregarListas(); setTimeout(() => preencherSelectCategoria('new'), 500); }
 
   atualizarCamposCondicionaisCadastro();
@@ -277,7 +285,8 @@ function atualizarCamposCondicionaisCadastro() {
   const status = document.getElementById('new-status')?.value;
   const campoBo = document.getElementById('campo-bo-cadastro');
   if (campoBo) campoBo.style.display = status === 'Extraviado' ? 'block' : 'none';
-  if (status !== 'Extraviado') document.getElementById('new-anexoBoletim').value = '';
+  const anexoBoletim = document.getElementById('new-anexoBoletim');
+  if (status !== 'Extraviado' && anexoBoletim) anexoBoletim.value = '';
 
   const campoQuebrado = document.getElementById('campo-quebrado-cadastro');
   if (campoQuebrado) campoQuebrado.style.display = status === 'Quebrado' ? 'block' : 'none';
@@ -389,12 +398,13 @@ export async function editarEquipamento(id) {
   const anexoExistente = document.getElementById('anexo-bo-existente');
   if (anexoExistente) anexoExistente.innerText = item.boletimOcorrenciaAnexoUrl ? '📎 Anexo atual: ' + item.boletimOcorrenciaAnexoUrl : '';
 
-  if (listasCache) {
+  const cache = getListasCache();
+  if (cache) {
     const selectCat = document.getElementById('edit-categoria');
     selectCat.innerHTML = '<option value="" disabled selected>Selecione</option>' +
-      listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
+      cache.categorias.map(c => `<option value="${c}">${c}</option>`).join('') +
       '<option value="__outro__">Outro (digitar)</option>';
-    if (item.categoria && listasCache.categorias.includes(item.categoria)) selectCat.value = item.categoria;
+    if (item.categoria && cache.categorias.includes(item.categoria)) selectCat.value = item.categoria;
     else if (item.categoria) { selectCat.value = '__outro__'; document.getElementById('edit-outro-categoria').value = item.categoria; document.getElementById('edit-outro-categoria-container').style.display = 'block'; }
     if (window.M && M.FormSelect) M.FormSelect.init(selectCat);
 
@@ -402,7 +412,7 @@ export async function editarEquipamento(id) {
       await popularMarcas('edit', selectCat.value);
       const selectMarca = document.getElementById('edit-marca');
       if (selectMarca) {
-        const marcasSet = listasCache.marcasPorCategoria[selectCat.value] || new Set();
+        const marcasSet = cache.marcasPorCategoria[selectCat.value] || new Set();
         if (item.marca && marcasSet.has(item.marca)) selectMarca.value = item.marca;
         else if (item.marca) { selectMarca.value = '__outro__'; document.getElementById('edit-outro-marca').value = item.marca; document.getElementById('edit-outro-marca-container').style.display = 'block'; }
         if (window.M && M.FormSelect) M.FormSelect.init(selectMarca);
@@ -411,7 +421,7 @@ export async function editarEquipamento(id) {
           await popularModelos('edit', selectCat.value, selectMarca.value);
           const selectModelo = document.getElementById('edit-modelo');
           if (selectModelo) {
-            const modelosSet = listasCache.modelosPorCategoriaMarca[selectCat.value]?.[selectMarca.value] || new Set();
+            const modelosSet = cache.modelosPorCategoriaMarca[selectCat.value]?.[selectMarca.value] || new Set();
             if (item.modelo && modelosSet.has(item.modelo)) selectModelo.value = item.modelo;
             else if (item.modelo) { selectModelo.value = '__outro__'; document.getElementById('edit-outro-modelo').value = item.modelo; document.getElementById('edit-outro-modelo-container').style.display = 'block'; }
             if (window.M && M.FormSelect) M.FormSelect.init(selectModelo);
@@ -623,7 +633,6 @@ export async function abrirHistorico(equipamentoId) {
    ============================================================================ */
 
 let idPendenteRemocao = null;
-let modalRemocaoInstance = null;
 
 export function abrirModalRemocao(id) {
   idPendenteRemocao = id;
@@ -717,4 +726,8 @@ export {
   initAuthFromUrl,
   logout,
   getScriptUrlBase,
+  getApiBaseUrl,
+  salvarCadastro,
+  salvarEdicao,
+  atualizarKpis,
 };
