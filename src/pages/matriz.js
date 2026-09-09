@@ -23,6 +23,7 @@ import {
   salvarCadastro,
   salvarEdicao,
   confirmarRemocao,
+  atualizarKpis,
   registrarManutencaoUI,
 } from './dashboard-base.js';
 

@@ -720,4 +720,5 @@ export {
   getApiBaseUrl,
   salvarCadastro,
   salvarEdicao,
+  atualizarKpis,
 };
