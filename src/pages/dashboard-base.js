@@ -279,7 +279,8 @@ function atualizarCamposCondicionaisCadastro() {
   const status = document.getElementById('new-status')?.value;
   const campoBo = document.getElementById('campo-bo-cadastro');
   if (campoBo) campoBo.style.display = status === 'Extraviado' ? 'block' : 'none';
-  if (status !== 'Extraviado') document.getElementById('new-anexoBoletim').value = '';
+  const anexoBoletim = document.getElementById('new-anexoBoletim');
+  if (status !== 'Extraviado' && anexoBoletim) anexoBoletim.value = '';
 
   const campoQuebrado = document.getElementById('campo-quebrado-cadastro');
   if (campoQuebrado) campoQuebrado.style.display = status === 'Quebrado' ? 'block' : 'none';
