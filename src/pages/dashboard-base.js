@@ -147,11 +147,19 @@ function configurarJustificativas(prefixo) {
 }
 
 /* ============================================================================
-   CARREGAMENTO DE EQUIPAMENTOS (abstrato - implementar no dashboard específico)
+   CARREGAMENTO DE EQUIPAMENTOS (abstrato - o dashboard específico injeta a imp)
    ============================================================================ */
 
+let carregarEquipamentosImpl = null;
+
+export function setCarregarEquipamentos(fn) {
+  carregarEquipamentosImpl = fn;
+}
+
 export async function carregarEquipamentos() {
-  // Deve ser implementado no dashboard específico
+  if (carregarEquipamentosImpl) {
+    return await carregarEquipamentosImpl();
+  }
   throw new Error('carregarEquipamentos deve ser implementado no dashboard específico');
 }
 
@@ -307,8 +315,11 @@ async function salvarCadastro() {
     if (el && el.value) dados[campo] = el.value;
   });
 
-  if (!dados.unidade || !dados.categoria || !dados.marca || !dados.modelo) {
-    toastError('Preencha Unidade, Categoria, Marca e Modelo.'); return;
+  if (document.getElementById('new-unidade') && !dados.unidade) {
+    toastError('Preencha a Unidade.'); return;
+  }
+  if (!dados.categoria || !dados.marca || !dados.modelo) {
+    toastError('Preencha Categoria, Marca e Modelo.'); return;
   }
   if (!dados.status) { toastError('Selecione um status.'); return; }
 

@@ -31,6 +31,7 @@ import {
   abrirModalRemocao,
   confirmarRemocao,
   atualizarKpis,
+  setCarregarEquipamentos,
 } from './dashboard-base.js';
 import { preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
@@ -74,6 +75,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('🟢 Inicializando Dashboard Filial...');
   
   if (window.M) M.FormSelect.init(document.querySelectorAll('select'));
+  
+  // Injeta a função de recarga para o dashboard-base usar após salvar/remover
+  setCarregarEquipamentos(carregarEquipamentos);
   
   await initDashboardBase({ perfil: 'Filial', loadEquipamentos: false });
   

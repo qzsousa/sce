@@ -25,6 +25,7 @@ import {
   confirmarRemocao,
   atualizarKpis,
   registrarManutencaoUI,
+  setCarregarEquipamentos,
 } from './dashboard-base.js';
 import { setupSelectCascata, getListasCache } from '../shared/js/lists.js';
 import { redefinirSenha } from '../shared/js/api.js';
@@ -93,6 +94,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Inicializa listeners de cascata para categoria/marca/modelo
   setupSelectCascata('new');
   setupSelectCascata('edit');
+  
+  // Injeta a função de recarga global para o dashboard-base usar após salvar/remover
+  setCarregarEquipamentos(carregarEquipamentosGlobal);
   
   await initDashboardBase({ perfil: 'Matriz', loadEquipamentos: false });
   inicializarFiltrosRapidos();
