@@ -312,8 +312,14 @@ app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const data = await sheets.getValues('Usuarios');
-  const usuarios = data.slice(1).map(row => ({
-    email: row[0], nome: row[1], nivel: row[2], filial: row[3], status: row[4], dataRemocao: row[5]
+  const usuarios = data.map(row => ({
+    email: row.email,
+    nome: row.nome,
+    nivel: row.nivel,
+    filial: row.filial,
+    status: row.status,
+    dataRemocao: row.data_remocao,
+    senhaDefinida: row.senha_definida !== false,
   }));
   res.json(standardResponse(true, usuarios));
 }));
@@ -379,22 +385,13 @@ app.get('/api/listas-cadastro', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   await requireSession(token);
   const data = await sheets.getValues('Listas');
-  if (!data || data.length < 2) return res.json(standardResponse(true, []));
-
-  const headers = data[0];
-  let idxCat = headers.indexOf('categoria');
-  let idxMarca = headers.indexOf('marca');
-  let idxModelo = headers.indexOf('modelo');
-  if (idxCat === -1) idxCat = 0;
-  if (idxMarca === -1) idxMarca = 1;
-  if (idxModelo === -1) idxModelo = 2;
+  if (!data || data.length === 0) return res.json(standardResponse(true, []));
 
   const result = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    const cat = row[idxCat] ? String(row[idxCat]).trim() : '';
-    const marca = row[idxMarca] ? String(row[idxMarca]).trim() : '';
-    const modelo = row[idxModelo] ? String(row[idxModelo]).trim() : '';
+  for (const row of data) {
+    const cat = row.categoria ? String(row.categoria).trim() : '';
+    const marca = row.marca ? String(row.marca).trim() : '';
+    const modelo = row.modelo ? String(row.modelo).trim() : '';
     if (cat && marca && modelo) result.push({ categoria: cat, marca, modelo });
   }
   res.json(standardResponse(true, result));
