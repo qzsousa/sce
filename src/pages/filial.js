@@ -10,6 +10,7 @@ import {
   hideLoading,
   toastSuccess,
   toastError,
+  toastInfo,
   setButtonLoading,
   isButtonLoading,
   downloadCsv,
@@ -21,6 +22,15 @@ import {
   CAMPOS_EDITAVEIS,
   CAMPOS_CADASTRO,
   getApiBaseUrl,
+  abrirCadastroEquipamento,
+  salvarCadastro,
+  salvarEdicao,
+  exportarCSVUI,
+  editarEquipamento,
+  abrirHistorico,
+  abrirModalRemocao,
+  confirmarRemocao,
+  atualizarKpis,
 } from './dashboard-base.js';
 import { preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
@@ -28,6 +38,9 @@ import { preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js'
 window.selecionarTipoEmprestimo = selecionarTipoEmprestimo;
 window.editarUsuarioUI = editarUsuarioUI;
 window.removerUsuarioUI = removerUsuarioUI;
+window.editarEquipamento = editarEquipamento;
+window.abrirHistorico = abrirHistorico;
+window.abrirModalRemocao = abrirModalRemocao;
 
 // ============================================================================
 // ESTADO ESPECÍFICO FILIAL
@@ -545,6 +558,7 @@ function aplicarFiltros() {
   paginaAtual = 1;
   renderTabelaEquipamentos(equipamentosFiltrados);
   atualizarKpis(equipamentosFiltrados);
+  atualizarGraficos(equipamentosFiltrados);
 }
 
 // ============================================================================
@@ -559,6 +573,152 @@ function atualizarGraficos(equipamentos) {
   const porCategoria = {};
   equipamentos.forEach(item => { const c = item.categoria || 'Sem categoria'; if (c === 'Monitor') return; porCategoria[c] = (porCategoria[c] || 0) + 1; });
   renderGraficoCategoria(porCategoria);
+}
+
+function renderGraficoStatus(porStatus) {
+  const canvas = document.getElementById('canvas-chart-status');
+  if (!canvas) return;
+  const labels = Object.keys(porStatus);
+  const valores = labels.map(l => porStatus[l]);
+  const cores = ['#1565c0', '#43a047', '#ef6c00', '#d32f2f', '#8e24aa', '#00838f', '#795548', '#607d8b'];
+  if (chartStatus) chartStatus.destroy();
+  chartStatus = new Chart(canvas.getContext('2d'), {
+    type: 'pie',
+    data: { labels, datasets: [{ data: valores, backgroundColor: cores.slice(0, labels.length) }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } } }
+  });
+}
+
+function renderGraficoCategoria(porCategoria) {
+  const canvas = document.getElementById('canvas-chart-categoria');
+  if (!canvas) return;
+  const labels = Object.keys(porCategoria);
+  const dados = labels.map(l => porCategoria[l]);
+  const cores = ['#4a148c', '#6a1b9a', '#7b1fa2', '#8e24aa', '#9c27b0', '#ab47bc', '#ba68c8', '#ce93d8', '#e1bee7', '#f3e5f5'];
+  if (chartCategoria) chartCategoria.destroy();
+  if (labels.length === 0) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#999';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Nenhuma categoria disponível', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+  chartCategoria = new Chart(canvas.getContext('2d'), {
+    type: 'pie',
+    data: { labels, datasets: [{ data: dados, backgroundColor: cores.slice(0, labels.length) }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } } }
+  });
+}
+
+function ordenarTabela(campo) {
+  if (campoOrdenacao === campo) {
+    ordemAtual = ordemAtual === 'asc' ? 'desc' : 'asc';
+  } else {
+    campoOrdenacao = campo;
+    ordemAtual = 'asc';
+  }
+  equipamentosFiltrados.sort((a, b) => {
+    const valA = (a[campo] || '').toString().toLowerCase();
+    const valB = (b[campo] || '').toString().toLowerCase();
+    if (valA < valB) return ordemAtual === 'asc' ? -1 : 1;
+    if (valA > valB) return ordemAtual === 'asc' ? 1 : -1;
+    return 0;
+  });
+  document.querySelectorAll('.sortable').forEach(th => {
+    const icon = th.querySelector('.material-icons');
+    if (icon) icon.textContent = 'unfold_more';
+  });
+  const thAtual = document.querySelector('[data-sort="' + campo + '"]');
+  if (thAtual) {
+    const icon = thAtual.querySelector('.material-icons');
+    if (icon) icon.textContent = ordemAtual === 'asc' ? 'arrow_upward' : 'arrow_downward';
+  }
+  paginaAtual = 1;
+  renderTabelaEquipamentos(equipamentosFiltrados);
+}
+
+function renderTabelaEquipamentos(equipamentos) {
+  const tbody = document.querySelector('#tabela-equipamentos tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!equipamentos || equipamentos.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
+    const info = document.getElementById('pagina-info');
+    if (info) info.innerText = 'Página 0 de 0 - 0 itens';
+    return;
+  }
+  const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
+  const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
+  pagina.forEach(item => {
+    const tr = document.createElement('tr');
+    const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
+    tr.className = statusClass;
+    let badgeManutencao = '-';
+    if (item.statusManutencao) {
+      const statusManut = item.statusManutencao.toLowerCase().replace(/ /g, '-');
+      let badgeClass = 'badge-manutencao ';
+      if (statusManut === 'pendente') badgeClass += 'badge-pendente';
+      else if (statusManut === 'em-andamento') badgeClass += 'badge-em-andamento';
+      else if (statusManut === 'concluído') badgeClass += 'badge-concluído';
+      badgeManutencao = '<span class="' + badgeClass + '">' + item.statusManutencao + '</span>';
+    }
+    let indicadorAtraso = '-';
+    if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+      const hoje = new Date();
+      const prevista = new Date(item.dataPrevistaDevolucao);
+      const atrasado = prevista < hoje;
+      const label = atrasado ? 'Atrasado' : 'Em dia';
+      const cls = atrasado ? 'badge-atrasado' : 'badge-em-dia';
+      indicadorAtraso = '<span class="badge-atraso ' + cls + '">' + label + '</span>';
+    }
+    tr.innerHTML =
+      '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
+      '<td>' + (item.categoria || '') + '</td>' +
+      '<td>' + (item.marca || '') + '</td>' +
+      '<td>' + (item.modelo || '') + '</td>' +
+      '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
+      '<td><strong>' + (item.status || '') + '</strong></td>' +
+      '<td>' + badgeManutencao + '</td>' +
+      '<td>' + indicadorAtraso + '</td>' +
+      '<td class="no-print" style="text-align:center;">' +
+      '<button class="btn-acao" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></button> ' +
+      '<button class="btn-acao" onclick="abrirHistorico(\'' + item.id + '\')" title="Histórico"><i class="material-icons">history</i></button> ' +
+      '<button class="btn-acao-excluir" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Excluir"><i class="material-icons">delete</i></button>' +
+      '</td>';
+    tbody.appendChild(tr);
+  });
+  const totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));
+  const info = document.getElementById('pagina-info');
+  if (info) info.innerText = 'Página ' + paginaAtual + ' de ' + totalPaginas + ' - ' + equipamentos.length + ' itens';
+}
+
+async function excluirSelecionados() {
+  const ids = getIdsSelecionados();
+  if (ids.length === 0) { toastError('Selecione pelo menos um equipamento.'); return; }
+  if (!confirm('Tem certeza que deseja excluir os ' + ids.length + ' equipamento(s) selecionado(s)? Esta ação não pode ser desfeita.')) return;
+
+  const btn = document.getElementById('btn-excluir-selecionados');
+  setButtonLoading(btn, true);
+  let concluidos = 0;
+  ids.forEach(id => {
+    fetch(`${getApiBaseUrl()}/remover-equipamento`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ id })
+    }).then(() => {
+      concluidos++;
+      if (concluidos === ids.length) {
+        setButtonLoading(btn, false);
+        toastSuccess('Equipamentos excluídos com sucesso.');
+        carregarEquipamentos();
+      }
+    }).catch(err => {
+      setButtonLoading(btn, false);
+      toastError('Erro ao excluir: ' + err.message);
+    });
+  });
 }
 
 // ============================================================================
