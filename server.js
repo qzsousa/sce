@@ -332,7 +332,7 @@ app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
 app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
-  let { email, nome, nivel, filial } = req.body;
+  let { email, nome, nivel, filial, senhaTemporaria } = req.body;
 
   if (session.nivel === niveis.ADMIN_FILIAL) {
     // AdminFilial cria apenas usuários "Filial" na própria unidade
@@ -356,6 +356,17 @@ app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
 
   await sheets.ensureSheetExists('Usuarios', HEADER_MAP.USUARIOS);
   await sheets.appendRow('Usuarios', [email, nome, nivel || niveis.FILIAL, filial, statusUsuario.ATIVO, null, false]);
+
+  // Se informada, cria o usuário no Supabase Auth com a senha temporária
+  // (senha_definida permanece false, forçando redefinição no primeiro acesso)
+  if (senhaTemporaria && String(senhaTemporaria).length >= 6) {
+    try {
+      await upsertAuthUser(email, senhaTemporaria, { nome, nivel: nivel || niveis.FILIAL, filial });
+    } catch (e) {
+      console.warn('Falha ao criar usuário no Auth (senha temporária):', e.message);
+    }
+  }
+
   await registrarAuditoria('adicionarUsuario', session.email, { email, nome, nivel, filial });
 
   res.json(standardResponse(true, { message: 'Usuário adicionado com sucesso.' }));

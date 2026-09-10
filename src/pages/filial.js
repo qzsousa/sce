@@ -983,6 +983,10 @@ function abrirNovoUsuario() {
   document.getElementById('usuario-email').value = '';
   document.getElementById('usuario-email').disabled = false;
   document.getElementById('usuario-nome').value = '';
+  const campoSenha = document.getElementById('campo-senha-temporaria');
+  if (campoSenha) campoSenha.style.display = 'block';
+  const senhaEl = document.getElementById('usuario-senha-temporaria');
+  if (senhaEl) senhaEl.value = '';
   
   const nivelEl = document.getElementById('usuario-nivel');
   const filialEl = document.getElementById('usuario-filial');
@@ -1006,6 +1010,8 @@ function editarUsuarioUI(email) {
   document.getElementById('usuario-email').value = email;
   document.getElementById('usuario-email').disabled = true;
   document.getElementById('usuario-nome').value = usuario.nome || '';
+  const campoSenha = document.getElementById('campo-senha-temporaria');
+  if (campoSenha) campoSenha.style.display = 'none';
   
   const nivelEl = document.getElementById('usuario-nivel');
   const filialEl = document.getElementById('usuario-filial');
@@ -1029,6 +1035,7 @@ async function salvarUsuario() {
   const nome = document.getElementById('usuario-nome').value.trim();
   const nivel = document.getElementById('usuario-nivel').value;
   const filial = document.getElementById('usuario-filial').value.trim();
+  const senhaTemporaria = document.getElementById('usuario-senha-temporaria')?.value || '';
   
   if (!email) { toastError('E-mail é obrigatório.'); return; }
   if (!nome) { toastError('Nome é obrigatório.'); return; }
@@ -1038,12 +1045,19 @@ async function salvarUsuario() {
   
   setButtonLoading(btn, true);
   try {
-    const action = emailOriginal ? 'atualizar-usuario' : 'adicionar-usuario';
-    const url = '/api/' + action + '?token=' + encodeURIComponent(getToken());
-    const body = emailOriginal ? JSON.stringify({ emailOriginal, ...dados }) : JSON.stringify(dados);
-    const res = await fetch(url, { method: 'POST', headers: getAuthHeaders(), body });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
+    if (emailOriginal) {
+      const res = await fetch(`${getApiBaseUrl()}/atualizar-usuario`, {
+        method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ emailOriginal, ...dados })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+    } else {
+      const res = await fetch(`${getApiBaseUrl()}/adicionar-usuario`, {
+        method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ ...dados, senhaTemporaria })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+    }
     
     setButtonLoading(btn, false);
     toastSuccess(emailOriginal ? 'Usuário atualizado.' : 'Usuário adicionado.');
