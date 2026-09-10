@@ -235,6 +235,7 @@ function getHeadersForTable(tableName) {
     LISTAS: ['categoria', 'marca', 'modelo'],
     FILIAIS: ['nome'],
     HISTORICO: ['id', 'equipamentoId', 'campo', 'valorAntigo', 'valorNovo', 'autor', 'data'],
+    HISTORICO_ITENS: ['id', 'equipamentoId', 'campo', 'valorAntigo', 'valorNovo', 'autor', 'data'],
     EMPRESTIMOS: ['id', 'equipamentoId', 'patrimonio', 'unidade', 'responsavel', 'cpf', 'emailResponsavel',
       'dataEmprestimo', 'dataPrevistaDevolucao', 'dataDevolucao', 'status', 'termoPdfUrl',
       'criadoPor', 'devolvidoPor', 'observacoes', 'tipoEmprestimo', 'escolaDestino'],

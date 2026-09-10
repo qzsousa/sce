@@ -450,12 +450,13 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
     if (h === 'id') return id;
     if (h === 'unidade') return unidade;
     if (h === 'status') return dados.status || 'Disponível';
+    if (h === 'vinculadoBlueMonitor') return dados.vinculadoBlueMonitor || 'Não';
     if (h === 'dataCadastro') return now;
     if (h === 'dataUltimaAtualizacao') return now;
     if (h === 'cadastradoPor') return session.email;
     if (h === 'ultimaAlteracaoPor') return session.email;
     if (h in dados) return dados[h];
-    return '';
+    return null;
   });
 
   await sheets.appendRow('Equipamentos', linha);
