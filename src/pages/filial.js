@@ -43,6 +43,7 @@ window.removerUsuarioUI = removerUsuarioUI;
 window.editarEquipamento = editarEquipamento;
 window.abrirHistorico = abrirHistorico;
 window.abrirModalRemocao = abrirModalRemocao;
+window.redefinirSenhaUI = redefinirSenhaUI;
 
 // ============================================================================
 // ESTADO ESPECÍFICO FILIAL
@@ -64,6 +65,7 @@ let modalEmprestimoInstance = null;
 let modalUsuariosInstance = null;
 let modalEditarUsuarioInstance = null;
 let modalHistoricoInstance = null;
+let modalRedefinirSenhaInstance = null;
 let itemEmEdicaoOriginal = null;
 
 let emprestimoIdsSelecionados = [];
@@ -123,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-novo-usuario')?.addEventListener('click', abrirNovoUsuario);
   document.getElementById('btn-atualizar-usuarios')?.addEventListener('click', carregarUsuariosUI);
   document.getElementById('btn-salvar-usuario')?.addEventListener('click', salvarUsuario);
+  document.getElementById('btn-confirmar-redefinir-senha')?.addEventListener('click', confirmarRedefinirSenha);
 
   document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
   document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
@@ -933,10 +936,48 @@ function renderTabelaUsuarios(usuarios) {
       '<td>' + (u.nivel || '') + '</td>' +
       '<td>' + (u.filial || '') + '</td>' +
       '<td>' + (u.status || '') + '</td>' +
-      '<td>' + (isSelf ? '' : '<button class="btn-acao" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></button> <button class="btn-acao danger" onclick="removerUsuarioUI(\'' + u.email + '\')" title="Remover"><i class="material-icons">delete</i></button>') +
+      '<td>' + (isSelf ? '' : '<button class="btn-acao" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></button> <button class="btn-acao" onclick="redefinirSenhaUI(\'' + u.email + '\')" title="Redefinir senha"><i class="material-icons">vpn_key</i></button> <button class="btn-acao danger" onclick="removerUsuarioUI(\'' + u.email + '\')" title="Remover"><i class="material-icons">delete</i></button>') +
       '</td>';
     tbody.appendChild(tr);
   });
+}
+
+function redefinirSenhaUI(email) {
+  document.getElementById('rd-email').innerText = email;
+  document.getElementById('rd-senha').value = '';
+  document.getElementById('rd-senha-confirm').value = '';
+  if (!modalRedefinirSenhaInstance && window.M && M.Modal) {
+    modalRedefinirSenhaInstance = M.Modal.init(document.getElementById('modal-redefinir-senha'));
+  }
+  modalRedefinirSenhaInstance.open();
+  if (window.M) M.updateTextFields();
+}
+
+async function confirmarRedefinirSenha() {
+  const btn = document.getElementById('btn-confirmar-redefinir-senha');
+  if (isButtonLoading(btn)) return;
+
+  const email = document.getElementById('rd-email').innerText;
+  const senha = document.getElementById('rd-senha').value;
+  const confirmacao = document.getElementById('rd-senha-confirm').value;
+
+  if (!senha || senha !== confirmacao) { toastError('As senhas não coincidem.'); return; }
+  if (senha.length < 6) { toastError('A senha deve ter pelo menos 6 caracteres.'); return; }
+
+  setButtonLoading(btn, true);
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/redefinir-senha`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ email, novaSenha: senha })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    toastSuccess('Senha redefinida com sucesso.');
+    if (modalRedefinirSenhaInstance) modalRedefinirSenhaInstance.close();
+  } catch (err) {
+    toastError('Erro ao redefinir senha: ' + err.message);
+  } finally {
+    setButtonLoading(btn, false);
+  }
 }
 
 function abrirNovoUsuario() {
@@ -994,7 +1035,6 @@ async function salvarUsuario() {
   
   if (!email) { toastError('E-mail é obrigatório.'); return; }
   if (!nome) { toastError('Nome é obrigatório.'); return; }
-  if (!filial) { toastError('Filial é obrigatória.'); return; }
   
   const dados = { email, nome, nivel, filial };
   const emailOriginal = document.getElementById('usuario-email-original').value;

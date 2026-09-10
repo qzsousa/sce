@@ -282,13 +282,17 @@ app.post('/api/definir-senha', asyncHandler(async (req, res) => {
 
 app.post('/api/redefinir-senha', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  const session = await requireSession(token, [niveis.MATRIZ]);
+  const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const { email, novaSenha } = req.body;
   if (!email || !novaSenha) return res.json(standardResponse(false, null, 'E-mail e nova senha são obrigatórios.'));
   if (String(novaSenha).length < 6) return res.json(standardResponse(false, null, 'A senha deve ter pelo menos 6 caracteres.'));
 
   const usuario = await findUsuarioByEmail(email);
   if (!usuario) return res.json(standardResponse(false, null, 'Usuário não encontrado.'));
+
+  if (session.nivel === niveis.ADMIN_FILIAL && usuario.filial !== session.filial) {
+    return res.json(standardResponse(false, null, 'Você só pode redefinir senha de usuários da sua própria filial.'));
+  }
 
   await upsertAuthUser(email, novaSenha, usuario);
   await setSenhaDefinida(email, true);
@@ -310,9 +314,9 @@ app.get('/api/get-nome-usuario', asyncHandler(async (req, res) => {
 
 app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
+  const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const data = await sheets.getValues('Usuarios');
-  const usuarios = data.map(row => ({
+  let usuarios = data.map(row => ({
     email: row.email,
     nome: row.nome,
     nivel: row.nivel,
@@ -321,13 +325,31 @@ app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
     dataRemocao: row.data_remocao,
     senhaDefinida: row.senha_definida !== false,
   }));
+  if (session.nivel === niveis.ADMIN_FILIAL) {
+    usuarios = usuarios.filter(u => u.filial === session.filial);
+  }
   res.json(standardResponse(true, usuarios));
 }));
 
 app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
-  const { email, nome, nivel, filial } = req.body;
+  let { email, nome, nivel, filial } = req.body;
+
+  if (session.nivel === niveis.ADMIN_FILIAL) {
+    // AdminFilial cria apenas usuários "Filial" na própria unidade
+    nivel = niveis.FILIAL;
+    filial = session.filial;
+    const data = await sheets.getValues('Usuarios');
+    const outrosAtivos = data.filter(row =>
+      row.filial === session.filial &&
+      row.status !== 'Removido' &&
+      String(row.email).trim().toLowerCase() !== String(session.email).trim().toLowerCase()
+    ).length;
+    if (outrosAtivos >= 2) {
+      return res.json(standardResponse(false, null, 'Limite atingido: uma filial pode ter no máximo 2 usuários além do administrador.'));
+    }
+  }
 
   if (!email || !nome || !filial) return res.json(standardResponse(false, null, 'E-mail, nome e filial são obrigatórios.'));
 
@@ -343,21 +365,27 @@ app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
 
 app.post('/api/atualizar-usuario', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  const session = await requireSession(token, [niveis.MATRIZ]);
+  const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const { emailOriginal, ...dados } = req.body;
 
   const usuario = await findUsuarioByEmail(emailOriginal);
   if (!usuario) return res.json(standardResponse(false, null, 'Usuário não encontrado.'));
 
-  const updates = [];
-  if (dados.nome !== undefined) updates.push({ row: usuario.rowIndex, col: 2, value: dados.nome });
-  if (dados.nivel !== undefined) updates.push({ row: usuario.rowIndex, col: 3, value: dados.nivel });
-  if (dados.filial !== undefined) updates.push({ row: usuario.rowIndex, col: 4, value: dados.filial });
-  if (dados.status !== undefined) updates.push({ row: usuario.rowIndex, col: 5, value: dados.status });
+  if (session.nivel === niveis.ADMIN_FILIAL && usuario.filial !== session.filial) {
+    return res.json(standardResponse(false, null, 'Você só pode editar usuários da sua própria filial.'));
+  }
 
-  if (updates.length > 0) {
-    await sheets.batchUpdateCells('Usuarios', updates);
-    await registrarAuditoria('atualizarUsuario', session.email, { emailOriginal, dados });
+  const updates = {};
+  if (dados.nome !== undefined) updates.nome = dados.nome;
+  if (session.nivel === niveis.MATRIZ) {
+    if (dados.nivel !== undefined) updates.nivel = dados.nivel;
+    if (dados.filial !== undefined) updates.filial = dados.filial;
+    if (dados.status !== undefined) updates.status = dados.status;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await supabaseAdmin.from('usuarios').update(updates).eq('email', String(emailOriginal).toLowerCase().trim());
+    await registrarAuditoria('atualizarUsuario', session.email, { emailOriginal, updates });
   }
 
   res.json(standardResponse(true, { message: 'Usuário atualizado.' }));
@@ -371,7 +399,13 @@ app.post('/api/remover-usuario', asyncHandler(async (req, res) => {
   const usuario = await findUsuarioByEmail(email);
   if (!usuario) return res.json(standardResponse(false, null, 'Usuário não encontrado.'));
 
-  await sheets.batchUpdateCells('Usuarios', [{ row: usuario.rowIndex, col: 5, value: statusUsuario.REMOVIDO }, { row: usuario.rowIndex, col: 6, value: new Date() }]);
+  if (session.nivel === niveis.ADMIN_FILIAL && usuario.filial !== session.filial) {
+    return res.json(standardResponse(false, null, 'Você só pode remover usuários da sua própria filial.'));
+  }
+
+  await supabaseAdmin.from('usuarios')
+    .update({ status: statusUsuario.REMOVIDO, data_remocao: new Date().toISOString() })
+    .eq('email', String(email).toLowerCase().trim());
   await registrarAuditoria('removerUsuario', session.email, { email });
 
   res.json(standardResponse(true, { message: 'Usuário removido.' }));
