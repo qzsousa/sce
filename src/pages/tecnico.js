@@ -20,6 +20,7 @@ import {
   editarEquipamento,
   abrirManutencao,
 } from './dashboard-base.js';
+import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
 // Expor funções globais para onclick no HTML
 window.editarEquipamento = editarEquipamento;
@@ -42,6 +43,9 @@ let modalCadastroInstance = null;
 let modalManutencaoInstance = null;
 let itemEmEdicaoOriginal = null;
 let equipamentoIdManutencaoAtual = null;
+let listasCache = null;
+let campoOrdenacao = null;
+let ordemAtual = 'asc';
 
 // ============================================================================
 // INICIALIZAÇÃO
@@ -151,7 +155,8 @@ function processarListas(combinacoes) {
   const categorias = new Set();
   const marcasPorCategoria = {};
   const modelosPorCategoriaMarca = {};
-  combinacoes.forEach(item => {
+  const combinadas = (combinacoes || []).concat(getCombinacoesDoCatalogo());
+  combinadas.forEach(item => {
     const cat = item.categoria, marca = item.marca, modelo = item.modelo;
     if (!cat || !marca || !modelo) return;
     categorias.add(cat);
@@ -161,7 +166,7 @@ function processarListas(combinacoes) {
     if (!modelosPorCategoriaMarca[cat][marca]) modelosPorCategoriaMarca[cat][marca] = new Set();
     modelosPorCategoriaMarca[cat][marca].add(modelo);
   });
-  listasCache = { combinacoes, categorias: Array.from(categorias).sort(), marcasPorCategoria, modelosPorCategoriaMarca };
+  listasCache = { combinacoes: combinadas, categorias: Array.from(categorias).sort(), marcasPorCategoria, modelosPorCategoriaMarca };
 }
 
 function preencherSelectCategoria(prefixo) {
@@ -242,9 +247,17 @@ function onMarcaChange(prefixo) {
   else limparModelo(prefixo);
 }
 
+function onModeloChange(prefixo) {
+  const selectModelo = document.getElementById(prefixo + '-modelo');
+  if (selectModelo && selectModelo.value && selectModelo.value !== '__outro__') {
+    preencherEspecificacoesModelo(prefixo, selectModelo.value);
+  }
+}
+
 // Expor para onclick no HTML
 window.onCategoriaChange = onCategoriaChange;
 window.onMarcaChange = onMarcaChange;
+window.onModeloChange = onModeloChange;
 
 // ============================================================================
 // JUSTIFICATIVAS

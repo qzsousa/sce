@@ -2,6 +2,8 @@
 // LISTS — Categoria / Marca / Modelo cascata com suporte a "Outro"
 // ============================================================================
 
+import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from './catalogo-modelos.js';
+
 let listasCache = null;
 
 export function setListasCache(data) {
@@ -9,7 +11,10 @@ export function setListasCache(data) {
   const marcasPorCategoria = {};
   const modelosPorCategoriaMarca = {};
 
-  (data || []).forEach(item => {
+  // Mescla os dados fornecidos com o catálogo padrão (planilha de modelos)
+  const combinacoes = (data || []).concat(getCombinacoesDoCatalogo());
+
+  combinacoes.forEach(item => {
     const cat = item.categoria?.trim();
     const marca = item.marca?.trim();
     const modelo = item.modelo?.trim();
@@ -23,7 +28,7 @@ export function setListasCache(data) {
   });
 
   listasCache = {
-    combinacoes: data,
+    combinacoes,
     categorias: Array.from(categorias).sort(),
     marcasPorCategoria,
     modelosPorCategoriaMarca,
@@ -234,8 +239,9 @@ export function setupSelectCascata(prefixo, onModeloChange) {
   if (selectModelo) {
     selectModelo.addEventListener('change', () => {
       toggleOutro(prefixo, 'modelo');
-      if (onModeloChange && selectModelo.value && selectModelo.value !== OUTRO_VALUE) {
-        onModeloChange(selectModelo.value);
+      if (selectModelo.value && selectModelo.value !== OUTRO_VALUE) {
+        preencherEspecificacoesModelo(prefixo, selectModelo.value);
+        if (onModeloChange) onModeloChange(selectModelo.value);
       }
     });
   }

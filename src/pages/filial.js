@@ -22,6 +22,7 @@ import {
   CAMPOS_CADASTRO,
   getApiBaseUrl,
 } from './dashboard-base.js';
+import { preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
 // Expor funções globais para onclick no HTML
 window.selecionarTipoEmprestimo = selecionarTipoEmprestimo;
@@ -79,6 +80,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   await initDashboardBase({ perfil: 'Filial', loadEquipamentos: false });
   await carregarEquipamentos();
+  
+  // Carregar listas (categoria/marca/modelo) - mescla com catálogo
+  await carregarListasCadastro();
   
   // Event listeners
   document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
@@ -140,8 +144,379 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // ============================================================================
+// CARREGAMENTO DE LISTAS (CASCATA + "OUTRO" + TV/PROJETOR)
+// ============================================================================
+
+async function carregarListasCadastro() {
+  console.log('🟢 carregarListasCadastro() iniciado...');
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/listas-cadastro`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    if (data.success) {
+      console.log('✅ Listas recebidas:', data.data);
+      processarListas(data.data);
+      preencherSelectCategoria('new');
+      preencherSelectCategoria('edit');
+      // Popular os filtros de categoria/marca/modelo da tabela com a mesma fonte
+      popularFiltroCategoria();
+      popularFiltroMarca('');
+      popularFiltroModelo('', '');
+    }
+  } catch (err) {
+    console.error('❌ Erro ao carregar listas:', err);
+    toastError('Erro ao carregar listas. Recarregue a página.');
+  }
+}
+
+function processarListas(combinacoes) {
+  const categorias = new Set();
+  const marcasPorCategoria = {};
+  const modelosPorCategoriaMarca = {};
+
+  // Mescla os dados da API com o catálogo padrão
+  const catalogoItens = CATALOGO_PARA_LISTAS();
+  const combinadas = (combinacoes || []).concat(catalogoItens);
+
+  combinadas.forEach(item => {
+    const cat = item.categoria, marca = item.marca, modelo = item.modelo;
+    if (!cat || !marca || !modelo) return;
+    if (cat === 'Monitor') return; // Exclui Monitor da cascata (conforme original)
+    categorias.add(cat);
+    if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
+    marcasPorCategoria[cat].add(marca);
+    if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};
+    if (!modelosPorCategoriaMarca[cat][marca]) modelosPorCategoriaMarca[cat][marca] = new Set();
+    modelosPorCategoriaMarca[cat][marca].add(modelo);
+  });
+
+  // Garante TV e Projetor nas categorias (caso especial sem marca/modelo)
+  if (!categorias.has('TV')) categorias.add('TV');
+  if (!categorias.has('Projetor')) categorias.add('Projetor');
+
+  listasCache = {
+    combinacoes: combinadas,
+    categorias: Array.from(categorias).sort(),
+    marcasPorCategoria,
+    modelosPorCategoriaMarca
+  };
+}
+
+// Retorna itens do catálogo no formato esperado por setListasCache
+function CATALOGO_PARA_LISTAS() {
+  // Importa do módulo catalogo-modelos (dados estáticos)
+  return window.CATALOGO_LISTAS_CACHE || [];
+}
+
+// Carrega o catálogo estático no window para uso em processarListas
+import('../shared/js/catalogo-modelos.js').then(mod => {
+  window.CATALOGO_LISTAS_CACHE = mod.getCombinacoesDoCatalogo?.() || [];
+});
+
+function preencherSelectCategoria(prefixo) {
+  const select = document.getElementById(prefixo + '-categoria');
+  if (!select || !listasCache) return;
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="" disabled selected>Selecione</option>' +
+    listasCache.categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+  if (valorAtual && listasCache.categorias.indexOf(valorAtual) !== -1) {
+    select.value = valorAtual;
+  } else {
+    select.value = '';
+  }
+  if (window.M && M.FormSelect) M.FormSelect.init(select);
+  
+  // Dispara onCategoriaChange para configurar marca/modelo
+  if (typeof window.onCategoriaChange === 'function') {
+    window.onCategoriaChange(prefixo);
+  }
+}
+
+function popularMarcas(prefixo, categoria) {
+  const selectMarca = document.getElementById(prefixo + '-marca');
+  const marcaContainer = document.getElementById(prefixo + '-marca-container');
+  const marcaTextContainer = document.getElementById(prefixo + '-marca-text-container');
+  const outroMarcaContainer = document.getElementById(prefixo + '-outro-marca-container');
+  
+  if (!selectMarca || !listasCache) return;
+  const valorAtual = selectMarca.value;
+  
+  const isEspecial = (categoria === 'TV' || categoria === 'Projetor');
+  
+  if (isEspecial) {
+    // Para TV/Projetor: esconde selects de marca/modelo, mostra input de texto para marca
+    if (marcaContainer) marcaContainer.style.display = 'none';
+    if (marcaTextContainer) marcaTextContainer.style.display = 'block';
+    limparModelo(prefixo);
+    limparCamposEspecificacao(prefixo);
+    return;
+  }
+  
+  if (marcaContainer) marcaContainer.style.display = 'block';
+  if (marcaTextContainer) marcaTextContainer.style.display = 'none';
+  
+  const marcasSet = listasCache.marcasPorCategoria[categoria] || new Set();
+  const marcas = Array.from(marcasSet).sort();
+  
+  selectMarca.innerHTML = '<option value="" disabled selected>Selecione uma marca</option>' +
+    marcas.map(m => `<option value="${m}">${m}</option>`).join('') +
+    '<option value="__outro__">Outro (digitar)</option>';
+  
+  if (valorAtual && marcas.includes(valorAtual)) {
+    selectMarca.value = valorAtual;
+  } else if (valorAtual && valorAtual !== '__outro__') {
+    selectMarca.value = '__outro__';
+    const input = document.getElementById(prefixo + '-outro-marca');
+    if (input) input.value = valorAtual;
+    if (outroMarcaContainer) outroMarcaContainer.style.display = 'block';
+  } else {
+    selectMarca.value = '';
+    if (outroMarcaContainer) outroMarcaContainer.style.display = 'none';
+  }
+  
+  if (window.M && M.FormSelect) M.FormSelect.init(selectMarca);
+  
+  if (selectMarca.value && selectMarca.value !== '__outro__') {
+    popularModelos(prefixo, categoria, selectMarca.value);
+  } else {
+    limparModelo(prefixo);
+  }
+}
+
+function popularModelos(prefixo, categoria, marca) {
+  const selectModelo = document.getElementById(prefixo + '-modelo');
+  const modeloContainer = document.getElementById(prefixo + '-modelo-container');
+  const modeloTextContainer = document.getElementById(prefixo + '-modelo-text-container');
+  const outroModeloContainer = document.getElementById(prefixo + '-outro-modelo-container');
+  
+  if (!selectModelo || !listasCache) return;
+  const valorAtual = selectModelo.value;
+  
+  const isEspecial = (categoria === 'TV' || categoria === 'Projetor');
+  
+  if (isEspecial) {
+    if (modeloContainer) modeloContainer.style.display = 'none';
+    if (modeloTextContainer) modeloTextContainer.style.display = 'block';
+    limparCamposEspecificacao(prefixo);
+    return;
+  }
+  
+  if (modeloContainer) modeloContainer.style.display = 'block';
+  if (modeloTextContainer) modeloTextContainer.style.display = 'none';
+  
+  const modelosSet = listasCache.modelosPorCategoriaMarca[categoria]?.[marca] || new Set();
+  const modelos = Array.from(modelosSet).sort();
+  
+  selectModelo.innerHTML = '<option value="" disabled selected>Selecione um modelo</option>' +
+    modelos.map(m => `<option value="${m}">${m}</option>`).join('') +
+    '<option value="__outro__">Outro (digitar)</option>';
+  
+  if (valorAtual && modelos.includes(valorAtual)) {
+    selectModelo.value = valorAtual;
+  } else if (valorAtual && valorAtual !== '__outro__') {
+    selectModelo.value = '__outro__';
+    const input = document.getElementById(prefixo + '-outro-modelo');
+    if (input) input.value = valorAtual;
+    if (outroModeloContainer) outroModeloContainer.style.display = 'block';
+  } else {
+    selectModelo.value = '';
+    if (outroModeloContainer) outroModeloContainer.style.display = 'none';
+  }
+  
+  if (window.M && M.FormSelect) M.FormSelect.init(selectModelo);
+  
+  // Se modelo já selecionado, preenche specs
+  if (selectModelo.value && selectModelo.value !== '__outro__') {
+    preencherEspecificacoesModelo(prefixo, selectModelo.value);
+  } else {
+    limparCamposEspecificacao(prefixo);
+  }
+}
+
+function limparMarcaModelo(prefixo) {
+  const selectMarca = document.getElementById(prefixo + '-marca');
+  if (selectMarca) {
+    selectMarca.innerHTML = '<option value="" disabled selected>Selecione a categoria</option>';
+    if (window.M && M.FormSelect) M.FormSelect.init(selectMarca);
+  }
+  limparModelo(prefixo);
+  const outroMarcaContainer = document.getElementById(prefixo + '-outro-marca-container');
+  if (outroMarcaContainer) outroMarcaContainer.style.display = 'none';
+}
+
+function limparModelo(prefixo) {
+  const selectModelo = document.getElementById(prefixo + '-modelo');
+  if (selectModelo) {
+    selectModelo.innerHTML = '<option value="" disabled selected>Selecione a marca</option>';
+    if (window.M && M.FormSelect) M.FormSelect.init(selectModelo);
+  }
+  const outroModeloContainer = document.getElementById(prefixo + '-outro-modelo-container');
+  if (outroModeloContainer) outroModeloContainer.style.display = 'none';
+  limparCamposEspecificacao(prefixo);
+}
+
+function toggleOutroCampo(prefixo, tipo) {
+  const select = document.getElementById(prefixo + '-' + tipo);
+  const container = document.getElementById(prefixo + '-outro-' + tipo + '-container');
+  const input = document.getElementById(prefixo + '-outro-' + tipo);
+  if (!select || !container || !input) return;
+  if (select.value === '__outro__') {
+    container.style.display = 'block';
+    input.focus();
+  } else {
+    container.style.display = 'none';
+    input.value = '';
+  }
+}
+
+// ============================================================================
+// FUNÇÕES GLOBAIS PARA ONCHANGE NO HTML (CASCATA)
+// ============================================================================
+
+window.onCategoriaChange = function(prefixo) {
+  const select = document.getElementById(prefixo + '-categoria');
+  const categoria = select.value;
+  const isEspecial = (categoria === 'TV' || categoria === 'Projetor');
+  
+  // Mostra/esconde containers de marca/modelo
+  const marcaContainer = document.getElementById(prefixo + '-marca-container');
+  const marcaTextContainer = document.getElementById(prefixo + '-marca-text-container');
+  const modeloContainer = document.getElementById(prefixo + '-modelo-container');
+  const modeloTextContainer = document.getElementById(prefixo + '-modelo-text-container');
+  const outroMarcaContainer = document.getElementById(prefixo + '-outro-marca-container');
+  const outroModeloContainer = document.getElementById(prefixo + '-outro-modelo-container');
+  
+  if (isEspecial) {
+    if (marcaContainer) marcaContainer.style.display = 'none';
+    if (marcaTextContainer) marcaTextContainer.style.display = 'block';
+    if (modeloContainer) modeloContainer.style.display = 'none';
+    if (modeloTextContainer) modeloTextContainer.style.display = 'block';
+    if (outroMarcaContainer) outroMarcaContainer.style.display = 'none';
+    if (outroModeloContainer) outroModeloContainer.style.display = 'none';
+    limparModelo(prefixo);
+    limparCamposEspecificacao(prefixo);
+  } else {
+    if (marcaContainer) marcaContainer.style.display = 'block';
+    if (marcaTextContainer) marcaTextContainer.style.display = 'none';
+    if (modeloContainer) modeloContainer.style.display = 'block';
+    if (modeloTextContainer) modeloTextContainer.style.display = 'none';
+    if (outroMarcaContainer) outroMarcaContainer.style.display = 'none';
+    if (outroModeloContainer) outroModeloContainer.style.display = 'none';
+    if (categoria) {
+      popularMarcas(prefixo, categoria);
+    } else {
+      limparMarcaModelo(prefixo);
+    }
+  }
+};
+
+window.onMarcaChange = function(prefixo) {
+  const selectMarca = document.getElementById(prefixo + '-marca');
+  const selectCategoria = document.getElementById(prefixo + '-categoria');
+  const categoria = selectCategoria?.value;
+  const isEspecial = (categoria === 'TV' || categoria === 'Projetor');
+  
+  const outroMarcaContainer = document.getElementById(prefixo + '-outro-marca-container');
+  if (outroMarcaContainer) toggleOutroCampo(prefixo, 'marca');
+  
+  if (selectMarca && selectCategoria && selectMarca.value && selectMarca.value !== '__outro__' && categoria && !isEspecial) {
+    popularModelos(prefixo, categoria, selectMarca.value);
+  } else {
+    limparModelo(prefixo);
+    limparCamposEspecificacao(prefixo);
+  }
+};
+
+window.onModeloChange = function(prefixo) {
+  const selectModelo = document.getElementById(prefixo + '-modelo');
+  const valor = selectModelo.value;
+  if (valor && valor !== '__outro__') {
+    preencherEspecificacoesModelo(prefixo, valor);
+  } else {
+    limparCamposEspecificacao(prefixo);
+  }
+  const outroModeloContainer = document.getElementById(prefixo + '-outro-modelo-container');
+  if (outroModeloContainer) toggleOutroCampo(prefixo, 'modelo');
+};
+
+window.onModeloTextChange = function(prefixo) {
+  const input = document.getElementById(prefixo + '-modelo-text');
+  const valor = input.value.trim();
+  if (valor) {
+    preencherEspecificacoesModelo(prefixo, valor);
+  } else {
+    limparCamposEspecificacao(prefixo);
+  }
+};
+
+function limparCamposEspecificacao(prefixo) {
+  const campos = ['sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento', 'tamanhoTela'];
+  campos.forEach(campo => {
+    const el = document.getElementById(prefixo + '-' + campo);
+    if (el) el.value = '';
+  });
+  if (window.M && typeof M.updateTextFields === 'function') M.updateTextFields();
+}
+
+// ============================================================================
+// CAMPOS CONDICIONAIS (STATUS)
+// ============================================================================
+
+window.atualizarCamposCondicionaisCadastro = function() {
+  const status = document.getElementById('new-status')?.value;
+  const campoQuebrado = document.getElementById('campo-quebrado-cadastro');
+  if (campoQuebrado) campoQuebrado.style.display = status === 'Quebrado' ? 'block' : 'none';
+  if (status !== 'Quebrado') {
+    const descInput = document.getElementById('new-descricaoQuebrado');
+    if (descInput) descInput.value = '';
+  }
+  const campoBo = document.getElementById('campo-bo-cadastro');
+  if (campoBo) campoBo.style.display = status === 'Extraviado' ? 'block' : 'none';
+  if (status !== 'Extraviado') {
+    const anexoInput = document.getElementById('new-anexoBoletim');
+    if (anexoInput) anexoInput.value = '';
+  }
+};
+
+window.atualizarCamposCondicionais = function() {
+  const status = document.getElementById('edit-status')?.value;
+  const campoChamado = document.getElementById('campo-chamado');
+  if (campoChamado) campoChamado.style.display = status === 'Manutenção' ? 'block' : 'none';
+  const campoBo = document.getElementById('campo-bo');
+  if (campoBo) campoBo.style.display = status === 'Extraviado' ? 'block' : 'none';
+  const campoQuebrado = document.getElementById('campo-quebrado');
+  if (campoQuebrado) campoQuebrado.style.display = status === 'Quebrado' ? 'block' : 'none';
+  if (status !== 'Quebrado') {
+    const descInput = document.getElementById('edit-descricaoQuebrado');
+    if (descInput) descInput.value = '';
+  }
+  if (status !== 'Extraviado') {
+    const anexoInput = document.getElementById('edit-anexoBoletim');
+    if (anexoInput) anexoInput.value = '';
+  }
+};
+
+// ============================================================================
 // CARREGAMENTO DE EQUIPAMENTOS (FILIAL - APENAS SUA UNIDADE)
 // ============================================================================
+
+async function carregarEquipamentos() {
+  console.log('🟢 carregarEquipamentos() INICIADA');
+  showLoading();
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/equipamentos-da-filial`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    equipamentosCache = data.data || [];
+    equipamentosCache.forEach(item => {
+      if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
+        const hoje = new Date(); const prevista = new Date(item.dataPrevistaDevolucao);
+        item.emAtraso = prevista < hoje;
+      } else { item.emAtraso = false; }
+    });
+    aplicarFiltros();
+  } catch (err) { toastError('Erro ao carregar: ' + err.message); }
+  finally { hideLoading(); }
+}
 
 // ============================================================================
 // FILTROS E TABELA
@@ -227,7 +602,9 @@ function popularFiltroModelo(categoria, marca) {
 // EMPRÉSTIMO / DEVOLUÇÃO
 // ============================================================================
 
-// emprestimoIdsSelecionados já declarado no topo
+function getIdsSelecionados() {
+  return Array.from(document.querySelectorAll('.check-equipamento:checked')).map(el => el.value);
+}
 
 function abrirEmprestimoSelecionados() {
   const ids = getIdsSelecionados();

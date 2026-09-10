@@ -18,9 +18,9 @@
     .obrigatorio::after { content: " *"; color: #d32f2f; font-weight: bold; }
     .campo-texto-marca-modelo { display: none; }
   </style>
-  <script type="module" crossorigin src="/assets/filial-CjJyPf0q.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-Bbv3uxjy.js">
-  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-Dg9pq527.js">
+  <script type="module" crossorigin src="/assets/filial-DbrqLcDr.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-Ce3MwBG8.js">
+  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-B98iljIQ.js">
   <link rel="stylesheet" crossorigin href="/assets/dashboard-base-Cep402Dj.css">
 </head>
 <body class="theme-filial">
@@ -98,9 +98,168 @@
 
   <div id="modal-emprestimo" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">assignment_turned_in</i>Registrar empréstimo</h5><input type="hidden" id="emp-tipo" value="interno"><div class="row"><div class="input-field col s12" id="emp-campo-escola" style="display:none;"><select id="emp-escola-destino" class="browser-default"><option value="" disabled selected>Selecione a escola de destino</option></select><label>Escola de destino *</label></div><div class="input-field col s6"><input type="text" id="emp-responsavel"><label for="emp-responsavel">Responsável</label></div><div class="input-field col s3"><input type="text" id="emp-cpf"><label for="emp-cpf">CPF</label></div><div class="input-field col s3"><input type="email" id="emp-email"><label for="emp-email">E-mail</label></div><div class="input-field col s4"><input type="date" id="emp-prevista"><label for="emp-prevista" class="active">Previsão de devolução</label></div><div class="input-field col s8"><textarea id="emp-observacoes" class="materialize-textarea"></textarea><label for="emp-observacoes">Observações</label></div></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-confirmar-emprestimo">Registrar</a></div></div>
 
-  <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5><div class="row" id="cadastro-fields"></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-cadastro">Salvar</a></div></div>
+  <!-- Modal de cadastro -->
+  <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">add_box</i>Adicionar equipamento</h5>
+      <div class="row">
+        <div class="input-field col s6">
+          <select id="new-categoria" onchange="onCategoriaChange('new')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="obrigatorio">Categoria</label>
+        </div>
+        <div class="input-field col s6" id="new-marca-container">
+          <select id="new-marca" onchange="onMarcaChange('new')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="obrigatorio">Marca</label>
+        </div>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="new-marca-text-container" style="display:none;">
+          <input type="text" id="new-marca-text"><label for="new-marca-text" class="obrigatorio">Marca</label>
+        </div>
+        <div class="input-field col s6" id="new-modelo-container">
+          <select id="new-modelo" onchange="onModeloChange('new')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="obrigatorio">Modelo</label>
+        </div>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="new-modelo-text-container" style="display:none;">
+          <input type="text" id="new-modelo-text" onchange="onModeloTextChange('new')"><label for="new-modelo-text" class="obrigatorio">Modelo</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-marca-container">
+          <input type="text" id="new-outro-marca" placeholder="Digite a marca"><label for="new-outro-marca">Outra marca</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="new-outro-modelo-container">
+          <input type="text" id="new-outro-modelo" placeholder="Digite o modelo"><label for="new-outro-modelo">Outro modelo</label>
+        </div>
+        <div class="input-field col s6"><input type="text" id="new-patrimonio"><label for="new-patrimonio" class="obrigatorio">Patrimônio</label></div>
+        <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
+          <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="new-justificativaPatrimonio" class="obrigatorio">Justificativa para ausência de Patrimônio</label>
+        </div>
+        <div class="input-field col s6"><input type="text" id="new-numeroSerie"><label for="new-numeroSerie" class="obrigatorio">Número de série</label></div>
+        <div class="input-field col s12" id="campo-justificativa-serie" style="display:none;">
+          <textarea id="new-justificativaNumeroSerie" class="materialize-textarea"></textarea><label for="new-justificativaNumeroSerie" class="obrigatorio">Justificativa para ausência de Número de Série</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="new-status" onchange="atualizarCamposCondicionaisCadastro()">
+            <option value="Disponível" selected>Disponível</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Emprestado">Emprestado</option>
+            <option value="Extraviado">Extraviado</option>
+            <option value="Inservível">Inservível</option>
+            <option value="Em verificação">Em verificação</option>
+            <option value="Quebrado">Quebrado</option>
+          </select>
+          <label class="obrigatorio">Status</label>
+        </div>
+        <div class="input-field col s12" id="campo-quebrado-cadastro" style="display:none;">
+          <textarea id="new-descricaoQuebrado" class="materialize-textarea"></textarea>
+          <label for="new-descricaoQuebrado" class="obrigatorio">Descrição da avaria (obrigatório)</label>
+        </div>
+        <div class="input-field col s12" id="campo-bo-cadastro" style="display:none;">
+          <div style="margin-top:10px;"><label style="font-size:.8rem;color:var(--sce-muted);" class="obrigatorio">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="new-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png">
+          </div>
+        </div>
+        <div class="input-field col s6"><input type="text" id="new-sistemaOperacional"><label for="new-sistemaOperacional">Sistema operacional</label></div>
+        <div class="input-field col s6"><input type="text" id="new-processador"><label for="new-processador">Processador</label></div>
+        <div class="input-field col s6"><input type="text" id="new-memoriaRAM"><label for="new-memoriaRAM">Memória RAM</label></div>
+        <div class="input-field col s6"><input type="text" id="new-armazenamento"><label for="new-armazenamento">Armazenamento</label></div>
+        <div class="input-field col s6"><input type="text" id="new-tamanhoTela"><label for="new-tamanhoTela">Tamanho da tela</label></div>
+        <div class="input-field col s6"><input type="text" id="new-responsavelAtual"><label for="new-responsavelAtual">Responsável atual</label></div>
+        <div class="input-field col s12"><textarea id="new-observacoes" class="materialize-textarea"></textarea><label for="new-observacoes">Observações</label></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-salvar-cadastro">Salvar</a>
+    </div>
+  </div>
 
-  <div id="modal-editar-equipamento" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5><input type="hidden" id="edit-id"><div class="row" id="edicao-fields"></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-edicao">Salvar</a></div></div>
+  <!-- Modal de edição -->
+  <div id="modal-editar-equipamento" class="modal modal-fixed-footer">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5>
+      <input type="hidden" id="edit-id">
+      <div class="row">
+        <div class="input-field col s6">
+          <select id="edit-categoria" onchange="onCategoriaChange('edit')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="active obrigatorio">Categoria</label>
+        </div>
+        <div class="input-field col s6" id="edit-marca-container">
+          <select id="edit-marca" onchange="onMarcaChange('edit')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="active obrigatorio">Marca</label>
+        </div>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="edit-marca-text-container" style="display:none;">
+          <input type="text" id="edit-marca-text"><label for="edit-marca-text" class="active obrigatorio">Marca</label>
+        </div>
+        <div class="input-field col s6" id="edit-modelo-container">
+          <select id="edit-modelo" onchange="onModeloChange('edit')">
+            <option value="" disabled selected>Selecione</option>
+          </select>
+          <label class="active obrigatorio">Modelo</label>
+        </div>
+        <div class="input-field col s6 campo-texto-marca-modelo" id="edit-modelo-text-container" style="display:none;">
+          <input type="text" id="edit-modelo-text" onchange="onModeloTextChange('edit')"><label for="edit-modelo-text" class="active obrigatorio">Modelo</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-marca-container">
+          <input type="text" id="edit-outro-marca" placeholder="Digite a marca"><label for="edit-outro-marca">Outra marca</label>
+        </div>
+        <div class="input-field col s12 campo-outro" id="edit-outro-modelo-container">
+          <input type="text" id="edit-outro-modelo" placeholder="Digite o modelo"><label for="edit-outro-modelo">Outro modelo</label>
+        </div>
+        <div class="input-field col s6"><input type="text" id="edit-patrimonio"><label for="edit-patrimonio" class="active obrigatorio">Patrimônio</label></div>
+        <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
+          <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="edit-justificativaPatrimonio" class="active obrigatorio">Justificativa para ausência de Patrimônio</label>
+        </div>
+        <div class="input-field col s6"><input type="text" id="edit-numeroSerie"><label for="edit-numeroSerie" class="active obrigatorio">Número de série</label></div>
+        <div class="input-field col s12" id="campo-justificativa-serie-edit" style="display:none;">
+          <textarea id="edit-justificativaNumeroSerie" class="materialize-textarea"></textarea><label for="edit-justificativaNumeroSerie" class="active obrigatorio">Justificativa para ausência de Número de Série</label>
+        </div>
+        <div class="input-field col s6">
+          <select id="edit-status" onchange="atualizarCamposCondicionais()">
+            <option value="Disponível">Disponível</option>
+            <option value="Manutenção">Manutenção</option>
+            <option value="Emprestado">Emprestado</option>
+            <option value="Extraviado">Extraviado</option>
+            <option value="Inservível">Inservível</option>
+            <option value="Em verificação">Em verificação</option>
+            <option value="Quebrado">Quebrado</option>
+          </select>
+          <label class="active obrigatorio">Status</label>
+        </div>
+        <div class="input-field col s12" id="campo-chamado" style="display:none;">
+          <input type="text" id="edit-numeroChamadoManutencao"><label for="edit-numeroChamadoManutencao" class="active obrigatorio">Nº do chamado de manutenção</label>
+        </div>
+        <div class="input-field col s12" id="campo-bo" style="display:none;">
+          <input type="text" id="edit-boletimOcorrencia"><label for="edit-boletimOcorrencia" class="active obrigatorio">Nº do Boletim de Ocorrência</label>
+          <div style="margin-top:10px;"><label style="font-size:.8rem;color:var(--sce-muted);" class="obrigatorio">Anexar B.O. (obrigatório)</label>
+            <input type="file" id="edit-anexoBoletim" accept=".pdf,.jpg,.jpeg,.png"><span id="anexo-bo-existente" style="font-size:.78rem;"></span>
+          </div>
+        </div>
+        <div class="input-field col s12" id="campo-quebrado" style="display:none;">
+          <textarea id="edit-descricaoQuebrado" class="materialize-textarea"></textarea>
+          <label for="edit-descricaoQuebrado" class="active obrigatorio">Descrição da avaria (obrigatório)</label>
+        </div>
+        <div class="input-field col s6"><input type="text" id="edit-sistemaOperacional"><label for="edit-sistemaOperacional" class="active">Sistema operacional</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-processador"><label for="edit-processador" class="active">Processador</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-memoriaRAM"><label for="edit-memoriaRAM" class="active">Memória RAM</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-armazenamento"><label for="edit-armazenamento" class="active">Armazenamento</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-tamanhoTela"><label for="edit-tamanhoTela" class="active">Tamanho da tela</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-responsavelAtual"><label for="edit-responsavelAtual" class="active">Responsável atual</label></div>
+        <div class="input-field col s12"><textarea id="edit-observacoes" class="materialize-textarea"></textarea><label for="edit-observacoes" class="active">Observações</label></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <a class="modal-close btn-flat">Cancelar</a>
+      <a class="btn" id="btn-salvar-edicao">Salvar</a>
+    </div>
+  </div>
 
   <div id="modal-historico" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">history</i>Histórico de alterações</h5><p><strong>Equipamento:</strong> <span id="historico-patrimonio"></span> – <span id="historico-modelo"></span></p><table class="striped" id="tabela-historico"><thead><tr><th>Data</th><th>Autor</th><th>Campo</th><th>Valor antigo</th><th>Valor novo</th></tr></thead><tbody></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
 

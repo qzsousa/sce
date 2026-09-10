@@ -26,7 +26,6 @@ import {
   atualizarKpis,
   registrarManutencaoUI,
 } from './dashboard-base.js';
-import { getEspecificacoesModelo } from '../shared/js/api.js';
 import { setupSelectCascata, getListasCache } from '../shared/js/lists.js';
 
 // Expor funções globais para onclick no HTML (executar imediatamente no load do módulo)
@@ -89,12 +88,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Inicializa listeners de cascata para categoria/marca/modelo
-  setupSelectCascata('new', async (modelo) => {
-    await preencherEspecificacoesModelo('new', modelo);
-  });
-  setupSelectCascata('edit', async (modelo) => {
-    await preencherEspecificacoesModelo('edit', modelo);
-  });
+  setupSelectCascata('new');
+  setupSelectCascata('edit');
   
   await initDashboardBase({ perfil: 'Matriz', loadEquipamentos: false });
   inicializarFiltrosRapidos();
@@ -648,28 +643,5 @@ window.onMarcaChange = function(prefixo) {
 };
 
 // Expor funções globais para onclick no HTML (feitas no topo do módulo)
-
-// Função para buscar e preencher especificações do modelo
-async function preencherEspecificacoesModelo(prefixo, modelo) {
-  try {
-    const token = getToken();
-    const specs = await getEspecificacoesModelo(modelo, token);
-    if (specs) {
-      const campos = {
-        sistemaOperacional: specs.sistema_operacional || '',
-        processador: specs.processador || '',
-        memoriaRAM: specs.memoria_ram || '',
-        armazenamento: specs.armazenamento || '',
-      };
-      Object.entries(campos).forEach(([campo, valor]) => {
-        const el = document.getElementById(prefixo + '-' + campo);
-        if (el && valor) el.value = valor;
-      });
-      if (window.M) M.updateTextFields();
-    }
-  } catch (err) {
-    console.warn('Erro ao buscar especificações do modelo:', err);
-  }
-}
 
 console.log('✅ Dashboard Matriz loaded');
