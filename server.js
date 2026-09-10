@@ -329,7 +329,7 @@ app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
   if (existing) return res.json(standardResponse(false, null, 'Usuário já existe com este e-mail.'));
 
   await sheets.ensureSheetExists('Usuarios', HEADER_MAP.USUARIOS);
-  await sheets.appendRow('Usuarios', [email, nome, nivel || niveis.FILIAL, filial, statusUsuario.ATIVO, '', false]);
+  await sheets.appendRow('Usuarios', [email, nome, nivel || niveis.FILIAL, filial, statusUsuario.ATIVO, null, false]);
   await registrarAuditoria('adicionarUsuario', session.email, { email, nome, nivel, filial });
 
   res.json(standardResponse(true, { message: 'Usuário adicionado com sucesso.' }));
