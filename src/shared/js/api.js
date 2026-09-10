@@ -3,9 +3,21 @@
 // ============================================================================
 
 export function getApiBaseUrl() {
-  return (typeof process !== 'undefined' && process.env?.API_BASE_URL)
-    ? process.env.API_BASE_URL
-    : (window.ENV?.API_BASE_URL || 'http://localhost:3000/api');
+  if (typeof process !== 'undefined' && process.env?.API_BASE_URL) {
+    return process.env.API_BASE_URL;
+  }
+  if (window.ENV && window.ENV.API_BASE_URL) {
+    return window.ENV.API_BASE_URL;
+  }
+  try {
+    const meta = document.querySelector('meta[name="api-base-url"]');
+    if (meta && meta.content) {
+      return meta.content;
+    }
+  } catch (e) {
+    /* ignora */
+  }
+  return 'https://sce-nyjc.onrender.com/api';
 }
 
 function getAuthHeaders(token) {
