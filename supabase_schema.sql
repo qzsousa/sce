@@ -386,11 +386,19 @@ CREATE POLICY "otp_service_only" ON otp_codes
 
 -- ============================================================
 -- TRIGGERS PARA updated_at AUTOMÁTICO
+-- (cada tabela tem sua própria coluna de timestamp)
 -- ============================================================
-CREATE OR REPLACE FUNCTION update_updated_at_column()
+CREATE OR REPLACE FUNCTION update_usuarios_atualizado_em()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
   NEW.atualizado_em = NOW();
+  RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION update_equipamentos_data_ultima()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
   NEW.data_ultima_atualizacao = NOW();
   RETURN NEW;
 END;
@@ -398,11 +406,11 @@ $$;
 
 CREATE TRIGGER update_equipamentos_updated_at
   BEFORE UPDATE ON equipamentos
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION update_equipamentos_data_ultima();
 
 CREATE TRIGGER update_usuarios_updated_at
   BEFORE UPDATE ON usuarios
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+  FOR EACH ROW EXECUTE FUNCTION update_usuarios_atualizado_em();
 
 -- ============================================================
 -- DADOS INICIAIS (SEED) - FILIAIS EXEMPLO

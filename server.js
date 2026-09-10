@@ -25,11 +25,6 @@ const standardResponse = (success, data = null, error = null) => ({
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-app.use((err, req, res, next) => {
-  console.error('Erro:', err);
-  res.status(500).json(standardResponse(false, null, err.message || 'Erro interno do servidor'));
-});
-
 const HEADER_MAP = {
   EQUIPAMENTOS: [
     'id', 'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie',
@@ -1013,6 +1008,12 @@ app.get('*', (req, res, next) => {
     return next();
   }
   res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// Error handler (deve ficar APÓS todas as rotas para capturar erros de rota)
+app.use((err, req, res, next) => {
+  console.error('Erro:', err);
+  res.status(500).json(standardResponse(false, null, err.message || 'Erro interno do servidor'));
 });
 
 const PORT = process.env.PORT || 3001;
