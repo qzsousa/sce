@@ -240,7 +240,7 @@ function getHeadersForTable(tableName) {
       'criadoPor', 'devolvidoPor', 'observacoes', 'tipoEmprestimo', 'escolaDestino'],
     AUDITORIA: ['data', 'usuario', 'acao', 'detalhes'],
     REGISTROS_MANUTENCAO: ['id', 'equipamentoId', 'autor', 'data', 'descricao', 'status'],
-    USUARIOS: ['email', 'nome', 'nivel', 'filial', 'status', 'dataRemocao'],
+    USUARIOS: ['email', 'nome', 'nivel', 'filial', 'status', 'dataRemocao', 'senhaDefinida'],
     SESSOES: ['token', 'email', 'nivel', 'filial', 'criadoEm', 'expiraEm'],
   };
   return map[tableName.toUpperCase()] || [];

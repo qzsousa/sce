@@ -24,15 +24,19 @@ CREATE TYPE tipo_emprestimo AS ENUM ('interno', 'interestadual');
 -- TABELA: usuarios
 -- ============================================================
 CREATE TABLE usuarios (
-  email         TEXT PRIMARY KEY,
-  nome          TEXT NOT NULL,
-  nivel         nivel_usuario NOT NULL DEFAULT 'Filial',
-  filial        TEXT NOT NULL,
-  status        status_usuario NOT NULL DEFAULT 'Ativo',
-  data_remocao  TIMESTAMPTZ,
-  criado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  email          TEXT PRIMARY KEY,
+  nome           TEXT NOT NULL,
+  nivel          nivel_usuario NOT NULL DEFAULT 'Filial',
+  filial         TEXT NOT NULL,
+  status         status_usuario NOT NULL DEFAULT 'Ativo',
+  data_remocao   TIMESTAMPTZ,
+  senha_definida BOOLEAN NOT NULL DEFAULT TRUE,
+  criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Para bancos já existentes, aplicar a migração abaixo:
+-- ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS senha_definida BOOLEAN NOT NULL DEFAULT TRUE;
 
 CREATE INDEX idx_usuarios_nivel ON usuarios(nivel);
 CREATE INDEX idx_usuarios_filial ON usuarios(filial);

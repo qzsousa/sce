@@ -49,7 +49,7 @@ const HEADER_MAP = {
     'criadoPor', 'devolvidoPor', 'observacoes', 'tipoEmprestimo', 'escolaDestino'],
   AUDITORIA: ['data', 'usuario', 'acao', 'detalhes'],
   REGISTROS_MANUTENCAO: ['id', 'equipamentoId', 'autor', 'data', 'descricao', 'status'],
-  USUARIOS: ['email', 'nome', 'nivel', 'filial', 'status', 'dataRemocao'],
+  USUARIOS: ['email', 'nome', 'nivel', 'filial', 'status', 'dataRemocao', 'senhaDefinida'],
   SESSOES: ['token', 'email', 'nivel', 'filial', 'criadoEm', 'expiraEm'],
 };
 
@@ -101,10 +101,78 @@ async function findUsuarioByEmail(email) {
   const data = await sheets.getValues('Usuarios');
   for (const row of data) {
     if (String(row.email).trim().toLowerCase() === email.trim().toLowerCase()) {
-      return { email: row.email, nome: row.nome, nivel: row.nivel, filial: row.filial, status: row.status, dataRemocao: row.data_remocao };
+      return {
+        email: row.email,
+        nome: row.nome,
+        nivel: row.nivel,
+        filial: row.filial,
+        status: row.status,
+        dataRemocao: row.data_remocao,
+        senhaDefinida: row.senha_definida !== false,
+      };
     }
   }
   return null;
+}
+
+// Busca um usuário no Supabase Auth pelo e-mail (admin API)
+async function findAuthUserByEmail(email) {
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (error) return null;
+    const users = data?.users || [];
+    return users.find(u => (u.email || '').toLowerCase() === String(email).toLowerCase()) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Cria ou atualiza o usuário no Supabase Auth com a senha informada
+async function upsertAuthUser(email, password, usuario) {
+  const existing = await findAuthUserByEmail(email);
+  if (existing) {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(existing.id, {
+      password,
+      email_confirm: true,
+    });
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { nome: usuario.nome, nivel: usuario.nivel, filial: usuario.filial },
+    });
+    if (error) throw new Error(error.message);
+  }
+}
+
+// Marca/desmarca a flag senha_definida no usuário
+async function setSenhaDefinida(email, valor) {
+  await supabaseAdmin
+    .from('usuarios')
+    .update({ senha_definida: valor })
+    .eq('email', String(email).toLowerCase().trim());
+}
+
+// Gera token de sessão e retorna o redirect do dashboard conforme o nível
+async function criarSessaoLogin(usuario) {
+  const token = uuidv4();
+  const agora = new Date();
+  const expiraEm = new Date(agora.getTime() + SESSION_DURATION_MS);
+  await sheets.ensureSheetExists('Sessoes', HEADER_MAP.SESSOES);
+  await sheets.appendRow('Sessoes', [token, usuario.email, usuario.nivel, usuario.filial, agora.toISOString(), expiraEm.toISOString()]);
+
+  const frontendUrl = process.env.FRONTEND_URL || 'https://sce-ebon.vercel.app';
+  const dashboardMap = {
+    [niveis.MATRIZ]: 'pages/matriz.html',
+    [niveis.ADMIN_FILIAL]: 'pages/filial.html',
+    [niveis.FILIAL]: 'pages/filial.html',
+    [niveis.TECNICO]: 'pages/tecnico.html',
+  };
+  const dashboardPage = dashboardMap[usuario.nivel] || 'pages/matriz.html';
+  const redirectUrl = `${frontendUrl}/${dashboardPage}`;
+  return { token, redirectUrl };
 }
 
 async function getAllEquipamentos() {
@@ -158,29 +226,75 @@ app.post('/api/login-password', asyncHandler(async (req, res) => {
   if (error) return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
 
   const usuario = await findUsuarioByEmail(email);
-  if (!usuario || usuario.status === 'REMOVIDO') {
+  if (!usuario || usuario.status === 'REMOVIDO' || usuario.status === 'Removido') {
     await supabaseAuth.auth.signOut();
     return res.json(standardResponse(false, null, 'Acesso não autorizado para este usuário.'));
   }
 
-  const token = uuidv4();
-  const agora = new Date();
-  const expiraEm = new Date(agora.getTime() + SESSION_DURATION_MS);
-  await sheets.ensureSheetExists('Sessoes', HEADER_MAP.SESSOES);
-  await sheets.appendRow('Sessoes', [token, usuario.email, usuario.nivel, usuario.filial, agora.toISOString(), expiraEm.toISOString()]);
-
-  const frontendUrl = process.env.FRONTEND_URL || 'https://sce-ebon.vercel.app';
-  const dashboardMap = {
-    [niveis.MATRIZ]: 'pages/matriz.html',
-    [niveis.ADMIN_FILIAL]: 'pages/filial.html',
-    [niveis.FILIAL]: 'pages/filial.html',
-    [niveis.TECNICO]: 'pages/tecnico.html',
-  };
-  const dashboardPage = dashboardMap[usuario.nivel] || 'pages/matriz.html';
-  const redirectUrl = `${frontendUrl}/${dashboardPage}`;
+  const { token, redirectUrl } = await criarSessaoLogin(usuario);
   await registrarAuditoria('login', email, { via: 'password' });
 
   res.json(standardResponse(true, { message: 'Login realizado com sucesso.', token, redirectUrl }));
+}));
+
+// ============================================================
+// PRIMEIRO ACESSO / DEFINIÇÃO DE SENHA
+// ============================================================
+
+app.post('/api/verificar-usuario', asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.json(standardResponse(false, null, 'E-mail é obrigatório.'));
+
+  const usuario = await findUsuarioByEmail(email);
+  if (!usuario || usuario.status === 'REMOVIDO' || usuario.status === 'Removido') {
+    return res.json(standardResponse(true, { existe: false }));
+  }
+
+  res.json(standardResponse(true, {
+    existe: true,
+    senhaDefinida: usuario.senhaDefinida !== false,
+    nome: usuario.nome,
+    nivel: usuario.nivel,
+  }));
+}));
+
+app.post('/api/definir-senha', asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.json(standardResponse(false, null, 'E-mail e senha são obrigatórios.'));
+  if (String(password).length < 6) return res.json(standardResponse(false, null, 'A senha deve ter pelo menos 6 caracteres.'));
+
+  const usuario = await findUsuarioByEmail(email);
+  if (!usuario || usuario.status === 'REMOVIDO' || usuario.status === 'Removido') {
+    return res.json(standardResponse(false, null, 'Usuário não encontrado ou sem acesso.'));
+  }
+  if (usuario.senhaDefinida !== false) {
+    return res.json(standardResponse(false, null, 'Este usuário já possui senha. Faça login normalmente.'));
+  }
+
+  await upsertAuthUser(email, password, usuario);
+  await setSenhaDefinida(email, true);
+
+  const { token, redirectUrl } = await criarSessaoLogin(usuario);
+  await registrarAuditoria('definirSenha', email, { via: 'primeiro_acesso' });
+
+  res.json(standardResponse(true, { message: 'Senha criada com sucesso.', token, redirectUrl }));
+}));
+
+app.post('/api/redefinir-senha', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const session = await requireSession(token, [niveis.MATRIZ]);
+  const { email, novaSenha } = req.body;
+  if (!email || !novaSenha) return res.json(standardResponse(false, null, 'E-mail e nova senha são obrigatórios.'));
+  if (String(novaSenha).length < 6) return res.json(standardResponse(false, null, 'A senha deve ter pelo menos 6 caracteres.'));
+
+  const usuario = await findUsuarioByEmail(email);
+  if (!usuario) return res.json(standardResponse(false, null, 'Usuário não encontrado.'));
+
+  await upsertAuthUser(email, novaSenha, usuario);
+  await setSenhaDefinida(email, true);
+  await registrarAuditoria('redefinirSenha', session.email, { email });
+
+  res.json(standardResponse(true, { message: 'Senha redefinida com sucesso.' }));
 }));
 
 // ============================================================
@@ -215,7 +329,7 @@ app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
   if (existing) return res.json(standardResponse(false, null, 'Usuário já existe com este e-mail.'));
 
   await sheets.ensureSheetExists('Usuarios', HEADER_MAP.USUARIOS);
-  await sheets.appendRow('Usuarios', [email, nome, nivel || niveis.FILIAL, filial, statusUsuario.ATIVO, '']);
+  await sheets.appendRow('Usuarios', [email, nome, nivel || niveis.FILIAL, filial, statusUsuario.ATIVO, '', false]);
   await registrarAuditoria('adicionarUsuario', session.email, { email, nome, nivel, filial });
 
   res.json(standardResponse(true, { message: 'Usuário adicionado com sucesso.' }));

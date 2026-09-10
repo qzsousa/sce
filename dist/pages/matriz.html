@@ -19,9 +19,9 @@
     .campo-outro { margin-top: 0; padding: 0 0 10px 0; display: none; }
     .campo-outro input { width: 100%; }
   </style>
-  <script type="module" crossorigin src="/assets/matriz-Cn-qAsW0.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-Ce3MwBG8.js">
-  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-B98iljIQ.js">
+  <script type="module" crossorigin src="/assets/matriz-D2-uecn7.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-DSjedT_w.js">
+  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-CU59ol0P.js">
   <link rel="stylesheet" crossorigin href="/assets/dashboard-base-Cep402Dj.css">
 </head>
 <body class="theme-matriz">
@@ -343,6 +343,8 @@
   </div>
 
   <div id="modal-confirmar-remocao" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5><p>Esta ação marcará o item como removido. Deseja continuar?</p></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn red" id="btn-confirmar-remocao">Remover</a></div></div>
+
+  <div id="modal-redefinir-senha" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">vpn_key</i>Redefinir senha</h5><p>Defina uma nova senha para <strong><span id="rd-email"></span></strong>.</p><div class="input-field"><input type="password" id="rd-senha"><label for="rd-senha">Nova senha</label></div><div class="input-field"><input type="password" id="rd-senha-confirm"><label for="rd-senha-confirm">Confirmar nova senha</label></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-confirmar-redefinir-senha">Salvar</a></div></div>
 
   <div id="modal-manutencao" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5><input type="hidden" id="manut-equipamento-id"><div class="row"><div class="input-field col s4"><select id="manut-status"><option value="Pendente">Pendente</option><option value="Em andamento">Em andamento</option><option value="Concluído">Concluído</option></select><label>Status</label></div><div class="input-field col s8"><textarea id="manut-descricao" class="materialize-textarea"></textarea><label for="manut-descricao">O que foi feito / observado</label></div></div><a class="btn waves-effect" id="btn-registrar-manutencao"><i class="material-icons left">add</i>Registrar</a><table class="striped" style="margin-top:20px;"><thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead><tbody id="tabela-manutencao-body"></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
 

@@ -27,6 +27,7 @@ import {
   registrarManutencaoUI,
 } from './dashboard-base.js';
 import { setupSelectCascata, getListasCache } from '../shared/js/lists.js';
+import { redefinirSenha } from '../shared/js/api.js';
 
 // Expor funções globais para onclick no HTML (executar imediatamente no load do módulo)
 window.editarEquipamento = editarEquipamento;
@@ -34,6 +35,7 @@ window.abrirHistorico = abrirHistorico;
 window.abrirModalRemocao = abrirModalRemocao;
 window.editarUsuarioUI = editarUsuarioUI;
 window.removerUsuarioUI = removerUsuarioUI;
+window.redefinirSenhaUI = redefinirSenhaUI;
 window.abrirCadastroEquipamento = abrirCadastroEquipamento;
 window.carregarEquipamentosGlobal = carregarEquipamentosGlobal;
 window.exportarCSVUI = exportarCSVUI;
@@ -62,6 +64,7 @@ let modalUsuariosInstance = null;
 let modalManutencaoInstance = null;
 let modalStatusLoteInstance = null;
 let modalHistoricoInstance = null;
+let modalRedefinirSenhaInstance = null;
 let itemEmEdicaoOriginal = null;
 let equipamentoIdManutencaoAtual = null;
 let usuariosCache = [];
@@ -105,6 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
   document.getElementById('btn-adicionar-usuario').addEventListener('click', adicionarUsuarioUI);
   document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
+  document.getElementById('btn-confirmar-redefinir-senha').addEventListener('click', confirmarRedefinirSenha);
   document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
   document.getElementById('btn-registrar-manutencao').addEventListener('click', registrarManutencaoUI);
   document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
@@ -536,10 +540,47 @@ function renderTabelaUsuarios(usuarios) {
       '<td>' + (u.nivel || '') + '</td>' +
       '<td>' + (u.filial || '') + '</td>' +
       '<td>' + (u.status || '') + '</td>' +
-      '<td>' + (isSelf ? '' : '<a class="btn-small waves-effect" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></a> <a class="btn-small red waves-effect" onclick="removerUsuarioUI(\'' + u.email + '\', this)" title="Remover"><i class="material-icons">delete</i></a>') +
+      '<td>' + (isSelf ? '' :
+        '<a class="btn-small waves-effect" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
+        '<a class="btn-small waves-effect" onclick="redefinirSenhaUI(\'' + u.email + '\')" title="Redefinir senha"><i class="material-icons">vpn_key</i></a> ' +
+        '<a class="btn-small red waves-effect" onclick="removerUsuarioUI(\'' + u.email + '\', this)" title="Remover"><i class="material-icons">delete</i></a>') +
       '</td>';
     tbody.appendChild(tr);
   });
+}
+
+function redefinirSenhaUI(email) {
+  document.getElementById('rd-email').innerText = email;
+  document.getElementById('rd-senha').value = '';
+  document.getElementById('rd-senha-confirm').value = '';
+  if (!window.modalRedefinirSenhaInstance && window.M && M.Modal) {
+    window.modalRedefinirSenhaInstance = M.Modal.init(document.getElementById('modal-redefinir-senha'));
+  }
+  window.modalRedefinirSenhaInstance.open();
+  if (window.M) M.updateTextFields();
+}
+
+async function confirmarRedefinirSenha() {
+  const btn = document.getElementById('btn-confirmar-redefinir-senha');
+  if (isButtonLoading(btn)) return;
+
+  const email = document.getElementById('rd-email').innerText;
+  const senha = document.getElementById('rd-senha').value;
+  const confirmacao = document.getElementById('rd-senha-confirm').value;
+
+  if (!senha || senha !== confirmacao) { toastError('As senhas não coincidem.'); return; }
+  if (senha.length < 6) { toastError('A senha deve ter pelo menos 6 caracteres.'); return; }
+
+  setButtonLoading(btn, true);
+  try {
+    await redefinirSenha(getToken(), email, senha);
+    toastSuccess('Senha redefinida com sucesso.');
+    if (window.modalRedefinirSenhaInstance) window.modalRedefinirSenhaInstance.close();
+  } catch (err) {
+    toastError('Erro ao redefinir senha: ' + err.message);
+  } finally {
+    setButtonLoading(btn, false);
+  }
 }
 
 function adicionarUsuarioUI() {

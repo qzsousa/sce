@@ -47,6 +47,49 @@ export async function loginWithPassword(email, password) {
   }
 }
 
+export async function verificarUsuario(email) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/verificar-usuario`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    return await handleResponse(response);
+  } catch (error) {
+    console.error('Erro em verificarUsuario:', error);
+    throw error;
+  }
+}
+
+export async function definirSenha(email, password) {
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/definir-senha`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    return await handleResponse(response);
+  } catch (error) {
+    console.error('Erro em definirSenha:', error);
+    throw error;
+  }
+}
+
+export async function redefinirSenha(token, email, novaSenha) {
+  try {
+    const t = token || getToken();
+    const response = await fetch(`${getApiBaseUrl()}/redefinir-senha?token=${encodeURIComponent(t)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
+      body: JSON.stringify({ email, novaSenha }),
+    });
+    return await handleResponse(response);
+  } catch (error) {
+    console.error('Erro em redefinirSenha:', error);
+    throw error;
+  }
+}
+
 export async function getNomeUsuario(token) {
   try {
     const t = token || getToken();
