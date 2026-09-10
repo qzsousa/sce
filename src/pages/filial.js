@@ -549,6 +549,7 @@ async function carregarInfoCabecalho() {
     const data = await res.json();
     if (data.success) {
       const inf = data.data || {};
+      sessionEmail = inf.email || '';
       const elUnidade = document.getElementById('nome-unidade');
       const elPerfil = document.getElementById('perfil-usuario');
       if (elUnidade) elUnidade.innerText = inf.filial || '—';
@@ -901,6 +902,7 @@ async function devolverSelecionados() {
 // ============================================================================
 
 let usuariosCache = [];
+let sessionEmail = '';
 
 function abrirGerenciarUsuarios() {
   if (!modalUsuariosInstance && window.M && M.Modal) {
@@ -929,7 +931,7 @@ function renderTabelaUsuarios(usuarios) {
     return;
   }
   usuarios.forEach(u => {
-    const isSelf = u.email === getToken().split('.')[0];
+    const isSelf = String(u.email || '').toLowerCase() === sessionEmail.toLowerCase();
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + (u.email || '') + '</td>' +
       '<td>' + (u.nome || '') + '</td>' +

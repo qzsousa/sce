@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 
-import sheets, { supabase as supabaseAdmin } from './supabaseService.js';
+import sheets, { supabase as supabaseAdmin, toCamelCase } from './supabaseService.js';
 
 const supabaseAuth = createClient(
   process.env.SUPABASE_URL,
@@ -149,10 +149,13 @@ async function upsertAuthUser(email, password, usuario) {
 
 // Marca/desmarca a flag senha_definida no usuário
 async function setSenhaDefinida(email, valor) {
-  await supabaseAdmin
+  const usuario = await findUsuarioByEmail(email);
+  if (!usuario) return;
+  const { error } = await supabaseAdmin
     .from('usuarios')
     .update({ senha_definida: valor })
-    .eq('email', String(email).toLowerCase().trim());
+    .eq('email', usuario.email);
+  if (error) throw new Error(error.message);
 }
 
 // Gera token de sessão e retorna o redirect do dashboard conforme o nível
@@ -182,7 +185,7 @@ async function getAllEquipamentos() {
     .order('data_cadastro', { ascending: false });
 
   if (error) throw new Error(`Erro ao buscar equipamentos: ${error.message}`);
-  return data || [];
+  return (data || []).map(item => toCamelCase(item));
 }
 
 async function registrarHistorico(equipamentoId, campo, valorAntigo, valorNovo, autor) {
@@ -309,7 +312,7 @@ app.get('/api/get-nome-usuario', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
   const usuario = await findUsuarioByEmail(session.email);
-  res.json(standardResponse(true, { nome: usuario?.nome, nivel: session.nivel, filial: session.filial }));
+  res.json(standardResponse(true, { nome: usuario?.nome, nivel: session.nivel, filial: session.filial, email: session.email }));
 }));
 
 app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
@@ -384,7 +387,7 @@ app.post('/api/atualizar-usuario', asyncHandler(async (req, res) => {
   }
 
   if (Object.keys(updates).length > 0) {
-    await supabaseAdmin.from('usuarios').update(updates).eq('email', String(emailOriginal).toLowerCase().trim());
+    await supabaseAdmin.from('usuarios').update(updates).eq('email', usuario.email);
     await registrarAuditoria('atualizarUsuario', session.email, { emailOriginal, updates });
   }
 
@@ -405,7 +408,7 @@ app.post('/api/remover-usuario', asyncHandler(async (req, res) => {
 
   await supabaseAdmin.from('usuarios')
     .update({ status: statusUsuario.REMOVIDO, data_remocao: new Date().toISOString() })
-    .eq('email', String(email).toLowerCase().trim());
+    .eq('email', usuario.email);
   await registrarAuditoria('removerUsuario', session.email, { email });
 
   res.json(standardResponse(true, { message: 'Usuário removido.' }));

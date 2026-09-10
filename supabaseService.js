@@ -32,7 +32,7 @@ const TABLES = {
 // ============================================================
 // HELPERS
 // ============================================================
-function toCamelCase(obj) {
+export function toCamelCase(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   const result = {};
   for (const [key, value] of Object.entries(obj)) {

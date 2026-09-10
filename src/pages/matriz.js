@@ -56,7 +56,7 @@ window.confirmarRemocao = confirmarRemocao;
 // ESTADO ESPECÍFICO MATRIZ
 // ============================================================================
 
-const SESSION_EMAIL = 'matriz@usuario'; // Será preenchido via getNomeUsuario
+let SESSION_EMAIL = ''; // Preenchido via get-nome-usuario
 
 let idPendenteRemocao = null;
 let modalRemocaoInstance = null;
@@ -81,6 +81,16 @@ let campoOrdenacao = 'patrimonio';
 let ordemAtual = 'asc';
 let paginaAtual = 1;
 
+async function carregarInfoCabecalho() {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/get-nome-usuario`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    if (data.success && data.data) {
+      SESSION_EMAIL = data.data.email || '';
+    }
+  } catch (e) { /* opcional */ }
+}
+
 // ============================================================================
 // INICIALIZAÇÃO
 // ============================================================================
@@ -102,6 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initDashboardBase({ perfil: 'Matriz', loadEquipamentos: false });
   inicializarFiltrosRapidos();
   inicializarSeletorUnidade();
+  carregarInfoCabecalho();
   
   // Carrega equipamentos globais (Matriz vê tudo)
   await carregarEquipamentosGlobal();
@@ -539,7 +550,7 @@ function renderTabelaUsuarios(usuarios) {
     return;
   }
   usuarios.forEach(u => {
-    const isSelf = u.email === SESSION_EMAIL;
+    const isSelf = String(u.email || '').toLowerCase() === SESSION_EMAIL.toLowerCase();
     const tr = document.createElement('tr');
     tr.innerHTML = '<td>' + (u.email || '') + '</td>' +
       '<td>' + (u.nome || '') + '</td>' +
