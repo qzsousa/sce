@@ -32,6 +32,7 @@ import {
   confirmarRemocao,
   atualizarKpis,
   setCarregarEquipamentos,
+  setEquipamentosCache,
 } from './dashboard-base.js';
 import { preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
@@ -527,6 +528,7 @@ async function carregarEquipamentos() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
     equipamentosCache = data.data || [];
+    setEquipamentosCache(equipamentosCache);
     equipamentosCache.forEach(item => {
       if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
         const hoje = new Date(); const prevista = new Date(item.dataPrevistaDevolucao);

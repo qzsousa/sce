@@ -26,6 +26,7 @@ import {
   atualizarKpis,
   registrarManutencaoUI,
   setCarregarEquipamentos,
+  setEquipamentosCache,
 } from './dashboard-base.js';
 import { setupSelectCascata, getListasCache } from '../shared/js/lists.js';
 import { redefinirSenha } from '../shared/js/api.js';
@@ -164,6 +165,7 @@ async function carregarEquipamentosGlobal() {
     if (!data.success) throw new Error(data.error);
     
     equipamentosCache = data.data || [];
+    setEquipamentosCache(equipamentosCache);
     equipamentosCache.forEach(item => {
       if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
         const hoje = new Date();

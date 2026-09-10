@@ -35,6 +35,13 @@ let modalEdicaoInstance = null;
 let modalManutencaoInstance = null;
 let modalHistoricoInstance = null;
 let modalRemocaoInstance = null;
+let equipamentosCache = [];
+let itemEmEdicaoOriginal = null;
+let equipamentoIdManutencaoAtual = null;
+
+export function setEquipamentosCache(arr) {
+  equipamentosCache = arr || [];
+}
 
 /* ============================================================================
    INICIALIZAÇÃO BASE
