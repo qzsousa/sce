@@ -46,7 +46,7 @@ function toSnakeCase(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   const result = {};
   for (const [key, value] of Object.entries(obj)) {
-    const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+    const snakeKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
     result[snakeKey] = value;
   }
   return result;
