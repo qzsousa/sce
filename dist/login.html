@@ -72,8 +72,8 @@
     #feedback.is-success { color: #2e7d32; }
     #feedback.is-info { color: var(--sce-muted); }
   </style>
-  <script type="module" crossorigin src="/assets/login-CTT3d0Oc.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-DSjedT_w.js">
+  <script type="module" crossorigin src="/assets/login-DxCRHej1.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-D_EX9G8O.js">
 </head>
 <body>
   <div class="sce-login-wrap">
@@ -84,8 +84,8 @@
     </div>
 
     <div class="card sce-login-card">
-      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">login</i>Entrar</h5>
-      <p style="margin:0 0 16px;color:var(--sce-muted);font-size:.85rem;">
+      <h5 id="titulo-card"><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">login</i>Entrar</h5>
+      <p id="subtitulo" style="margin:0 0 16px;color:var(--sce-muted);font-size:.85rem;">
         Use seu e-mail institucional e senha.
       </p>
 
@@ -101,8 +101,14 @@
         <label for="password">Senha</label>
       </div>
 
+      <div class="input-field" id="campo-confirmar" style="display:none;">
+        <i class="material-icons prefix" style="color:var(--sce-muted);">lock</i>
+        <input type="password" id="confirm-password" autocomplete="new-password" placeholder="Confirme sua senha">
+        <label for="confirm-password">Confirmar senha</label>
+      </div>
+
       <button class="btn waves-effect" id="btn-entrar">
-        <i class="material-icons">login</i>Entrar
+        <i class="material-icons">login</i><span id="btn-entrar-texto">Entrar</span>
       </button>
 
       <div id="feedback"></div>
