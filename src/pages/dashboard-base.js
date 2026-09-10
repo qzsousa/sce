@@ -462,10 +462,11 @@ export async function editarEquipamento(id) {
 
 function atualizarCamposCondicionais() {
   const status = document.getElementById('edit-status')?.value;
-  document.getElementById('campo-chamado').style.display = status === 'Manutenção' ? 'block' : 'none';
-  document.getElementById('campo-bo').style.display = status === 'Extraviado' ? 'block' : 'none';
-  document.getElementById('campo-justificativa').style.display = status === 'Em verificação' ? 'block' : 'none';
-  document.getElementById('campo-quebrado').style.display = status === 'Quebrado' ? 'block' : 'none';
+  const setDisplay = (id, show) => { const el = document.getElementById(id); if (el) el.style.display = show ? 'block' : 'none'; };
+  setDisplay('campo-chamado', status === 'Manutenção');
+  setDisplay('campo-bo', status === 'Extraviado');
+  setDisplay('campo-justificativa', status === 'Em verificação');
+  setDisplay('campo-quebrado', status === 'Quebrado');
   const fileInput = document.getElementById('edit-anexoBoletim');
   if (fileInput && status !== 'Extraviado') fileInput.value = '';
   if (status !== 'Quebrado') {

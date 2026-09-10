@@ -84,6 +84,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   await initDashboardBase({ perfil: 'Filial', loadEquipamentos: false });
   
+  // Popula cabeçalho (unidade + perfil) ANTES de decidir os botões
+  await carregarInfoCabecalho();
+  
   // Mostra/esconde botões baseados no nível
   const nivel = document.getElementById('perfil-usuario')?.textContent || '';
   const btnExcluir = document.getElementById('btn-excluir-selecionados');
@@ -98,14 +101,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (modalEditarUsuario) modalEditarUsuario.style.display = 'block';
   }
   
-  await initDashboardBase({ perfil: 'Filial', loadEquipamentos: false });
   await carregarEquipamentos();
   
   // Carregar listas (categoria/marca/modelo) - mescla com catálogo
   await carregarListasCadastro();
-  
-  // Popula cabeçalho (unidade + perfil)
-  carregarInfoCabecalho();
   
   // Event listeners
   document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
