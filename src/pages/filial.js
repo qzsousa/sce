@@ -91,14 +91,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const nivel = document.getElementById('perfil-usuario')?.textContent || '';
   const btnExcluir = document.getElementById('btn-excluir-selecionados');
   const btnUsuarios = document.getElementById('btn-gerenciar-usuarios');
-  const modalUsuarios = document.getElementById('modal-gerenciar-usuarios');
-  const modalEditarUsuario = document.getElementById('modal-editar-usuario');
   
   if (nivel === 'AdminFilial') {
     if (btnExcluir) btnExcluir.style.display = 'inline-block';
     if (btnUsuarios) btnUsuarios.style.display = 'inline-block';
-    if (modalUsuarios) modalUsuarios.style.display = 'block';
-    if (modalEditarUsuario) modalEditarUsuario.style.display = 'block';
   }
   
   await carregarEquipamentos();
@@ -993,7 +989,7 @@ function abrirNovoUsuario() {
   if (nivelEl && filialEl) {
     nivelEl.value = 'Filial';
     filialEl.value = '';
-    if (window.M) { M.updateTextFields(); M.FormSelect.init(nivelEl); }
+    if (window.M && M.updateTextFields) M.updateTextFields();
   }
   
   if (!modalEditarUsuarioInstance && window.M && M.Modal) {
@@ -1016,7 +1012,7 @@ function editarUsuarioUI(email) {
   if (nivelEl && filialEl) {
     nivelEl.value = usuario.nivel || 'Filial';
     filialEl.value = usuario.filial || '';
-    if (window.M) { M.updateTextFields(); M.FormSelect.init(nivelEl); }
+    if (window.M && M.updateTextFields) M.updateTextFields();
   }
   
   if (!modalEditarUsuarioInstance && window.M && M.Modal) {
