@@ -57,6 +57,20 @@ function sairModoPrimeiroAcesso() {
   passwordInput.autocomplete = 'current-password';
 }
 
+function redirecionarParaDashboard(res) {
+  let dest = '/pages/matriz';
+  const redirectUrl = res?.redirectUrl ?? res?.data?.redirectUrl;
+  if (redirectUrl) {
+    try {
+      const u = new URL(redirectUrl, window.location.origin);
+      dest = u.pathname.replace(/\.html$/, '');
+    } catch {
+      dest = '/pages/matriz';
+    }
+  }
+  window.location.href = dest;
+}
+
 async function fazerLogin() {
   if (isLoggingIn || isButtonLoading(btnEntrar)) return;
 
@@ -112,7 +126,7 @@ async function fazerLogin() {
       const token = res?.token ?? res?.data?.token;
       if (token) {
         setToken(token);
-        window.location.href = '/pages/matriz';
+        redirecionarParaDashboard(res);
       } else {
         setButtonsDisabled(false);
         setFeedback(res?.message || 'Erro ao criar senha', 'error');
@@ -128,7 +142,7 @@ async function fazerLogin() {
     const token = res?.token ?? res?.data?.token;
     if (token) {
       setToken(token);
-      window.location.href = '/pages/matriz';
+      redirecionarParaDashboard(res);
     } else {
       setButtonsDisabled(false);
       setFeedback(res?.message || 'Erro no login', 'error');
