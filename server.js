@@ -305,7 +305,7 @@ app.get('/api/get-nome-usuario', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
   const usuario = await findUsuarioByEmail(session.email);
-  res.json(standardResponse(true, { nome: usuario?.nome, nivel: session.nivel }));
+  res.json(standardResponse(true, { nome: usuario?.nome, nivel: session.nivel, filial: session.filial }));
 }));
 
 app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
@@ -424,6 +424,7 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   const dados = req.body;
 
   const unidade = sheets.resolverUnidadeParaEscrita(session, dados.unidade);
+  if (!unidade) return res.json(standardResponse(false, null, 'Não foi possível determinar a unidade deste usuário. Verifique o cadastro da filial.'));
 
   const patrimonio = (dados.patrimonio || '').trim();
   const justifPat = (dados.justificativaPatrimonio || '').trim();

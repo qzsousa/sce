@@ -101,6 +101,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Carregar listas (categoria/marca/modelo) - mescla com catálogo
   await carregarListasCadastro();
   
+  // Popula cabeçalho (unidade + perfil)
+  carregarInfoCabecalho();
+  
   // Event listeners
   document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
   document.getElementById('btn-abrir-emprestimo').addEventListener('click', abrirEmprestimoSelecionados);
@@ -533,6 +536,20 @@ async function carregarEquipamentos() {
     aplicarFiltros();
   } catch (err) { toastError('Erro ao carregar: ' + err.message); }
   finally { hideLoading(); }
+}
+
+async function carregarInfoCabecalho() {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/get-nome-usuario`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    if (data.success) {
+      const inf = data.data || {};
+      const elUnidade = document.getElementById('nome-unidade');
+      const elPerfil = document.getElementById('perfil-usuario');
+      if (elUnidade) elUnidade.innerText = inf.filial || '—';
+      if (elPerfil) elPerfil.innerText = inf.nivel || '—';
+    }
+  } catch (e) { /* cabeçalho opcional */ }
 }
 
 // ============================================================================
