@@ -183,6 +183,44 @@ async function getAllEquipamentos() {
   return (data || []).map(item => toCamelCase(item));
 }
 
+// ============================================================
+// STORAGE (ANEXOS) - Supabase Storage (bucket privado)
+// ============================================================
+const STORAGE_BUCKET = 'anexos';
+
+function sanitizeFileName(name) {
+  return String(name || '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]/g, '');
+}
+
+async function uploadAnexoBoletim(base64, mimeType, fileName) {
+  if (!base64) return null;
+  const buf = Buffer.from(base64, 'base64');
+  let ext = 'bin';
+  if (fileName && fileName.includes('.')) ext = fileName.split('.').pop().toLowerCase();
+  else if (mimeType) {
+    if (mimeType.includes('pdf')) ext = 'pdf';
+    else if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+  }
+  const nomeBase = sanitizeFileName((fileName || 'anexo').replace(/\.[^.]+$/, '')) || 'anexo';
+  const path = `boletins/${uuidv4()}-${nomeBase}.${ext}`;
+  const { error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, buf, { contentType: mimeType || 'application/octet-stream', upsert: true });
+  if (error) throw new Error(`Erro ao salvar anexo: ${error.message}`);
+  return path;
+}
+
+async function gerarUrlAnexo(path) {
+  const { data, error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(path, 60 * 60);
+  if (error) throw new Error(`Erro ao gerar link do anexo: ${error.message}`);
+  return data?.signedUrl || null;
+}
+
 async function registrarHistorico(equipamentoId, campo, valorAntigo, valorNovo, autor) {
   await sheets.ensureSheetExists('Historico_Itens', HEADER_MAP.HISTORICO);
   const id = uuidv4();
@@ -485,6 +523,9 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
 
   if (dados.status === 'Extraviado') {
     if (!dados._anexoBoletim) return res.json(standardResponse(false, null, 'Para o status "Extraviado", o anexo do Boletim de Ocorrência é obrigatório.'));
+    // Faz upload do anexo e guarda o caminho no storage
+    const anexoPath = await uploadAnexoBoletim(dados._anexoBoletim.base64, dados._anexoBoletim.mimeType, dados._anexoBoletim.fileName);
+    dados.boletimOcorrenciaAnexoUrl = anexoPath;
   }
 
   const id = uuidv4();
@@ -542,10 +583,18 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
 
   // Validações de status especial
   if (camposAlterados.status === 'Extraviado') {
-    const anexoExistente = equipAtual.boletimOcorrenciaAnexoUrl;
-    if (!camposAlterados._anexoBoletim && !anexoExistente && !camposAlterados.boletimOcorrenciaAnexoUrl) {
+    const anexoExistente = equipAtual.boletim_ocorrencia_anexo_url || equipAtual.boletimOcorrenciaAnexoUrl;
+    if (!camposAlterados._anexoBoletim && !anexoExistente) {
       return res.json(standardResponse(false, null, 'Para o status "Extraviado", anexe o Boletim de Ocorrência.'));
     }
+  }
+
+  // Upload do anexo do B.O. (se enviado)
+  let novoAnexoPath = null;
+  if (camposAlterados._anexoBoletim) {
+    const anexo = camposAlterados._anexoBoletim;
+    novoAnexoPath = await uploadAnexoBoletim(anexo.base64, anexo.mimeType, anexo.fileName);
+    delete camposAlterados._anexoBoletim;
   }
 
   const regrasStatus = {
@@ -588,6 +637,15 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
     if (error) throw new Error(`Erro ao atualizar equipamento: ${error.message}`);
   }
 
+  // Salva o caminho do anexo (coluna snake_case separada)
+  if (novoAnexoPath) {
+    const { error: errAnexo } = await sheets.supabase
+      .from('equipamentos')
+      .update({ boletim_ocorrencia_anexo_url: novoAnexoPath })
+      .eq('id', id);
+    if (errAnexo) throw new Error(`Erro ao salvar anexo: ${errAnexo.message}`);
+  }
+
   for (const h of historico) {
     await registrarHistorico(id, h.campo, h.antigo, h.novo, session.email);
   }
@@ -596,6 +654,16 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
   }
 
   res.json(standardResponse(true));
+}));
+
+// Gera link temporário (assinado) para baixar um anexo do B.O.
+app.get('/api/anexo-url', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  await requireSession(token);
+  const { path } = req.query;
+  if (!path) return res.json(standardResponse(false, null, 'Caminho do anexo não informado.'));
+  const url = await gerarUrlAnexo(path);
+  res.json(standardResponse(true, { url }));
 }));
 
 app.post('/api/clone-equipamento', asyncHandler(async (req, res) => {

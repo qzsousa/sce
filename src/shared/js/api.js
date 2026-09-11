@@ -292,6 +292,20 @@ export async function getEspecificacoesModelo(modelo, token) {
   }
 }
 
+export async function getAnexoUrl(path, token) {
+  try {
+    const t = token || getToken();
+    const response = await fetch(`${getApiBaseUrl()}/anexo-url?token=${encodeURIComponent(t)}&path=${encodeURIComponent(path)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
+    });
+    return await handleResponse(response);
+  } catch (error) {
+    console.error('Erro em getAnexoUrl:', error);
+    throw error;
+  }
+}
+
 export async function listarUsuarios(token) {
   try {
     const t = token || getToken();

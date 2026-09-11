@@ -2,7 +2,7 @@
 // DASHBOARD BASE — Funcionalidades comuns a todos os dashboards
 // ============================================================================
 
-import { getEquipamentosDaFilial, getEquipamentosGlobal, createEquipamento, updateEquipamento, cloneEquipamento, removerEquipamento, atualizarStatusManutencao, registrarManutencao, getRegistrosManutencao, getHistoricoEquipamento, getEspecificacoesModelo, listarUsuarios, adicionarUsuario, atualizarUsuario, removerUsuario, getFiliaisParaEmprestimo, registrarEmprestimo, registrarDevolucao, exportarCSV, exportarEquipamentosPDF, getNomeUsuario, getApiBaseUrl } from '../shared/js/api.js';
+import { getEquipamentosDaFilial, getEquipamentosGlobal, createEquipamento, updateEquipamento, cloneEquipamento, removerEquipamento, atualizarStatusManutencao, registrarManutencao, getRegistrosManutencao, getHistoricoEquipamento, getEspecificacoesModelo, listarUsuarios, adicionarUsuario, atualizarUsuario, removerUsuario, getFiliaisParaEmprestimo, registrarEmprestimo, registrarDevolucao, exportarCSV, exportarEquipamentosPDF, getNomeUsuario, getApiBaseUrl, getAnexoUrl } from '../shared/js/api.js';
 import { showLoading, hideLoading, toastSuccess, toastError, toastInfo, setButtonLoading, isButtonLoading, downloadCsv, openModal, closeModal, initModals, initSelects, updateTextFields, fileToBase64, validateFile } from '../shared/js/ui.js';
 import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache, getListasCache } from '../shared/js/lists.js';
 import { formatDate, formatDateShort, getFormData, clearForm, getNested } from '../shared/js/utils.js';
@@ -42,6 +42,19 @@ let equipamentoIdManutencaoAtual = null;
 export function setEquipamentosCache(arr) {
   equipamentosCache = arr || [];
 }
+
+window.abrirAnexoBoletim = async function (path) {
+  try {
+    const res = await getAnexoUrl(path, getToken());
+    if (res && res.url) {
+      window.open(res.url, '_blank');
+    } else {
+      toastError('Não foi possível gerar o link do anexo.');
+    }
+  } catch (e) {
+    toastError('Erro ao abrir anexo: ' + e.message);
+  }
+};
 
 /* ============================================================================
    INICIALIZAÇÃO BASE
@@ -410,7 +423,13 @@ export async function editarEquipamento(id) {
   if (!item.numeroSerie) document.getElementById('campo-justificativa-serie-edit').style.display = 'block';
 
   const anexoExistente = document.getElementById('anexo-bo-existente');
-  if (anexoExistente) anexoExistente.innerText = item.boletimOcorrenciaAnexoUrl ? '📎 Anexo atual: ' + item.boletimOcorrenciaAnexoUrl : '';
+  if (anexoExistente) {
+    if (item.boletimOcorrenciaAnexoUrl) {
+      anexoExistente.innerHTML = '<a href="#" onclick="abrirAnexoBoletim(\'' + String(item.boletimOcorrenciaAnexoUrl).replace(/"/g, '') + '\'); return false;">📎 Baixar B.O. anexo</a>';
+    } else {
+      anexoExistente.innerHTML = '';
+    }
+  }
 
   const cache = getListasCache();
   if (cache) {
