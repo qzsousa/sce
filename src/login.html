@@ -17,57 +17,97 @@
 
   <style>
     body {
-      background: radial-gradient(circle at top left, #e3f0fd 0%, #f2f5f9 45%, #f2f5f9 100%);
+      background: linear-gradient(-45deg, #e3f0fd, #eef4fb, #f6f0fd, #e3f0fd);
+      background-size: 400% 400%;
+      animation: sceGradBounce 18s ease infinite;
       min-height: 100vh;
+      margin: 0;
     }
+    @keyframes sceGradBounce {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
     .sce-login-wrap {
-      max-width: 420px;
-      margin: 64px auto;
+      max-width: 430px;
+      margin: 48px auto 32px;
       padding: 0 16px;
     }
-    .sce-login-logo {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 22px;
-      text-align: center;
-    }
-    .sce-login-logo .material-icons {
-      font-size: 34px;
-      color: white;
-      background: linear-gradient(135deg, var(--sce-primary) 0%, var(--sce-primary-dark) 100%);
-      border-radius: 14px;
-      padding: 14px;
-      box-shadow: var(--sce-shadow-md);
-    }
-    .sce-login-logo h5 { margin: 0; font-size: 1.15rem; color: var(--sce-ink); }
-    .sce-login-logo p { margin: 2px 0 0; color: var(--sce-muted); font-size: .85rem; }
 
     .sce-login-card {
-      padding: 34px 30px 26px;
-      border-radius: 14px !important;
+      padding: 32px 30px 26px;
+      border-radius: 16px !important;
       box-shadow: var(--sce-shadow-md) !important;
+      animation: sceFadeUp .5s ease both;
+      transition: box-shadow .3s ease;
     }
+    .sce-login-card:hover { box-shadow: var(--sce-shadow-lg, 0 12px 40px rgba(16,24,40,.16)) !important; }
+    @keyframes sceFadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .sce-login-brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .sce-login-brand-row .logo-icon {
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--sce-primary) 0%, var(--sce-primary-dark) 100%);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--sce-shadow-md);
+      animation: sceFloat 3.5s ease-in-out infinite;
+    }
+    @keyframes sceFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    .sce-login-brand-row .logo-icon .material-icons { font-size: 30px; }
+    .sce-login-brand-row h5 { margin: 0; color: var(--sce-ink); font-weight: 700; }
+    .sce-login-brand-row p { margin: 2px 0 0; color: var(--sce-muted); font-size: .8rem; }
+
     .sce-login-card h5 {
-      font-size: 1.05rem;
-      margin: 0 0 6px;
+      font-size: 1.08rem;
+      margin: 0 0 4px;
       color: var(--sce-ink);
     }
-    .sce-login-card .input-field { margin-bottom: 14px; }
+    .sce-login-card .input-field { margin-bottom: 12px; }
+    .sce-login-card .input-field input:focus { border-bottom-color: var(--sce-primary) !important; box-shadow: 0 1px 0 0 var(--sce-primary) !important; }
+    .sce-login-card .input-field .prefix { color: var(--sce-muted); }
+    .sce-login-card .input-field input:focus ~ .prefix { color: var(--sce-primary) !important; }
+
     .sce-login-card .btn {
       width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
+      border-radius: 10px;
+      text-transform: none;
+      font-weight: 600;
+      letter-spacing: .01em;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .sce-login-card .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(21,101,192,.28); }
+
+    .btn-first-access {
+      width: 100%;
+      margin-top: 6px;
+      color: var(--sce-primary) !important;
+      text-transform: none;
+      font-weight: 500;
     }
 
     .sce-login-steps {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 22px;
+      margin-bottom: 20px;
     }
     .sce-login-step {
       flex: 1;
@@ -79,55 +119,52 @@
       color: var(--sce-muted);
     }
     .sce-login-step .num {
-      width: 24px;
-      height: 24px;
+      width: 24px; height: 24px;
       border-radius: 50%;
       border: 2px solid var(--sce-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: .72rem;
-      font-weight: 700;
-      flex-shrink: 0;
-      background: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .72rem; font-weight: 700; flex-shrink: 0; background: white;
+      transition: all .25s ease;
     }
-    .sce-login-step.active .num {
-      border-color: var(--sce-primary);
-      background: var(--sce-primary);
-      color: white;
-    }
-    .sce-login-step.done .num {
-      border-color: #43a047;
-      background: #43a047;
-      color: white;
-    }
-    .sce-login-step-sep {
-      width: 20px;
-      height: 2px;
-      background: var(--sce-border);
-      flex-shrink: 0;
-    }
+    .sce-login-step.active .num { border-color: var(--sce-primary); background: var(--sce-primary); color: white; }
+    .sce-login-step.done .num { border-color: #43a047; background: #43a047; color: white; }
+    .sce-login-step-sep { width: 20px; height: 2px; background: var(--sce-border); flex-shrink: 0; }
 
-    #feedback {
-      min-height: 20px;
-      font-size: .88rem;
-      text-align: center;
-      margin-top: 12px;
-    }
+    #email-status { min-height: 16px; font-size: .8rem; margin: -2px 0 6px; }
+    #email-status.is-error { color: #c62828; }
+    #email-status.is-success { color: #2e7d32; }
+    #email-status.is-info { color: var(--sce-muted); }
+
+    #fa-mensagem { margin-top: 12px; font-size: .85rem; line-height: 1.5; }
+    #fa-mensagem a { color: var(--sce-primary); font-weight: 600; }
+
+    #feedback { min-height: 20px; font-size: .88rem; text-align: center; margin-top: 12px; }
     #feedback.is-error { color: #c62828; }
     #feedback.is-success { color: #2e7d32; }
     #feedback.is-info { color: var(--sce-muted); }
   </style>
 </head>
 <body>
-  <div class="sce-login-wrap">
-    <div class="sce-login-logo">
-      <i class="material-icons">inventory_2</i>
-      <h5>SCE - Leste 3</h5>
-      <p>Sistema de Controle de Equipamentos</p>
-    </div>
+  <div class="sce-header">
+    <span class="brand">
+      <img src="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP" alt="Logotipo Leste 3" style="width:75px;">
+      <span>SCE - Leste 3<span class="brand-sub">Sistema de Controle de Equipamentos</span></span>
+    </span>
+  </div>
 
+  <div class="sce-login-wrap">
     <div class="card sce-login-card">
+      <div class="sce-login-brand-row">
+        <div class="logo-icon"><i class="material-icons">inventory_2</i></div>
+        <div>
+          <h5>SCE - Leste 3</h5>
+          <p>Sistema de Controle de Equipamentos</p>
+        </div>
+      </div>
+
+      <h5 id="titulo-card"><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">login</i>Entrar</h5>
+      <p id="subtitulo" style="margin:0 0 16px;color:var(--sce-muted);font-size:.85rem;">Use seu e-mail institucional e senha.</p>
+
       <div class="sce-login-steps">
         <div class="sce-login-step active" id="step-1">
           <span class="num">1</span>
@@ -140,15 +177,11 @@
         </div>
       </div>
 
-      <h5 id="titulo-card"><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">login</i>Entrar</h5>
-      <p id="subtitulo" style="margin:0 0 16px;color:var(--sce-muted);font-size:.85rem;">
-        Use seu e-mail institucional e senha.
-      </p>
-
       <div class="input-field">
         <i class="material-icons prefix" style="color:var(--sce-muted);">alternate_email</i>
         <input type="email" id="email" autocomplete="email" placeholder="seu.email@instituicao.org">
       </div>
+      <div id="email-status"></div>
 
       <div class="input-field">
         <i class="material-icons prefix" style="color:var(--sce-muted);">lock_outline</i>
@@ -162,10 +195,15 @@
         <i class="material-icons pwd-toggle" data-target="confirm-password" title="Mostrar/ocultar senha" style="position:absolute; right:8px; top:14px; cursor:pointer; color:var(--sce-muted);">visibility</i>
       </div>
 
-      <button class="btn waves-effect" id="btn-entrar">
+      <button class="btn waves-effect btn-primary" id="btn-entrar">
         <i class="material-icons">login</i><span id="btn-entrar-texto">Entrar</span>
       </button>
 
+      <button class="btn-flat waves-effect btn-first-access" id="btn-primeiro-acesso">
+        <i class="material-icons left">vpn_key</i>Primeiro acesso
+      </button>
+
+      <div id="fa-mensagem"></div>
       <div id="feedback"></div>
     </div>
   </div>
