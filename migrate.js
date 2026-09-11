@@ -66,55 +66,23 @@ async function migrate() {
       console.log(`  ✅ ${rows.length} usuários processados`);
     }
 
-    // ---------- 2. FILIAIS ----------
-    console.log('📥 Migrando filiais...');
-    const filiaisData = await getSheetValues('CORE', 'Filiais');
-    if (filiaisData.length > 1) {
-      const rows = filiaisData.slice(1);
-      for (const row of rows) {
-        const nome = row[0]?.trim();
-        if (!nome) continue;
-        const { error } = await supabase.from('filiais').upsert({ nome }, { onConflict: 'nome' });
-        if (error) console.error(`  ⚠️ ${nome}:`, error.message);
-      }
-      console.log(`  ✅ ${rows.length} filiais processadas`);
-    }
-
-    // ---------- 3. LISTAS (categoria, marca, modelo) ----------
-    console.log('📥 Migrando listas (categoria/marca/modelo)...');
-    const listasData = await getSheetValues('CORE', 'Listas');
-    if (listasData.length > 1) {
-      const headers = listasData[0];
-      const idxCat = headers.indexOf('categoria') >= 0 ? headers.indexOf('categoria') : 0;
-      const idxMarca = headers.indexOf('marca') >= 0 ? headers.indexOf('marca') : 1;
-      const idxModelo = headers.indexOf('modelo') >= 0 ? headers.indexOf('modelo') : 2;
-      const rows = listasData.slice(1);
-      let count = 0;
-      for (const row of rows) {
-        const categoria = row[idxCat]?.trim();
-        const marca = row[idxMarca]?.trim();
-        const modelo = row[idxModelo]?.trim();
-        if (!categoria || !marca || !modelo) continue;
-        const { error } = await supabase.from('listas').upsert({
-          categoria, marca, modelo
-        }, { onConflict: 'categoria,marca,modelo' });
-        if (error) console.error(`  ⚠️ ${categoria}/${marca}/${modelo}:`, error.message);
-        count++;
-      }
-      console.log(`  ✅ ${count} combinações processadas`);
-    }
-
-    // ---------- 4. EQUIPAMENTOS ----------
+    // ---------- 2. EQUIPAMENTOS ----------
     console.log('📥 Migrando equipamentos (pode demorar)...');
     const equipData = await getSheetValues('CORE', 'Equipamentos');
     if (equipData.length > 1) {
       const headers = equipData[0];
       const rows = equipData.slice(1);
+
+      // Fallback de e-mail válido para cadastrado_por (quando a planilha não tem)
+      const { data: usuarioFallback } = await supabase.from('usuarios').select('email').eq('nivel', 'Matriz').limit(1).single();
+      const fallbackEmail = usuarioFallback?.email || 'migracao@sce.local';
+
       let success = 0, errors = 0;
       for (const row of rows) {
         const obj = {};
         headers.forEach((h, i) => obj[h] = row[i] || '');
-        if (!obj.id) obj.id = randomUUID();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(obj.id));
+        if (!obj.id || !isUuid) obj.id = randomUUID();
 
         const equip = {
           id: obj.id,
@@ -140,8 +108,8 @@ async function migrate() {
           observacoes: obj.observacoes || null,
           data_cadastro: obj.dataCadastro ? new Date(obj.dataCadastro).toISOString() : new Date().toISOString(),
           data_ultima_atualizacao: obj.dataUltimaAtualizacao ? new Date(obj.dataUltimaAtualizacao).toISOString() : new Date().toISOString(),
-          cadastrado_por: obj.cadastradoPor || 'migracao',
-          ultima_alteracao_por: obj.ultimaAlteracaoPor || 'migracao',
+          cadastrado_por: (obj.cadastradoPor && /@/.test(obj.cadastradoPor)) ? obj.cadastradoPor : fallbackEmail,
+          ultima_alteracao_por: (obj.ultimaAlteracaoPor && /@/.test(obj.ultimaAlteracaoPor)) ? obj.ultimaAlteracaoPor : null,
           justificativa_patrimonio: obj.justificativaPatrimonio || null,
           justificativa_numero_serie: obj.justificativaNumeroSerie || null,
           boletim_ocorrencia_anexo_url: obj.boletimOcorrenciaAnexoUrl || null,
