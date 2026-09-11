@@ -19,6 +19,13 @@
   </style>
 </head>
 <body class="theme-tecnico">
+  <div class="sce-header">
+    <span class="brand">
+      <img src="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP" alt="Logotipo Leste 3" style="width:75px;">
+      <span>SCE - Leste 3<span class="brand-sub">Sistema de Controle de Equipamentos</span></span>
+    </span>
+    <button class="logout-btn" onclick="sceLogout()"><i class="material-icons">logout</i> Sair</button>
+  </div>
   <div id="sce-loading-overlay">
     <div class="sce-spinner-box">
       <div class="preloader-wrapper small active">
@@ -92,10 +99,10 @@
             <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="numeroSerie" class="sortable" style="cursor:pointer;">Número de Série <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th>Manutenção</th>
             <th>Devolução</th>
-            <th>BlueMonitor</th>
             <th class="no-print">Ações</th>
           </tr>
         </thead>

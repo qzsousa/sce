@@ -385,18 +385,16 @@ function renderTabelaGlobal(equipamentos) {
       indicadorAtraso = `<span class="badge-atraso ${cls}">${label}</span>`;
     }
     
-    const blueBadge = item.vinculadoBlueMonitor === 'Sim' ? '<span class="badge-blue sim">Sim</span>' : '<span class="badge-blue nao">Não</span>';
-    
     tr.innerHTML =
       '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
       '<td>' + (item.unidade || '') + '</td>' +
       '<td>' + (item.categoria || '') + '</td>' +
       '<td>' + (item.marca || '') + '</td>' +
       '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
+      '<td>' + (item.numeroSerie || '') + '</td>' +
       '<td><strong>' + (item.status || '') + '</strong></td>' +
       '<td>' + badgeManutencao + '</td>' +
       '<td>' + indicadorAtraso + '</td>' +
-      '<td>' + blueBadge + '</td>' +
       '<td class="no-print">' +
         '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
         '<a class="btn-small waves-effect" onclick="abrirHistorico(\'' + item.id + '\')" title="Histórico"><i class="material-icons">history</i></a> ' +

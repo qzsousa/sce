@@ -703,6 +703,7 @@ function renderTabelaEquipamentos(equipamentos) {
       '<td>' + (item.marca || '') + '</td>' +
       '<td>' + (item.modelo || '') + '</td>' +
       '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
+      '<td>' + (item.numeroSerie || '') + '</td>' +
       '<td><strong>' + (item.status || '') + '</strong></td>' +
       '<td>' + badgeManutencao + '</td>' +
       '<td>' + indicadorAtraso + '</td>' +

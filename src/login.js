@@ -188,4 +188,19 @@ document.addEventListener('DOMContentLoaded', () => {
   emailInput.focus();
 });
 
+// Mostrar/ocultar senha
+document.querySelectorAll('.pwd-toggle').forEach(icon => {
+  icon.addEventListener('click', function () {
+    const input = document.getElementById(this.dataset.target);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      this.innerText = 'visibility_off';
+    } else {
+      input.type = 'password';
+      this.innerText = 'visibility';
+    }
+  });
+});
+
 console.log('✅ Login page loaded (email/senha)');

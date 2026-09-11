@@ -148,19 +148,18 @@
       <div class="input-field">
         <i class="material-icons prefix" style="color:var(--sce-muted);">alternate_email</i>
         <input type="email" id="email" autocomplete="email" placeholder="seu.email@instituicao.org">
-        <label for="email">E-mail institucional</label>
       </div>
 
       <div class="input-field">
         <i class="material-icons prefix" style="color:var(--sce-muted);">lock_outline</i>
         <input type="password" id="password" autocomplete="current-password" placeholder="Sua senha">
-        <label for="password">Senha</label>
+        <i class="material-icons pwd-toggle" data-target="password" title="Mostrar/ocultar senha" style="position:absolute; right:8px; top:14px; cursor:pointer; color:var(--sce-muted);">visibility</i>
       </div>
 
       <div class="input-field" id="campo-confirmar" style="display:none;">
         <i class="material-icons prefix" style="color:var(--sce-muted);">lock</i>
         <input type="password" id="confirm-password" autocomplete="new-password" placeholder="Confirme sua senha">
-        <label for="confirm-password">Confirmar senha</label>
+        <i class="material-icons pwd-toggle" data-target="confirm-password" title="Mostrar/ocultar senha" style="position:absolute; right:8px; top:14px; cursor:pointer; color:var(--sce-muted);">visibility</i>
       </div>
 
       <button class="btn waves-effect" id="btn-entrar">

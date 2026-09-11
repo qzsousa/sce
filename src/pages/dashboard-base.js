@@ -56,6 +56,11 @@ window.abrirAnexoBoletim = async function (path) {
   }
 };
 
+window.sceLogout = function () {
+  localStorage.removeItem('sce_token');
+  window.location.href = '/login';
+};
+
 /* ============================================================================
    INICIALIZAÇÃO BASE
    ============================================================================ */
