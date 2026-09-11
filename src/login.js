@@ -46,6 +46,12 @@ function entrarModoPrimeiroAcesso() {
   passwordInput.value = '';
   if (confirmPasswordInput) confirmPasswordInput.value = '';
   passwordInput.autocomplete = 'new-password';
+  const step1 = document.getElementById('step-1');
+  const step2 = document.getElementById('step-2');
+  const step2Label = document.getElementById('step-2-label');
+  if (step1) { step1.classList.remove('active'); step1.classList.add('done'); }
+  if (step2) step2.classList.add('active');
+  if (step2Label) step2Label.innerText = 'Criar senha';
 }
 
 function sairModoPrimeiroAcesso() {
@@ -55,6 +61,12 @@ function sairModoPrimeiroAcesso() {
   if (subtitulo) subtitulo.innerText = 'Use seu e-mail institucional e senha.';
   if (btnEntrarTexto) btnEntrarTexto.innerText = 'Entrar';
   passwordInput.autocomplete = 'current-password';
+  const step1 = document.getElementById('step-1');
+  const step2 = document.getElementById('step-2');
+  const step2Label = document.getElementById('step-2-label');
+  if (step1) { step1.classList.add('active'); step1.classList.remove('done'); }
+  if (step2) step2.classList.remove('active');
+  if (step2Label) step2Label.innerText = 'Senha';
 }
 
 function redirecionarParaDashboard(res) {

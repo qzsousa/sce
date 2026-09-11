@@ -97,6 +97,7 @@ async function carregarInfoCabecalho() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🟢 Inicializando Dashboard Matriz...');
+  showLoading();
   
   if (window.M) {
     M.FormSelect.init(document.querySelectorAll('select'));
@@ -159,6 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.check-equipamento').forEach(el => el.checked = checked);
   });
 
+  hideLoading();
   console.log('✅ Dashboard Matriz inicializado!');
 });
 

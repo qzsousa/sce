@@ -76,6 +76,7 @@ let emprestimoIdsSelecionados = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🟢 Inicializando Dashboard Filial...');
+  showLoading();
   
   if (window.M) M.FormSelect.init(document.querySelectorAll('select'));
   
@@ -159,6 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  hideLoading();
   console.log('✅ Dashboard Filial inicializado!');
 });
 

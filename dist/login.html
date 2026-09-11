@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 
   <!-- Shared CSS -->
-  <link rel="stylesheet" href="../shared/css/main.css">
+
   <style>
     body {
       background: radial-gradient(circle at top left, #e3f0fd 0%, #f2f5f9 45%, #f2f5f9 100%);
@@ -40,7 +40,7 @@
       padding: 14px;
       box-shadow: var(--sce-shadow-md);
     }
-    .sce-login-logo h5 { margin: 0; font-size: 1.15rem; }
+    .sce-login-logo h5 { margin: 0; font-size: 1.15rem; color: var(--sce-ink); }
     .sce-login-logo p { margin: 2px 0 0; color: var(--sce-muted); font-size: .85rem; }
 
     .sce-login-card {
@@ -62,6 +62,51 @@
       gap: 8px;
     }
 
+    .sce-login-steps {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .sce-login-step {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .78rem;
+      font-weight: 500;
+      color: var(--sce-muted);
+    }
+    .sce-login-step .num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--sce-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .72rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: white;
+    }
+    .sce-login-step.active .num {
+      border-color: var(--sce-primary);
+      background: var(--sce-primary);
+      color: white;
+    }
+    .sce-login-step.done .num {
+      border-color: #43a047;
+      background: #43a047;
+      color: white;
+    }
+    .sce-login-step-sep {
+      width: 20px;
+      height: 2px;
+      background: var(--sce-border);
+      flex-shrink: 0;
+    }
+
     #feedback {
       min-height: 20px;
       font-size: .88rem;
@@ -72,8 +117,9 @@
     #feedback.is-success { color: #2e7d32; }
     #feedback.is-info { color: var(--sce-muted); }
   </style>
-  <script type="module" crossorigin src="/assets/login-BoX8a7bn.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-CpMPNVD3.js">
+  <script type="module" crossorigin src="/assets/login-Ci_jRAI7.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-BGRmcChJ.js">
+  <link rel="stylesheet" crossorigin href="/assets/auth-Cep402Dj.css">
 </head>
 <body>
   <div class="sce-login-wrap">
@@ -84,6 +130,18 @@
     </div>
 
     <div class="card sce-login-card">
+      <div class="sce-login-steps">
+        <div class="sce-login-step active" id="step-1">
+          <span class="num">1</span>
+          <span>E-mail</span>
+        </div>
+        <div class="sce-login-step-sep"></div>
+        <div class="sce-login-step" id="step-2">
+          <span class="num">2</span>
+          <span id="step-2-label">Senha</span>
+        </div>
+      </div>
+
       <h5 id="titulo-card"><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">login</i>Entrar</h5>
       <p id="subtitulo" style="margin:0 0 16px;color:var(--sce-muted);font-size:.85rem;">
         Use seu e-mail institucional e senha.
@@ -112,6 +170,19 @@
       </button>
 
       <div id="feedback"></div>
+    </div>
+  </div>
+
+  <div id="sce-loading-overlay">
+    <div class="sce-spinner-box">
+      <div class="preloader-wrapper small active">
+        <div class="spinner-layer spinner-blue-only">
+          <div class="circle-clipper left"><div class="circle"></div></div>
+          <div class="gap-patch"><div class="circle"></div></div>
+          <div class="circle-clipper right"><div class="circle"></div></div>
+        </div>
+      </div>
+      <span>Carregando...</span>
     </div>
   </div>
 

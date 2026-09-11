@@ -53,6 +53,7 @@ let ordemAtual = 'asc';
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🟢 Inicializando dashboard Técnico...');
+  showLoading();
   
   if (window.M) M.FormSelect.init(document.querySelectorAll('select'));
   
@@ -103,6 +104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  hideLoading();
   console.log('✅ Dashboard técnico inicializado!');
 });
 
