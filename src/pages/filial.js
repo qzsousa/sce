@@ -668,7 +668,7 @@ function renderTabelaEquipamentos(equipamentos) {
   if (!tbody) return;
   tbody.innerHTML = '';
   if (!equipamentos || equipamentos.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
     const info = document.getElementById('pagina-info');
     if (info) info.innerText = 'Página 0 de 0 - 0 itens';
     return;
@@ -679,38 +679,14 @@ function renderTabelaEquipamentos(equipamentos) {
     const tr = document.createElement('tr');
     const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
     tr.className = statusClass;
-    let badgeManutencao = '-';
-    if (item.statusManutencao) {
-      const statusManut = item.statusManutencao.toLowerCase().replace(/ /g, '-');
-      let badgeClass = 'badge-manutencao ';
-      if (statusManut === 'pendente') badgeClass += 'badge-pendente';
-      else if (statusManut === 'em-andamento') badgeClass += 'badge-em-andamento';
-      else if (statusManut === 'concluído') badgeClass += 'badge-concluído';
-      badgeManutencao = '<span class="' + badgeClass + '">' + item.statusManutencao + '</span>';
-    }
-    let indicadorAtraso = '-';
-    if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
-      const hoje = new Date();
-      const prevista = new Date(item.dataPrevistaDevolucao);
-      const atrasado = prevista < hoje;
-      const label = atrasado ? 'Atrasado' : 'Em dia';
-      const cls = atrasado ? 'badge-atrasado' : 'badge-em-dia';
-      indicadorAtraso = '<span class="badge-atraso ' + cls + '">' + label + '</span>';
-    }
     tr.innerHTML =
       '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
-      '<td>' + (item.categoria || '') + '</td>' +
-      '<td>' + (item.marca || '') + '</td>' +
-      '<td>' + (item.modelo || '') + '</td>' +
+      '<td class="cell-2lin"><span class="cell-main">' + (item.modelo || '') + '</span><span class="cell-sub">' + (item.categoria || '') + ' · ' + (item.marca || '') + '</span></td>' +
       '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
       '<td>' + (item.numeroSerie || '') + '</td>' +
       '<td><strong>' + (item.status || '') + '</strong></td>' +
-      '<td>' + badgeManutencao + '</td>' +
-      '<td>' + indicadorAtraso + '</td>' +
       '<td class="no-print" style="text-align:center;">' +
-      '<button class="btn-acao" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></button> ' +
-      '<button class="btn-acao" onclick="abrirHistorico(\'' + item.id + '\')" title="Histórico"><i class="material-icons">history</i></button> ' +
-      '<button class="btn-acao-excluir" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Excluir"><i class="material-icons">delete</i></button>' +
+      '<div class="kebab-wrap"><button class="kebab-btn" onclick="toggleKebab(this)"><i class="material-icons">more_vert</i></button><div class="kebab-menu"><a onclick="editarEquipamento(\'' + item.id + '\')"><i class="material-icons">edit</i> Editar</a><a onclick="abrirHistorico(\'' + item.id + '\')"><i class="material-icons">history</i> Histórico</a><a class="danger" onclick="abrirModalRemocao(\'' + item.id + '\')"><i class="material-icons">delete</i> Remover</a></div></div>' +
       '</td>';
     tbody.appendChild(tr);
   });

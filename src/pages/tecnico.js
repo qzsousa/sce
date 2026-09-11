@@ -19,6 +19,9 @@ import {
   getApiBaseUrl,
   editarEquipamento,
   abrirManutencao,
+  abrirHistorico,
+  abrirModalRemocao,
+  confirmarRemocao,
 } from './dashboard-base.js';
 import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
@@ -81,6 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
   document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
   document.getElementById('btn-registrar-manutencao').addEventListener('click', registrarManutencaoUI);
+  document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
   document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
   document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDF);
 
@@ -381,18 +385,14 @@ function renderTabelaEquipamentos(equipamentos) {
   const tbody = document.querySelector('#tabela-equipamentos tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  if (!equipamentos || equipamentos.length === 0) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>'; document.getElementById('pagina-info').innerText = 'Página 0 de 0 - 0 itens'; return; }
+  if (!equipamentos || equipamentos.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>'; document.getElementById('pagina-info').innerText = 'Página 0 de 0 - 0 itens'; return; }
   const inicio = (paginaAtual - 1) * ITENS_POR_PAGINA;
   const pagina = equipamentos.slice(inicio, inicio + ITENS_POR_PAGINA);
   pagina.forEach(item => {
     const tr = document.createElement('tr');
     const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
     tr.className = statusClass;
-    let badgeManutencao = '-';
-    if (item.statusManutencao) { const statusManut = item.statusManutencao.toLowerCase().replace(/ /g, '-'); let badgeClass = 'badge-manutencao '; if (statusManut === 'pendente') badgeClass += 'badge-pendente'; else if (statusManut === 'em-andamento') badgeClass += 'badge-em-andamento'; else if (statusManut === 'concluído') badgeClass += 'badge-concluído'; badgeManutencao = `<span class="${badgeClass}">${item.statusManutencao}</span>`; }
-    let indicadorAtraso = '-';
-    if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) { const hoje = new Date(); const prevista = new Date(item.dataPrevistaDevolucao); const atrasado = prevista < hoje; const label = atrasado ? 'Atrasado' : 'Em dia'; const cls = atrasado ? 'badge-atrasado' : 'badge-em-dia'; indicadorAtraso = `<span class="badge-atraso ${cls}">${label}</span>`; }
-    tr.innerHTML = '<td>' + (item.unidade || '') + '</td>' + '<td>' + (item.categoria || '') + '</td>' + '<td>' + (item.marca || '') + '</td>' + '<td>' + (item.modelo || '') + '</td>' + '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' + '<td>' + (item.numeroSerie || '') + '</td>' + '<td><strong>' + (item.status || '') + '</strong></td>' + '<td>' + badgeManutencao + '</td>' + '<td>' + indicadorAtraso + '</td>' + '<td class="no-print">' + '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></a> ' + '<a class="btn-small waves-effect" onclick="abrirManutencao(\'' + item.id + '\')" title="Manutenção"><i class="material-icons">build</i></a>' + '</td>';
+    tr.innerHTML = '<td class="cell-2lin"><span class="cell-main">' + (item.modelo || '') + '</span><span class="cell-sub">' + (item.categoria || '') + ' · ' + (item.marca || '') + '</span></td>' + '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' + '<td>' + (item.numeroSerie || '') + '</td>' + '<td><strong>' + (item.status || '') + '</strong></td>' + '<td class="no-print">' + '<div class="kebab-wrap"><button class="kebab-btn" onclick="toggleKebab(this)"><i class="material-icons">more_vert</i></button><div class="kebab-menu"><a onclick="editarEquipamento(\'' + item.id + '\')"><i class="material-icons">edit</i> Editar</a><a onclick="abrirHistorico(\'' + item.id + '\')"><i class="material-icons">history</i> Histórico</a><a class="danger" onclick="abrirModalRemocao(\'' + item.id + '\')"><i class="material-icons">delete</i> Remover</a></div></div>' + '</td>';
     tbody.appendChild(tr);
   });
   const totalPaginas = Math.max(1, Math.ceil(equipamentos.length / ITENS_POR_PAGINA));

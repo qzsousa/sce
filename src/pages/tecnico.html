@@ -94,15 +94,10 @@
       <table class="striped" id="tabela-equipamentos">
         <thead>
           <tr>
-            <th data-sort="unidade" class="sortable" style="cursor:pointer;">Unidade <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="modelo" class="sortable" style="cursor:pointer;">Equipamento <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="numeroSerie" class="sortable" style="cursor:pointer;">Número de Série <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th>Manutenção</th>
-            <th>Devolução</th>
             <th class="no-print">Ações</th>
           </tr>
         </thead>
@@ -122,6 +117,10 @@
   <div id="modal-editar-equipamento" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar equipamento</h5><input type="hidden" id="edit-id"><div class="row" id="edicao-fields"></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-edicao">Salvar</a></div></div>
 
   <div id="modal-manutencao" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">build</i>Manutenção</h5><input type="hidden" id="manut-equipamento-id"><div class="row"><div class="input-field col s4"><select id="manut-status"><option value="Pendente">Pendente</option><option value="Em andamento">Em andamento</option><option value="Concluído">Concluído</option></select><label>Status</label></div><div class="input-field col s8"><textarea id="manut-descricao" class="materialize-textarea"></textarea><label for="manut-descricao">O que foi feito / observado</label></div></div><a class="btn waves-effect" id="btn-registrar-manutencao"><i class="material-icons left">add</i>Registrar</a><table class="striped" style="margin-top:20px;"><thead><tr><th>Data</th><th>Autor</th><th>Status</th><th>Descrição</th></tr></thead><tbody id="tabela-manutencao-body"></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+
+  <div id="modal-historico" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">history</i>Histórico de alterações</h5><p><strong>Equipamento:</strong> <span id="historico-patrimonio"></span> – <span id="historico-modelo"></span></p><table class="striped" id="tabela-historico"><thead><tr><th>Data</th><th>Autor</th><th>Campo</th><th>Valor antigo</th><th>Valor novo</th></tr></thead><tbody></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+
+  <div id="modal-confirmar-remocao" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5><p>Esta ação marcará o item como removido. Deseja continuar?</p></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn red" id="btn-confirmar-remocao">Remover</a></div></div>
 
   <footer class="sce-footer"><div class="sce-container" style="text-align:center;padding:12px 0;border-top:1px solid var(--sce-border);margin-top:20px;"><span style="color:var(--sce-muted);font-size:0.8rem;">Suporte técnico:</span><a href="https://support.lenovo.com/br/pt/servicerequest" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Lenovo</a><a href="https://www.multilaser.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Multilaser</a><a href="https://www.positivotecnologia.com.br/suporte" target="_blank" style="margin-left:12px;color:var(--sce-primary);">Positivo</a><span style="margin-left:20px;color:var(--sce-muted);font-size:0.7rem;">SCE v2.1.0</span></div></footer>
 

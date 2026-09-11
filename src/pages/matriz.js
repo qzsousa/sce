@@ -356,7 +356,7 @@ function renderTabelaGlobal(equipamentos) {
   tbody.innerHTML = '';
   
   if (!equipamentos || equipamentos.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
     return;
   }
   
@@ -365,40 +365,15 @@ function renderTabelaGlobal(equipamentos) {
     const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
     tr.className = statusClass;
     
-    let badgeManutencao = '-';
-    if (item.statusManutencao) {
-      const sm = item.statusManutencao.toLowerCase().replace(/ /g, '-');
-      let cls = 'badge-manutencao ';
-      if (sm === 'pendente') cls += 'badge-pendente';
-      else if (sm === 'em-andamento') cls += 'badge-em-andamento';
-      else if (sm === 'concluído') cls += 'badge-concluído';
-      badgeManutencao = `<span class="${cls}">${item.statusManutencao}</span>`;
-    }
-    
-    let indicadorAtraso = '-';
-    if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
-      const hoje = new Date();
-      const prevista = new Date(item.dataPrevistaDevolucao);
-      const atrasado = prevista < hoje;
-      const label = atrasado ? 'Atrasado' : 'Em dia';
-      const cls = atrasado ? 'badge-atrasado' : 'badge-em-dia';
-      indicadorAtraso = `<span class="badge-atraso ${cls}">${label}</span>`;
-    }
-    
     tr.innerHTML =
       '<td class="no-print"><label><input type="checkbox" class="check-equipamento" value="' + item.id + '"><span></span></label></td>' +
-      '<td>' + (item.unidade || '') + '</td>' +
-      '<td>' + (item.categoria || '') + '</td>' +
-      '<td>' + (item.marca || '') + '</td>' +
+      '<td class="cell-2lin"><span class="cell-main">' + (item.modelo || '') + '</span><span class="cell-sub">' + (item.categoria || '') + ' · ' + (item.marca || '') + '</span></td>' +
       '<td>' + (item.patrimonio || '') + (item.justificativaPatrimonio ? ' *' : '') + '</td>' +
       '<td>' + (item.numeroSerie || '') + '</td>' +
+      '<td>' + (item.unidade || '') + '</td>' +
       '<td><strong>' + (item.status || '') + '</strong></td>' +
-      '<td>' + badgeManutencao + '</td>' +
-      '<td>' + indicadorAtraso + '</td>' +
       '<td class="no-print">' +
-        '<a class="btn-small waves-effect" onclick="editarEquipamento(\'' + item.id + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
-        '<a class="btn-small waves-effect" onclick="abrirHistorico(\'' + item.id + '\')" title="Histórico"><i class="material-icons">history</i></a> ' +
-        '<a class="btn-small red waves-effect" onclick="abrirModalRemocao(\'' + item.id + '\')" title="Remover"><i class="material-icons">delete</i></a>' +
+        '<div class="kebab-wrap"><button class="kebab-btn" onclick="toggleKebab(this)"><i class="material-icons">more_vert</i></button><div class="kebab-menu"><a onclick="editarEquipamento(\'' + item.id + '\')"><i class="material-icons">edit</i> Editar</a><a onclick="abrirHistorico(\'' + item.id + '\')"><i class="material-icons">history</i> Histórico</a><a class="danger" onclick="abrirModalRemocao(\'' + item.id + '\')"><i class="material-icons">delete</i> Remover</a></div></div>' +
       '</td>';
     tbody.appendChild(tr);
   });
