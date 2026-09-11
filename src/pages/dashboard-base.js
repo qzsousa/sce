@@ -61,6 +61,18 @@ window.sceLogout = function () {
   window.location.href = '/login';
 };
 
+window.toggleKebab = function (btn) {
+  const menu = btn && btn.parentElement ? btn.parentElement.querySelector('.kebab-menu') : null;
+  document.querySelectorAll('.kebab-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+  if (menu) menu.classList.toggle('open');
+};
+
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('.kebab-wrap')) {
+    document.querySelectorAll('.kebab-menu.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
 /* ============================================================================
    INICIALIZAÇÃO BASE
    ============================================================================ */

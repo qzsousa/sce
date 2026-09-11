@@ -298,3 +298,59 @@
 
 /* Checkbox de seleção em lote */
 .check-equipamento { transform: scale(1.1); }
+
+/* ---------- Célula de duas linhas (equipamento na tabela) ---------- */
+.cell-2lin { line-height: 1.25; }
+.cell-2lin .cell-main {
+  font-weight: 600;
+  color: var(--sce-ink);
+  display: block;
+}
+.cell-2lin .cell-sub {
+  font-size: .78rem;
+  color: var(--sce-muted);
+  display: block;
+  margin-top: 2px;
+}
+
+/* ---------- Menu kebab (ações da tabela) ---------- */
+.kebab-wrap { position: relative; display: inline-block; }
+.kebab-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--sce-muted);
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background .15s ease, color .15s ease;
+}
+.kebab-btn:hover { background: var(--sce-primary-light); color: var(--sce-primary-dark); }
+.kebab-btn .material-icons { font-size: 20px; }
+.kebab-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 60;
+  background: #fff;
+  border: 1px solid var(--sce-border);
+  border-radius: 8px;
+  box-shadow: var(--sce-shadow-md);
+  min-width: 160px;
+  display: none;
+  overflow: hidden;
+}
+.kebab-menu.open { display: block; }
+.kebab-menu a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: .85rem;
+  color: var(--sce-ink);
+  cursor: pointer;
+  text-decoration: none;
+}
+.kebab-menu a:hover { background: var(--sce-bg); }
+.kebab-menu a .material-icons { font-size: 18px; color: var(--sce-muted); }
+.kebab-menu a.danger { color: #d32f2f; }
+.kebab-menu a.danger .material-icons { color: #d32f2f; }
