@@ -59,6 +59,7 @@ async function migrate() {
           filial: filial?.trim() || '',
           status: status?.trim() || 'Ativo',
           data_remocao: dataRemocao ? new Date(dataRemocao).toISOString() : null,
+          senha_definida: false,
         }, { onConflict: 'email' });
         if (error) console.error(`  ⚠️ ${email}:`, error.message);
       }
@@ -155,99 +156,7 @@ async function migrate() {
       console.log(`  ✅ ${success} equipamentos migrados, ${errors} erros`);
     }
 
-    // ---------- 5. HISTORICO ----------
-    console.log('📥 Migrando histórico...');
-    const histData = await getSheetValues('MOVIMENTACAO', 'Historico_Itens');
-    if (histData.length > 1) {
-      const headers = histData[0];
-      const rows = histData.slice(1);
-      for (const row of rows) {
-        const obj = {}; headers.forEach((h,i)=>obj[h]=row[i]);
-        const { error } = await supabase.from('historico_itens').upsert({
-          id: obj.id || randomUUID(),
-          equipamento_id: obj.equipamentoId,
-          campo: obj.campo,
-          valor_antigo: obj.valorAntigo,
-          valor_novo: obj.valorNovo,
-          autor: obj.autor,
-          data: obj.data ? new Date(obj.data).toISOString() : new Date().toISOString(),
-        }, { onConflict: 'id' });
-        if (error) console.error(`  ⚠️ Histórico:`, error.message);
-      }
-      console.log(`  ✅ ${rows.length} registros de histórico processados`);
-    }
-
-    // ---------- 6. EMPRESTIMOS ----------
-    console.log('📥 Migrando empréstimos...');
-    const empData = await getSheetValues('MOVIMENTACAO', 'Emprestimos');
-    if (empData.length > 1) {
-      const headers = empData[0];
-      const rows = empData.slice(1);
-      for (const row of rows) {
-        const obj = {}; headers.forEach((h,i)=>obj[h]=row[i]);
-        const { error } = await supabase.from('emprestimos').upsert({
-          id: obj.id || randomUUID(),
-          equipamento_id: obj.equipamentoId,
-          patrimonio: obj.patrimonio,
-          unidade: obj.unidade,
-          responsavel: obj.responsavel,
-          cpf: obj.cpf,
-          email_responsavel: obj.emailResponsavel,
-          data_emprestimo: obj.dataEmprestimo ? new Date(obj.dataEmprestimo).toISOString() : new Date().toISOString(),
-          data_prevista_devolucao: obj.dataPrevistaDevolucao ? new Date(obj.dataPrevistaDevolucao).toISOString().split('T')[0] : null,
-          data_devolucao: obj.dataDevolucao ? new Date(obj.dataDevolucao).toISOString() : null,
-          status: obj.status || 'Emprestado',
-          termo_pdf_url: obj.termoPdfUrl,
-          criado_por: obj.criadoPor,
-          devolvido_por: obj.devolvidoPor,
-          observacoes: obj.observacoes,
-          tipo_emprestimo: obj.tipoEmprestimo || 'interno',
-          escola_destino: obj.escolaDestino,
-        }, { onConflict: 'id' });
-        if (error) console.error(`  ⚠️ Empréstimo:`, error.message);
-      }
-      console.log(`  ✅ ${rows.length} empréstimos processados`);
-    }
-
-    // ---------- 7. REGISTROS_MANUTENCAO ----------
-    console.log('📥 Migrando manutenções...');
-    const manData = await getSheetValues('MOVIMENTACAO', 'Registros_Manutencao');
-    if (manData.length > 1) {
-      const headers = manData[0];
-      const rows = manData.slice(1);
-      for (const row of rows) {
-        const obj = {}; headers.forEach((h,i)=>obj[h]=row[i]);
-        const { error } = await supabase.from('registros_manutencao').upsert({
-          id: obj.id || randomUUID(),
-          equipamento_id: obj.equipamentoId,
-          autor: obj.autor,
-          data: obj.data ? new Date(obj.data).toISOString() : new Date().toISOString(),
-          descricao: obj.descricao,
-          status: obj.status || 'Pendente',
-        }, { onConflict: 'id' });
-        if (error) console.error(`  ⚠️ Manutenção:`, error.message);
-      }
-      console.log(`  ✅ ${rows.length} manutenções processadas`);
-    }
-
-    // ---------- 8. AUDITORIA ----------
-    console.log('📥 Migrando auditoria...');
-    const audData = await getSheetValues('MOVIMENTACAO', 'Auditoria');
-    if (audData.length > 1) {
-      const headers = audData[0];
-      const rows = audData.slice(1);
-      for (const row of rows) {
-        const obj = {}; headers.forEach((h,i)=>obj[h]=row[i]);
-        const { error } = await supabase.from('auditoria').insert({
-          data: obj.data ? new Date(obj.data).toISOString() : new Date().toISOString(),
-          usuario: obj.usuario,
-          acao: obj.acao,
-          detalhes: obj.detalhes,
-        });
-        if (error) console.error(`  ⚠️ Auditoria:`, error.message);
-      }
-      console.log(`  ✅ ${rows.length} auditorias processadas`);
-    }
+    // Movimentação (histórico, empréstimos, manutenções, auditoria) NÃO será migrada.
 
     console.log('\n🎉 Migração concluída com sucesso!');
     console.log('🔍 Verifique no Supabase Dashboard → Table Editor');
