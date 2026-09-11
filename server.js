@@ -187,6 +187,7 @@ async function getAllEquipamentos() {
 // STORAGE (ANEXOS) - Supabase Storage (bucket privado)
 // ============================================================
 const STORAGE_BUCKET = 'anexos';
+const MAX_ANEXO_MB = 8;
 
 function sanitizeFileName(name) {
   return String(name || '')
@@ -197,6 +198,9 @@ function sanitizeFileName(name) {
 async function uploadAnexoBoletim(base64, mimeType, fileName) {
   if (!base64) return null;
   const buf = Buffer.from(base64, 'base64');
+  if (buf.length > MAX_ANEXO_MB * 1024 * 1024) {
+    throw new Error(`Arquivo muito grande. O tamanho máximo é de ${MAX_ANEXO_MB}MB.`);
+  }
   let ext = 'bin';
   if (fileName && fileName.includes('.')) ext = fileName.split('.').pop().toLowerCase();
   else if (mimeType) {
