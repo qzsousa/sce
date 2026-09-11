@@ -520,10 +520,10 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   if (!serie && !justifSerie) return res.json(standardResponse(false, null, 'Informe o Número de Série ou uma justificativa para a sua ausência.'));
 
   const todos = await getAllEquipamentos();
-  const duplicado = todos.some(e => e.status !== 'Removido' &&
-    ((serie && String(e.numeroSerie || '').trim().toUpperCase() === serie.toUpperCase()) ||
-     (patrimonio && String(e.patrimonio || '').trim().toUpperCase() === patrimonio.toUpperCase())));
-  if (duplicado) return res.json(standardResponse(false, null, 'Já existe um equipamento com este Número de Série ou Patrimônio.'));
+  const duplicadoPat = patrimonio ? todos.find(e => e.status !== 'Removido' && String(e.patrimonio || '').trim().toUpperCase() === patrimonio.toUpperCase()) : null;
+  const duplicadoSerie = serie ? todos.find(e => e.status !== 'Removido' && String(e.numeroSerie || '').trim().toUpperCase() === serie.toUpperCase()) : null;
+  if (duplicadoPat) return res.json(standardResponse(false, null, `Já existe um equipamento com o patrimônio "${patrimonio}".`));
+  if (duplicadoSerie) return res.json(standardResponse(false, null, `Já existe um equipamento com o número de série "${serie}".`));
 
   if (dados.status === 'Extraviado') {
     if (!dados._anexoBoletim) return res.json(standardResponse(false, null, 'Para o status "Extraviado", o anexo do Boletim de Ocorrência é obrigatório.'));
@@ -579,10 +579,10 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
     const serieNova = camposAlterados.numeroSerie !== undefined ? camposAlterados.numeroSerie : equipAtual.numeroSerie;
     const patNovo = camposAlterados.patrimonio !== undefined ? camposAlterados.patrimonio : equipAtual.patrimonio;
     const todos = await getAllEquipamentos();
-    const duplicado = todos.some(e => e.id !== id && e.status !== 'Removido' &&
-      ((serieNova && String(e.numeroSerie || '').trim().toUpperCase() === String(serieNova).trim().toUpperCase()) ||
-       (patNovo && String(e.patrimonio || '').trim().toUpperCase() === String(patNovo).trim().toUpperCase())));
-    if (duplicado) return res.json(standardResponse(false, null, 'Já existe outro equipamento com este Número de Série ou Patrimônio.'));
+    const dupPat = patNovo ? todos.find(e => e.id !== id && e.status !== 'Removido' && String(e.patrimonio || '').trim().toUpperCase() === String(patNovo).trim().toUpperCase()) : null;
+    const dupSerie = serieNova ? todos.find(e => e.id !== id && e.status !== 'Removido' && String(e.numeroSerie || '').trim().toUpperCase() === String(serieNova).trim().toUpperCase()) : null;
+    if (dupPat) return res.json(standardResponse(false, null, `Já existe outro equipamento com o patrimônio "${patNovo}".`));
+    if (dupSerie) return res.json(standardResponse(false, null, `Já existe outro equipamento com o número de série "${serieNova}".`));
   }
 
   // Validações de status especial
