@@ -74,8 +74,10 @@ function entrarModoPrimeiroAcesso() {
   if (step1) { step1.classList.remove('active'); step1.classList.add('done'); }
   if (step2) step2.classList.add('active');
   if (step2Label) step2Label.innerText = 'Criar senha';
-  setFeedback('Crie sua senha abaixo.', 'info');
+  setEmailStatus('Crie sua senha abaixo.', 'info');
+  setFeedback('', '');
   setFaMensagem('');
+  if (btnPrimeiroAcesso) btnPrimeiroAcesso.style.display = 'none';
   if (passwordInput) setTimeout(() => passwordInput.focus(), 150);
 }
 
@@ -92,6 +94,7 @@ function sairModoPrimeiroAcesso() {
   if (step1) { step1.classList.add('active'); step1.classList.remove('done'); }
   if (step2) step2.classList.remove('active');
   if (step2Label) step2Label.innerText = 'Senha';
+  if (btnPrimeiroAcesso) btnPrimeiroAcesso.style.display = '';
 }
 
 function redirecionarParaDashboard(res) {
