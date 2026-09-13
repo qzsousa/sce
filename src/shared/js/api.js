@@ -431,7 +431,11 @@ export async function exportarEquipamentosPDF(token, filtros = {}) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify(filtros),
     });
-    return await handleResponse(response);
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Erro HTTP: ${response.status}`);
+    }
+    return await response.blob();
   } catch (error) {
     console.error('Erro em exportarEquipamentosPDF:', error);
     throw error;

@@ -51,8 +51,16 @@ function setButtonsDisabled(disabled) {
   if (confirmPasswordInput) confirmPasswordInput.disabled = disabled;
 }
 
+// Bloqueia/desbloqueia senha + botão Entrar (usado no primeiro acesso detectado)
+function setSenhaBloqueada(bloqueada) {
+  passwordInput.disabled = bloqueada;
+  btnEntrar.disabled = bloqueada;
+  if (bloqueada) passwordInput.value = '';
+}
+
 function entrarModoPrimeiroAcesso() {
   modoPrimeiroAcesso = true;
+  setSenhaBloqueada(false);
   if (campoConfirmar) campoConfirmar.style.display = 'block';
   if (tituloCard) tituloCard.innerHTML = '<i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">vpn_key</i>Primeiro acesso';
   if (subtitulo) subtitulo.innerText = 'Crie uma senha para o seu e-mail institucional.';
@@ -122,14 +130,18 @@ function agendarVerificacaoEmail() {
     const usuario = await verificarAcesso(email);
     if (!usuario) {
       setEmailStatus('Não foi possível verificar o e-mail agora.', 'info');
+      setSenhaBloqueada(false);
       return;
     }
     if (usuario.existe === false) {
       setEmailStatus('E-mail não encontrado no sistema.', 'error');
+      setSenhaBloqueada(false);
     } else if (usuario.senhaDefinida === false) {
-      setEmailStatus('Primeiro acesso: este e-mail ainda não tem senha.', 'success');
+      setEmailStatus('Primeiro acesso: este e-mail ainda não tem senha. Clique em "Primeiro acesso" abaixo.', 'success');
+      setSenhaBloqueada(true);
     } else {
-      setEmailStatus('Este e-mail já possui uma senha.', 'info');
+      setEmailStatus('', '');
+      setSenhaBloqueada(false);
     }
   }, 600);
 }

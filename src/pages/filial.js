@@ -26,6 +26,7 @@ import {
   salvarCadastro,
   salvarEdicao,
   exportarCSVUI,
+  exportarPDFUI,
   editarEquipamento,
   abrirHistorico,
   abrirModalRemocao,
@@ -109,7 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-devolver-selecionados').addEventListener('click', devolverSelecionados);
   document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
   document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
-  document.getElementById('btn-exportar-pdf').addEventListener('click', () => toastInfo('Função de PDF em desenvolvimento...'));
+  document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDFUI);
   document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
   document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
   document.getElementById('btn-confirmar-emprestimo').addEventListener('click', confirmarEmprestimo);

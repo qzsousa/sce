@@ -22,6 +22,7 @@ import {
   abrirHistorico,
   abrirModalRemocao,
   confirmarRemocao,
+  exportarPDFUI,
 } from './dashboard-base.js';
 import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
@@ -86,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-registrar-manutencao').addEventListener('click', registrarManutencaoUI);
   document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
   document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSVUI);
-  document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDF);
+  document.getElementById('btn-exportar-pdf').addEventListener('click', exportarPDFUI);
 
   document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
   document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);

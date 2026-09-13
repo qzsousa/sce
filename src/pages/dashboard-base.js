@@ -738,8 +738,15 @@ export async function exportarPDFUI() {
 
   setButtonLoading(btn, true);
   try {
-    const res = await exportarEquipamentosPDF(getToken(), {});
-    if (res.url) window.open(res.url, '_blank');
+    const blob = await exportarEquipamentosPDF(getToken(), {});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sce-equipamentos-${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
     toastSuccess('PDF gerado.');
   } catch (err) {
     toastError('Erro ao exportar PDF: ' + err.message);

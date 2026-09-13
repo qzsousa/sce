@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
+import PDFDocument from 'pdfkit';
 import 'dotenv/config';
 
 import sheets, { supabase as supabaseAdmin, toCamelCase } from './supabaseService.js';
@@ -1016,9 +1017,66 @@ app.get('/api/exportar-csv', asyncHandler(async (req, res) => {
 app.post('/api/exportar-pdf', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   await requireSession(token);
-  // Em produção, gerar PDF com pdfkit ou puppeteer
-  const url = `${process.env.APP_URL || 'http://localhost:3000'}/relatorio.pdf`;
-  res.json(standardResponse(true, { url, message: 'PDF gerado.' }));
+
+  const equipamentos = await getAllEquipamentos();
+
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'landscape',
+    margins: { top: 40, bottom: 40, left: 40, right: 40 },
+  });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', 'attachment; filename="sce-equipamentos.pdf"');
+  doc.pipe(res);
+
+  // Cabeçalho do relatório
+  doc.fontSize(18).fillColor('#0B1E36').text('SCE - Leste 3');
+  doc.fontSize(12).fillColor('#64748b').text('Relatório de equipamentos');
+  doc.moveDown(0.5);
+  doc.fontSize(10).fillColor('#64748b')
+    .text('Gerado em ' + new Date().toLocaleString('pt-BR') + '  •  ' + equipamentos.length + ' equipamento(s)');
+  doc.moveDown();
+
+  const cols = [
+    { key: 'unidade', label: 'Unidade', w: 110 },
+    { key: 'categoria', label: 'Categoria', w: 90 },
+    { key: 'marca', label: 'Marca', w: 80 },
+    { key: 'modelo', label: 'Modelo', w: 150 },
+    { key: 'patrimonio', label: 'Patrimônio', w: 85 },
+    { key: 'numeroSerie', label: 'Nº Série', w: 110 },
+    { key: 'status', label: 'Status', w: 95 },
+  ];
+  const tableWidth = cols.reduce((s, c) => s + c.w, 0);
+
+  const rowHeight = 16;
+  let y = doc.y;
+
+  // Linha de cabeçalho da tabela
+  doc.font('Helvetica-Bold').fontSize(9).fillColor('#0B1E36');
+  let hx = 40;
+  for (const c of cols) {
+    doc.text(c.label, hx, y, { width: c.w, height: rowHeight });
+    hx += c.w;
+  }
+  y += rowHeight;
+  doc.moveTo(40, y).lineTo(40 + tableWidth, y).lineWidth(1).strokeColor('#c9c9c9').stroke();
+
+  y += 4;
+
+  // Linhas da tabela
+  doc.font('Helvetica').fontSize(8).fillColor('#1c2733');
+  for (const eq of equipamentos) {
+    if (y > 520) { doc.addPage(); y = 60; }
+    let rx = 40;
+    for (const c of cols) {
+      doc.text(String(eq[c.key] || ''), rx, y, { width: c.w - 4, height: rowHeight });
+      rx += c.w;
+    }
+    y += rowHeight;
+  }
+
+  doc.end();
 }));
 
 // ============================================================
