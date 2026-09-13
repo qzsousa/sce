@@ -137,7 +137,7 @@ function agendarVerificacaoEmail() {
       return;
     }
     if (usuario.existe === false) {
-      setEmailStatus('E-mail não encontrado no sistema.', 'error');
+      setEmailStatus('', '');
       setSenhaBloqueada(false);
     } else if (usuario.senhaDefinida === false) {
       setEmailStatus('Primeiro acesso: este e-mail ainda não tem senha. Clique em "Primeiro acesso" abaixo.', 'success');

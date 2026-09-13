@@ -893,16 +893,26 @@ async function carregarUsuariosUI() {
     const res = await fetch(`${getApiBaseUrl()}/listar-usuarios`, { headers: getAuthHeaders() });
     const data = await res.json();
     usuariosCache = data.data || [];
-    renderTabelaUsuarios(usuariosCache);
+    filtrarUsuarios();
   } catch (err) { toastError('Erro ao carregar usuários: ' + err.message); }
   finally { hideLoading(); }
 }
+
+function filtrarUsuarios() {
+  const busca = (document.getElementById('busca-usuarios')?.value || '').trim().toLowerCase();
+  const filtrados = usuariosCache.filter(u => {
+    if (!busca) return true;
+    return [u.email, u.nome, u.filial].some(v => (v || '').toLowerCase().includes(busca));
+  });
+  renderTabelaUsuarios(filtrados);
+}
+document.getElementById('busca-usuarios')?.addEventListener('input', filtrarUsuarios);
 
 function renderTabelaUsuarios(usuarios) {
   const tbody = document.querySelector('#tabela-usuarios tbody');
   tbody.innerHTML = '';
   if (!usuarios || usuarios.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6">Nenhum usuário cadastrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7">Nenhum usuário cadastrado.</td></tr>';
     return;
   }
   usuarios.forEach(u => {
@@ -913,6 +923,9 @@ function renderTabelaUsuarios(usuarios) {
       '<td>' + (u.nivel || '') + '</td>' +
       '<td>' + (u.filial || '') + '</td>' +
       '<td>' + (u.status || '') + '</td>' +
+      '<td>' + (u.senhaDefinida === false
+        ? '<span style="color:#2e7d32;font-weight:600;">Sim</span>'
+        : '<span style="color:var(--sce-muted);">Não</span>') + '</td>' +
       '<td>' + (isSelf ? '' : '<button class="btn-acao" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></button> <button class="btn-acao" onclick="redefinirSenhaUI(\'' + u.email + '\')" title="Redefinir senha"><i class="material-icons">vpn_key</i></button> <button class="btn-acao danger" onclick="removerUsuarioUI(\'' + u.email + '\')" title="Remover"><i class="material-icons">delete</i></button>') +
       '</td>';
     tbody.appendChild(tr);

@@ -513,15 +513,25 @@ async function carregarUsuarios() {
     const res = await fetch(`${getApiBaseUrl()}/listar-usuarios`, { headers: getAuthHeaders() });
     const data = await res.json();
     usuariosCache = data.data || [];
-    renderTabelaUsuarios(usuariosCache);
+    filtrarUsuarios();
   } catch (err) { toastError('Erro ao carregar usuários: ' + err.message); }
 }
+
+function filtrarUsuarios() {
+  const busca = (document.getElementById('busca-usuarios')?.value || '').trim().toLowerCase();
+  const filtrados = usuariosCache.filter(u => {
+    if (!busca) return true;
+    return [u.email, u.nome, u.filial].some(v => (v || '').toLowerCase().includes(busca));
+  });
+  renderTabelaUsuarios(filtrados);
+}
+document.getElementById('busca-usuarios')?.addEventListener('input', filtrarUsuarios);
 
 function renderTabelaUsuarios(usuarios) {
   const tbody = document.querySelector('#tabela-usuarios tbody');
   tbody.innerHTML = '';
   if (!usuarios || usuarios.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6">Nenhum usuário cadastrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7">Nenhum usuário cadastrado.</td></tr>';
     return;
   }
   usuarios.forEach(u => {
@@ -532,6 +542,9 @@ function renderTabelaUsuarios(usuarios) {
       '<td>' + (u.nivel || '') + '</td>' +
       '<td>' + (u.filial || '') + '</td>' +
       '<td>' + (u.status || '') + '</td>' +
+      '<td>' + (u.senhaDefinida === false
+        ? '<span style="color:#2e7d32;font-weight:600;">Sim</span>'
+        : '<span style="color:var(--sce-muted);">Não</span>') + '</td>' +
       '<td>' + (isSelf ? '' :
         '<a class="btn-small waves-effect" onclick="editarUsuarioUI(\'' + u.email + '\')" title="Editar"><i class="material-icons">edit</i></a> ' +
         '<a class="btn-small waves-effect" onclick="redefinirSenhaUI(\'' + u.email + '\')" title="Redefinir senha"><i class="material-icons">vpn_key</i></a> ' +
