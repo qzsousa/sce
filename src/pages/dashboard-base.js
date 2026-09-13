@@ -668,10 +668,27 @@ export async function abrirHistorico(equipamentoId) {
   try {
     const registros = await getHistoricoEquipamento(getToken(), equipamentoId);
     tbody.innerHTML = '';
-    if (!registros?.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sce-muted);">Nenhuma alteração registrada.</td></tr>'; return; }
-    registros.forEach(r => {
+
+    // Linha de criação (cadastro do equipamento)
+    const trCriacao = document.createElement('tr');
+    trCriacao.innerHTML =
+      `<td>${formatDate(item.dataCadastro)}</td>` +
+      `<td>${item.cadastradoPor || ''}</td>` +
+      `<td><strong>Criação</strong></td>` +
+      `<td>-</td>` +
+      `<td>Equipamento cadastrado</td>`;
+    tbody.appendChild(trCriacao);
+
+    const mudancas = (registros || []).filter(r => String(r.campo || '').toLowerCase() !== 'criação');
+    if (!mudancas.length) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${formatDate(r.data)}</td><td>${r.autor || ''}</td><td><strong>${r.campo || ''}</strong></td><td>${r.valorAntigo || '-'}</td><td>${r.valorNovo || '-'}</td>`;
+      tr.innerHTML = '<td colspan="5" style="text-align:center;color:var(--sce-muted);">Nenhuma alteração adicional registrada.</td></tr>';
+      tbody.appendChild(tr);
+      return;
+    }
+    mudancas.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${formatDate(r.data)}</td><td>${r.autor || ''}</td><td><strong>${r.campo || ''}</strong></td><td>${r.valor_antigo || '-'}</td><td>${r.valor_novo || '-'}</td>`;
       tbody.appendChild(tr);
     });
   } catch (err) {
