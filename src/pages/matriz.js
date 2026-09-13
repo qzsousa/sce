@@ -76,10 +76,13 @@ let chartUnidade = null;
 let chartCategoria = null;
 
 let equipamentosCache = [];
-let equipamentosFiltrados = [];
-let campoOrdenacao = 'patrimonio';
+let totalEquipamentos = 0;
+let cacheStats = { porStatus: {}, porUnidade: {}, porCategoria: {} };
+let dropdownsInicializados = false;
+let campoOrdenacao = '';
 let ordemAtual = 'asc';
 let paginaAtual = 1;
+let limiteExibicao = 100;
 
 async function carregarInfoCabecalho() {
   try {
@@ -112,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   await initDashboardBase({ perfil: 'Matriz', loadEquipamentos: false });
   inicializarFiltrosRapidos();
-  inicializarSeletorUnidade();
+  popularFiltroCategoria();
   carregarInfoCabecalho();
   
   // Carrega equipamentos globais (Matriz vê tudo)
@@ -137,8 +140,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-alterar-status-lote').addEventListener('click', abrirAlterarStatusLote);
   document.getElementById('btn-confirmar-alterar-status-lote').addEventListener('click', confirmarAlterarStatusLote);
 
-  document.getElementById('filtro-busca').addEventListener('input', aplicarFiltros);
+  let buscaDebounceTimer = null;
+  document.getElementById('filtro-busca').addEventListener('input', function() {
+    clearTimeout(buscaDebounceTimer);
+    buscaDebounceTimer = setTimeout(aplicarFiltros, 400);
+  });
   document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+  document.getElementById('seletor-unidade').addEventListener('change', aplicarFiltros);
   document.getElementById('filtro-categoria').addEventListener('change', function() {
     const categoria = this.value;
     popularFiltroMarca(categoria);
@@ -150,6 +158,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     aplicarFiltros();
   });
   document.getElementById('filtro-modelo').addEventListener('change', aplicarFiltros);
+  document.getElementById('limite-exibicao').addEventListener('change', function() {
+    limiteExibicao = parseInt(this.value, 10) || 100;
+    paginaAtual = 1;
+    carregarEquipamentosGlobal();
+  });
   
   document.querySelectorAll('.sortable').forEach(th => {
     th.addEventListener('click', function() {
@@ -163,37 +176,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.check-equipamento').forEach(el => el.checked = checked);
   });
 
+  document.getElementById('btn-pagina-anterior').addEventListener('click', () => mudarPagina(-1));
+  document.getElementById('btn-proxima-pagina').addEventListener('click', () => mudarPagina(1));
+
   hideLoading();
   console.log('✅ Dashboard Matriz inicializado!');
 });
 
 // ============================================================================
-// CARREGAMENTO DE EQUIPAMENTOS (GLOBAL - MATRIZ VÊ TUDO)
+// CARREGAMENTO DE EQUIPAMENTOS (GLOBAL - MATRIZ, SERVER-SIDE PAGINADO)
 // ============================================================================
+
+function montarQueryParams() {
+  const params = new URLSearchParams();
+  params.set('limite', limiteExibicao);
+  params.set('offset', (paginaAtual - 1) * limiteExibicao);
+  const busca = (document.getElementById('filtro-busca')?.value || '').trim();
+  const status = document.getElementById('filtro-status')?.value || '';
+  const unidade = document.getElementById('seletor-unidade')?.value || '';
+  const categoria = document.getElementById('filtro-categoria')?.value || '';
+  const marca = document.getElementById('filtro-marca')?.value || '';
+  const modelo = document.getElementById('filtro-modelo')?.value || '';
+  if (busca) params.set('busca', busca);
+  if (status) params.set('status', status);
+  if (unidade) params.set('unidade', unidade);
+  if (categoria) params.set('categoria', categoria);
+  if (marca) params.set('marca', marca);
+  if (modelo) params.set('modelo', modelo);
+  if (campoOrdenacao) {
+    params.set('ordem', campoOrdenacao);
+    params.set('direcao', ordemAtual);
+  }
+  return params.toString();
+}
 
 async function carregarEquipamentosGlobal() {
   showLoading();
   try {
-    const res = await fetch(`${getApiBaseUrl()}/equipamentos-global`, {
+    const res = await fetch(`${getApiBaseUrl()}/equipamentos-global?${montarQueryParams()}`, {
       headers: getAuthHeaders()
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
-    
-    equipamentosCache = data.data || [];
+
+    const payload = data.data || {};
+    equipamentosCache = payload.data || [];
+    totalEquipamentos = payload.total || 0;
+    cacheStats = payload.stats || { porStatus: {}, porUnidade: {}, porCategoria: {} };
     setEquipamentosCache(equipamentosCache);
-    equipamentosCache.forEach(item => {
-      if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
-        const hoje = new Date();
-        const prevista = new Date(item.dataPrevistaDevolucao);
-        item.emAtraso = prevista < hoje;
-      } else { item.emAtraso = false; }
-    });
-    
-    inicializarSeletorUnidade();
-    atualizarFiltrosOpcoes(equipamentosCache);
-    popularFiltroCategoria();
-    aplicarFiltros();
+
+    if (!dropdownsInicializados) {
+      popularSeletorUnidade(cacheStats.porUnidade);
+      popularFiltroStatus(cacheStats.porStatus);
+      dropdownsInicializados = true;
+    }
+
+    renderTabelaGlobal(equipamentosCache);
+    atualizarKpisDeStats(totalEquipamentos, cacheStats.porStatus);
+    renderGraficosDeStats(cacheStats);
+    atualizarPaginacao();
   } catch (err) {
     console.error('Erro ao carregar:', err);
     toastError('Erro ao carregar: ' + err.message);
@@ -202,22 +243,51 @@ async function carregarEquipamentosGlobal() {
   }
 }
 
+function atualizarPaginacao() {
+  const totalPaginas = Math.max(1, Math.ceil(totalEquipamentos / limiteExibicao));
+  const info = document.getElementById('pagina-info');
+  if (info) info.innerText = `Página ${paginaAtual} de ${totalPaginas} - ${totalEquipamentos} itens`;
+  const btnAnt = document.getElementById('btn-pagina-anterior');
+  const btnProx = document.getElementById('btn-proxima-pagina');
+  if (btnAnt) btnAnt.disabled = paginaAtual <= 1;
+  if (btnProx) btnProx.disabled = paginaAtual >= totalPaginas;
+  const contador = document.getElementById('contador-equipamentos');
+  if (contador) contador.innerText = totalEquipamentos;
+}
+
+function mudarPagina(delta) {
+  const totalPaginas = Math.max(1, Math.ceil(totalEquipamentos / limiteExibicao));
+  const nova = paginaAtual + delta;
+  if (nova < 1 || nova > totalPaginas) return;
+  paginaAtual = nova;
+  carregarEquipamentosGlobal();
+}
+
 // ============================================================================
 // FILTROS E SELETOR DE UNIDADE
 // ============================================================================
 
-function inicializarSeletorUnidade() {
+function popularSeletorUnidade(porUnidade) {
   const select = document.getElementById('seletor-unidade');
   if (!select) return;
-  const unidades = equipamentosCache
-    .map(e => e.unidade)
-    .filter(u => u && u.trim())
-    .filter((u, i, arr) => arr.indexOf(u) === i)
+  const unidades = Object.keys(porUnidade || {})
+    .filter(u => u && u !== 'Sem unidade')
     .sort();
   select.innerHTML = '<option value="">Todas as unidades</option>' +
     unidades.map(u => `<option value="${u}">${u}</option>`).join('');
-  document.getElementById('total-unidades').innerText = unidades.length;
-  select.addEventListener('change', aplicarFiltros);
+  const totalUnidades = document.getElementById('total-unidades');
+  if (totalUnidades) totalUnidades.innerText = unidades.length;
+}
+
+function popularFiltroStatus(porStatus) {
+  const select = document.getElementById('filtro-status');
+  if (!select) return;
+  const statuses = Object.keys(porStatus || {})
+    .filter(s => s && s !== 'Removido')
+    .sort();
+  select.innerHTML = '<option value="">Todos os status</option>' +
+    statuses.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (window.M && M.FormSelect) M.FormSelect.init(select);
 }
 
 function inicializarFiltrosRapidos() {
@@ -235,21 +305,6 @@ function inicializarFiltrosRapidos() {
   });
 }
 
-function atualizarFiltrosOpcoes(equipamentos) {
-  preencherSelectFiltro('filtro-status', equipamentos.map(e => e.status), 'Todos os status');
-  preencherSelectFiltro('filtro-categoria', equipamentos.map(e => e.categoria), 'Todas as categorias');
-}
-
-function preencherSelectFiltro(id, valores, label) {
-  const select = document.getElementById(id);
-  if (!select) return;
-  const atual = select.value;
-  const unicos = valores.filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i).sort();
-  select.innerHTML = '<option value="">' + label + '</option>' + unicos.map(v => `<option value="${v}">${v}</option>`).join('');
-  select.value = atual;
-  if (window.M && M.FormSelect) M.FormSelect.init(select);
-}
-
 function getIdsSelecionados() {
   return Array.from(document.querySelectorAll('.check-equipamento:checked')).map(el => el.value);
 }
@@ -265,13 +320,6 @@ function ordenarTabela(campo) {
     campoOrdenacao = campo;
     ordemAtual = 'asc';
   }
-  equipamentosFiltrados.sort((a, b) => {
-    const valA = (a[campo] || '').toString().toLowerCase();
-    const valB = (b[campo] || '').toString().toLowerCase();
-    if (valA < valB) return ordemAtual === 'asc' ? -1 : 1;
-    if (valA > valB) return ordemAtual === 'asc' ? 1 : -1;
-    return 0;
-  });
   document.querySelectorAll('.sortable').forEach(th => {
     const icon = th.querySelector('.material-icons');
     if (icon) icon.textContent = 'unfold_more';
@@ -281,32 +329,13 @@ function ordenarTabela(campo) {
     const icon = thAtual.querySelector('.material-icons');
     if (icon) icon.textContent = ordemAtual === 'asc' ? 'arrow_upward' : 'arrow_downward';
   }
-  renderTabelaGlobal(equipamentosFiltrados);
+  paginaAtual = 1;
+  carregarEquipamentosGlobal();
 }
 
 function aplicarFiltros() {
-  const busca = document.getElementById('filtro-busca')?.value?.trim()?.toLowerCase() || '';
-  const status = document.getElementById('filtro-status')?.value || '';
-  const unidadeSelecionada = document.getElementById('seletor-unidade')?.value || '';
-  const categoria = document.getElementById('filtro-categoria')?.value || '';
-  const marca = document.getElementById('filtro-marca')?.value || '';
-  const modelo = document.getElementById('filtro-modelo')?.value || '';
-  
-  equipamentosFiltrados = equipamentosCache.filter(item => {
-    if (status && item.status !== status) return false;
-    if (unidadeSelecionada && item.unidade !== unidadeSelecionada) return false;
-    if (categoria && item.categoria !== categoria) return false;
-    if (marca && item.marca !== marca) return false;
-    if (modelo && item.modelo !== modelo) return false;
-    if (!busca) return true;
-    return [item.patrimonio, item.numeroSerie, item.modelo, item.unidade].join(' ').toLowerCase().includes(busca);
-  });
-  
   paginaAtual = 1;
-  renderTabelaGlobal(equipamentosFiltrados);
-  atualizarKpis(equipamentosFiltrados);
-  renderGraficos(equipamentosFiltrados);
-  document.getElementById('contador-equipamentos').innerText = equipamentosFiltrados.length;
+  carregarEquipamentosGlobal();
 }
 
 // ============================================================================
@@ -357,13 +386,17 @@ function renderTabelaGlobal(equipamentos) {
   const tbody = document.querySelector('#tabela-equipamentos-global tbody');
   if (!tbody) return;
   tbody.innerHTML = '';
-  
-  if (!equipamentos || equipamentos.length === 0) {
+
+  const lista = (limiteExibicao > 0 && equipamentos && equipamentos.length > limiteExibicao)
+    ? equipamentos.slice(0, limiteExibicao)
+    : (equipamentos || []);
+
+  if (!lista || lista.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--sce-muted);">🔍 Nenhum equipamento encontrado com os filtros aplicados.</td></tr>';
     return;
   }
-  
-  equipamentos.forEach(item => {
+
+  lista.forEach(item => {
     const tr = document.createElement('tr');
     const statusClass = 'status-' + (item.status || '').toLowerCase().replace(/ /g, '-');
     tr.className = statusClass;
@@ -383,13 +416,37 @@ function renderTabelaGlobal(equipamentos) {
 }
 
 // ============================================================================
-// GRÁFICOS (MATRIZ TEM 3)
+// GRÁFICOS E KPIs (MATRIZ)
 // ============================================================================
 
-function renderGraficos(equipamentos) {
-  // Status
-  const porStatus = {};
-  equipamentos.forEach(item => { const s = item.status || 'Não definido'; porStatus[s] = (porStatus[s] || 0) + 1; });
+function kpiCard(icone, valor, label, extraClass) {
+  return '<div class="col s12 m3">' +
+    '<div class="sce-kpi ' + (extraClass || '') + '">' +
+      '<div class="sce-kpi-icon"><i class="material-icons">' + icone + '</i></div>' +
+      '<div><div class="sce-kpi-value">' + valor + '</div><div class="sce-kpi-label">' + label + '</div></div>' +
+    '</div></div>';
+}
+
+function atualizarKpisDeStats(total, porStatus) {
+  const kpisEl = document.getElementById('kpis');
+  if (!kpisEl) return;
+  const disponiveis = porStatus['Disponível'] || 0;
+  const manutencao = porStatus['Manutenção'] || 0;
+  const quebrados = porStatus['Quebrado'] || 0;
+  const extraviado = porStatus['Extraviado'] || 0;
+  kpisEl.innerHTML =
+    kpiCard('devices', total, 'Total', 'kpi-total') +
+    kpiCard('check_circle', disponiveis, 'Disponíveis', 'kpi-disponiveis') +
+    kpiCard('build', manutencao, 'Manutenção', 'kpi-manutencao') +
+    kpiCard('report', quebrados, 'Quebrados', 'kpi-quebrados') +
+    kpiCard('assignment_late', extraviado, 'Extraviado', 'kpi-extraviado');
+}
+
+function renderGraficosDeStats(stats) {
+  const porStatus = stats.porStatus || {};
+  const porUnidade = stats.porUnidade || {};
+  const porCategoria = stats.porCategoria || {};
+
   const labelsStatus = Object.keys(porStatus);
   const dataStatus = labelsStatus.map(l => porStatus[l]);
   const coresStatus = ['#1565c0', '#43a047', '#ef6c00', '#d32f2f', '#8e24aa', '#00838f', '#795548', '#607d8b'];
@@ -399,9 +456,6 @@ function renderGraficos(equipamentos) {
     options: { responsive: true, maintainAspectRatio: false }
   });
 
-  // Unidade
-  const porUnidade = {};
-  equipamentos.forEach(item => { const u = item.unidade || 'Sem unidade'; porUnidade[u] = (porUnidade[u] || 0) + 1; });
   const labelsUnidade = Object.keys(porUnidade);
   const dataUnidade = labelsUnidade.map(l => porUnidade[l]);
   const coresUnidade = ['#1b5e20', '#2e7d32', '#388e3c', '#43a047', '#4caf50', '#66bb6a', '#81c784', '#a5d6a7'];
@@ -411,9 +465,6 @@ function renderGraficos(equipamentos) {
     options: { responsive: true, maintainAspectRatio: false }
   });
 
-  // Categoria
-  const porCategoria = {};
-  equipamentos.forEach(item => { const c = item.categoria || 'Sem categoria'; porCategoria[c] = (porCategoria[c] || 0) + 1; });
   const labelsCategoria = Object.keys(porCategoria);
   const dataCategoria = labelsCategoria.map(l => porCategoria[l]);
   const coresCategoria = ['#4a148c', '#6a1b9a', '#7b1fa2', '#8e24aa', '#9c27b0', '#ab47bc', '#ba68c8', '#ce93d8'];

@@ -90,6 +90,7 @@
         <div class="campo-filtro"><label for="filtro-categoria">Categoria</label><select id="filtro-categoria" class="browser-default"><option value="">Todas</option></select></div>
         <div class="campo-filtro"><label for="filtro-marca">Marca</label><select id="filtro-marca" class="browser-default"><option value="">Todas</option></select></div>
         <div class="campo-filtro"><label for="filtro-modelo">Modelo</label><select id="filtro-modelo" class="browser-default"><option value="">Todos</option></select></div>
+        <div class="campo-filtro"><label for="limite-exibicao">Exibir</label><select id="limite-exibicao" class="browser-default"><option value="10">10</option><option value="50">50</option><option value="100" selected>100</option><option value="500">500</option></select></div>
       </div>
 
       <div class="tabela-equipamentos">
@@ -106,10 +107,17 @@
           </tr>
         </thead>
         <tbody></tbody>
-      </table>
+        </table>
+      </div>
+      <div class="paginacao">
+        <span class="info" id="pagina-info">Página 1 de 1 - 0 itens</span>
+        <div class="botoes">
+          <button id="btn-pagina-anterior" disabled>◀ Anterior</button>
+          <button id="btn-proxima-pagina">Próxima ▶</button>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 </div>
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">

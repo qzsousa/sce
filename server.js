@@ -497,11 +497,70 @@ app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
 
 app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  const incluirRemovidos = req.query.incluirRemovidos === 'true';
-  const session = await requireSession(token, niveis.MATRIZ);
-  const todos = await getAllEquipamentos();
-  const filtrados = todos.filter(item => incluirRemovidos || item.status !== 'Removido');
-  res.json(standardResponse(true, filtrados));
+  await requireSession(token, niveis.MATRIZ);
+
+  const limite = Math.max(1, Math.min(parseInt(req.query.limite, 10) || 100, 500));
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const busca = String(req.query.busca || '').trim();
+  const status = String(req.query.status || '').trim();
+  const unidade = String(req.query.unidade || '').trim();
+  const categoria = String(req.query.categoria || '').trim();
+  const marca = String(req.query.marca || '').trim();
+  const modelo = String(req.query.modelo || '').trim();
+
+  const colunasOrdem = {
+    modelo: 'modelo',
+    patrimonio: 'patrimonio',
+    numeroSerie: 'numero_serie',
+    unidade: 'unidade',
+    status: 'status',
+  };
+  const ordem = colunasOrdem[req.query.ordem] || 'data_cadastro';
+  const ascendente = req.query.direcao !== 'desc';
+
+  const aplicarFiltros = (q) => {
+    let query = q.neq('status', 'Removido');
+    if (status) query = query.eq('status', status);
+    if (unidade) query = query.eq('unidade', unidade);
+    if (categoria) query = query.eq('categoria', categoria);
+    if (marca) query = query.eq('marca', marca);
+    if (modelo) query = query.eq('modelo', modelo);
+    if (busca) {
+      const b = `%${busca}%`;
+      query = query.or(`patrimonio.ilike.${b},numero_serie.ilike.${b},modelo.ilike.${b},unidade.ilike.${b}`);
+    }
+    return query;
+  };
+
+  // Página de resultados
+  const pageQuery = aplicarFiltros(
+    sheets.supabase.from('equipamentos').select('*', { count: 'exact' })
+  ).order(ordem, { ascending: ascendente }).range(offset, offset + limite - 1);
+
+  const { data, count, error } = await pageQuery;
+  if (error) throw new Error(error.message);
+
+  // Agregados (KPIs + gráficos) apenas com as colunas necessárias, respeitando filtros
+  const { data: statsRows, error: statsError } = await aplicarFiltros(
+    sheets.supabase.from('equipamentos').select('status, unidade, categoria')
+  );
+  if (statsError) throw new Error(statsError.message);
+
+  const porStatus = {}, porUnidade = {}, porCategoria = {};
+  for (const linha of (statsRows || [])) {
+    const s = linha.status || 'Não definido';
+    porStatus[s] = (porStatus[s] || 0) + 1;
+    const u = linha.unidade || 'Sem unidade';
+    porUnidade[u] = (porUnidade[u] || 0) + 1;
+    const c = linha.categoria || 'Sem categoria';
+    porCategoria[c] = (porCategoria[c] || 0) + 1;
+  }
+
+  res.json(standardResponse(true, {
+    data: (data || []).map(toCamelCase),
+    total: count || 0,
+    stats: { porStatus, porUnidade, porCategoria },
+  }));
 }));
 
 app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
