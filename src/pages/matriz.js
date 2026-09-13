@@ -117,6 +117,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Carrega equipamentos globais (Matriz vê tudo)
   await carregarEquipamentosGlobal();
+
+  // Atualização automática a cada 5 minutos
+  setInterval(() => { carregarEquipamentosGlobal(); }, 5 * 60 * 1000);
   
   // Event listeners
   document.getElementById('btn-abrir-gestao-usuarios').addEventListener('click', abrirGestaoUsuarios);
