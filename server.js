@@ -1062,9 +1062,10 @@ app.get('/api/especificacoes-modelo', asyncHandler(async (req, res) => {
 
 app.get('/api/exportar-csv', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  await requireSession(token);
+  const session = await requireSession(token);
 
-  const equipamentos = await getAllEquipamentos();
+  const todos = await getAllEquipamentos();
+  const equipamentos = todos.filter(item => item.status !== 'Removido' && sheets.sessaoTemAcessoAUnidade(session, item.unidade));
   const headers = HEADER_MAP.EQUIPAMENTOS;
   const csv = [headers.join(',')];
   for (const eq of equipamentos) {
@@ -1075,9 +1076,10 @@ app.get('/api/exportar-csv', asyncHandler(async (req, res) => {
 
 app.post('/api/exportar-pdf', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  await requireSession(token);
+  const session = await requireSession(token);
 
-  const equipamentos = await getAllEquipamentos();
+  const todos = await getAllEquipamentos();
+  const equipamentos = todos.filter(item => item.status !== 'Removido' && sheets.sessaoTemAcessoAUnidade(session, item.unidade));
 
   const doc = new PDFDocument({
     size: 'A4',

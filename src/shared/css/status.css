@@ -11,6 +11,10 @@ tr.status-inservível { background-color: var(--status-inservivel) !important; }
 tr.status-em-verificação { background-color: var(--status-em-verificacao) !important; }
 tr.status-removido { background-color: var(--status-removido) !important; opacity: 0.7; }
 
+/* Quebrado: destacado em vermelho */
+tr.status-quebrado { background-color: #ffcdd2 !important; }
+tr.status-quebrado td { color: #b71c1c; }
+
 /* Variações com hífen (para compatibilidade) */
 tr.status-manutencao { background-color: var(--status-manutencao) !important; }
 tr.status-em_verificacao { background-color: var(--status-em-verificacao) !important; }
