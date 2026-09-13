@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="api-base-url" content="https://sce-nyjc.onrender.com/api">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
   <!-- Materialize CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
@@ -17,16 +18,22 @@
 
   <style>
     body {
-      background: linear-gradient(-45deg, #e3f0fd, #eef4fb, #f6f0fd, #e3f0fd);
-      background-size: 400% 400%;
-      animation: sceGradBounce 18s ease infinite;
+      background: #eef4fb;
       min-height: 100vh;
       margin: 0;
     }
-    @keyframes sceGradBounce {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
+
+    #sce-bg-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+    .sce-login-wrap {
+      position: relative;
+      z-index: 1;
     }
 
     .sce-login-wrap {
@@ -55,19 +62,14 @@
       margin-bottom: 20px;
     }
     .sce-login-brand-row .logo-icon {
-      width: 52px; height: 52px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, var(--sce-primary) 0%, var(--sce-primary-dark) 100%);
-      color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: var(--sce-shadow-md);
+      line-height: 0;
       animation: sceFloat 3.5s ease-in-out infinite;
     }
     @keyframes sceFloat {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-6px); }
     }
-    .sce-login-brand-row .logo-icon .material-icons { font-size: 30px; }
+    .sce-login-brand-row .logo-icon img { height: 68px; width: auto; }
     .sce-login-brand-row h5 { margin: 0; color: var(--sce-ink); font-weight: 700; }
     .sce-login-brand-row p { margin: 2px 0 0; color: var(--sce-muted); font-size: .8rem; }
 
@@ -145,6 +147,8 @@
   </style>
 </head>
 <body>
+  <canvas id="sce-bg-canvas"></canvas>
+
   <div class="sce-header">
     <span class="brand">
       <img src="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP" alt="Logotipo Leste 3" style="width:75px;">
@@ -155,7 +159,7 @@
   <div class="sce-login-wrap">
     <div class="card sce-login-card">
       <div class="sce-login-brand-row">
-        <div class="logo-icon"><i class="material-icons">inventory_2</i></div>
+        <div class="logo-icon"><img src="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP" alt="URE Leste 3"></div>
         <div>
           <h5>SCE - Leste 3</h5>
           <p>Sistema de Controle de Equipamentos</p>

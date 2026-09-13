@@ -291,3 +291,194 @@ document.querySelectorAll('.pwd-toggle').forEach(icon => {
 });
 
 console.log('✅ Login page loaded (email/senha)');
+
+// ============================================================================
+// ANIMATED BACKGROUND — campo de partículas azuis (cor única, devagar)
+// ============================================================================
+
+(function startParticleBackground() {
+  const canvas = document.getElementById('sce-bg-canvas');
+  if (!canvas || !canvas.getContext) return;
+
+  const ctx = canvas.getContext('2d');
+  const HUE = 210, SAT = 85, LUM = 42;   // azul único (sem deslocamento de cor)
+  const GRID_SIZE = 8;
+  const MAX_POP = 220;
+  const LIFESPAN = 1200;
+  const BIRTH_FREQ = 4;                  // maior = nasce menos (mais calmo)
+  const FRAME_INTERVAL = 50;             // ms entre frames (mais lento)
+
+  let W = 0, H = 0, xC = 0, yC = 0;
+  let stepCount = 0;
+  let particles = [];
+  let grid = [];
+  let gridSteps = 0;
+  let gridMaxIndex = 0;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    xC = W / 2;
+    yC = H / 2;
+  }
+
+  function buildGrid() {
+    grid = [];
+    gridSteps = Math.floor(1000 / GRID_SIZE);
+    let i = 0;
+    for (let xx = -500; xx < 500; xx += GRID_SIZE) {
+      for (let yy = -500; yy < 500; yy += GRID_SIZE) {
+        const r = Math.sqrt(xx * xx + yy * yy);
+        const r0 = 100;
+        let field;
+        if (r < r0) field = 255 / r0 * r;
+        else field = 255 - Math.min(255, (r - r0) / 2);
+        grid.push({ x: xx, y: yy, busyAge: 0, spotIndex: i, field });
+        i++;
+      }
+    }
+    gridMaxIndex = i;
+  }
+
+  function birth() {
+    const spot = grid[Math.floor(Math.random() * gridMaxIndex)];
+    particles.push({
+      x: spot.x, y: spot.y,
+      xLast: spot.x, yLast: spot.y,
+      xSpeed: 0, ySpeed: 0,
+      age: 0, ageSinceStuck: 0,
+      attractor: { oldIndex: spot.spotIndex, gridSpotIndex: spot.spotIndex },
+      name: 'seed-' + Math.ceil(10000000 * Math.random()),
+    });
+  }
+
+  function kill(name) {
+    const idx = particles.findIndex((p) => p.name === name);
+    if (idx !== -1) particles.splice(idx, 1);
+  }
+
+  function maxBy(arr, fn) {
+    let best = arr[0];
+    let bestVal = fn(arr[0]);
+    for (let i = 1; i < arr.length; i++) {
+      const v = fn(arr[i]);
+      if (v > bestVal) { bestVal = v; best = arr[i]; }
+    }
+    return best;
+  }
+
+  function isEdge(spot) {
+    const last = -500 + GRID_SIZE * (gridSteps - 1);
+    return spot.x === -500 || spot.x === last || spot.y === -500 || spot.y === last;
+  }
+
+  function move() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.xLast = p.x;
+      p.yLast = p.y;
+
+      let index = p.attractor.gridSpotIndex;
+      let spot = grid[index];
+
+      if (Math.random() < 0.5) {
+        if (!isEdge(spot)) {
+          const candidates = [
+            grid[index - 1], grid[index + 1],
+            grid[index - gridSteps], grid[index + gridSteps],
+          ];
+          const chaos = 30;
+          const next = maxBy(candidates, (e) => e.field + chaos * Math.random());
+          if (next.busyAge === 0 || next.busyAge > 15) {
+            p.ageSinceStuck = 0;
+            p.attractor.oldIndex = index;
+            p.attractor.gridSpotIndex = next.spotIndex;
+            spot = next;
+            spot.busyAge = 1;
+          } else {
+            p.ageSinceStuck++;
+          }
+        } else {
+          p.ageSinceStuck++;
+        }
+      }
+
+      if (p.ageSinceStuck >= 10) { kill(p.name); continue; }
+
+      const k = 8, visc = 0.4;
+      p.xSpeed += -k * (p.x - spot.x);
+      p.ySpeed += -k * (p.y - spot.y);
+      p.xSpeed *= visc;
+      p.ySpeed *= visc;
+      p.x += 0.1 * p.xSpeed;
+      p.y += 0.1 * p.ySpeed;
+
+      p.age++;
+      if (p.age > LIFESPAN) { kill(p.name); }
+    }
+  }
+
+  function dataXYtoCanvasXY(x, y) {
+    const zoom = 1.6;
+    return { x: xC + x * zoom, y: yC + y * zoom };
+  }
+
+  function draw() {
+    ctx.fillStyle = 'rgba(238, 244, 251, 0.10)';
+    ctx.fillRect(0, 0, W, H);
+
+    const stroke = 'hsla(' + HUE + ', ' + SAT + '%, ' + LUM + '%, 1)';
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const last = dataXYtoCanvasXY(p.xLast, p.yLast);
+      const now = dataXYtoCanvasXY(p.x, p.y);
+      const attracSpot = grid[p.attractor.gridSpotIndex];
+      const attracXY = dataXYtoCanvasXY(attracSpot.x, attracSpot.y);
+      const oldAttracSpot = grid[p.attractor.oldIndex];
+      const oldAttracXY = dataXYtoCanvasXY(oldAttracSpot.x, oldAttracSpot.y);
+
+      ctx.strokeStyle = stroke;
+      ctx.fillStyle = stroke;
+      ctx.lineWidth = 1.5;
+
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(now.x, now.y);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(oldAttracXY.x, oldAttracXY.y);
+      ctx.lineTo(attracXY.x, attracXY.y);
+      ctx.arc(attracXY.x, attracXY.y, 1.5, 0, 2 * Math.PI, false);
+      ctx.stroke();
+      ctx.fill();
+    }
+  }
+
+  function evolve() {
+    stepCount++;
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i].busyAge > 0) grid[i].busyAge++;
+    }
+    if (stepCount % BIRTH_FREQ === 0 && particles.length < MAX_POP) birth();
+    move();
+    draw();
+  }
+
+  resize();
+  buildGrid();
+  ctx.fillStyle = '#eef4fb';
+  ctx.fillRect(0, 0, W, H);
+
+  window.addEventListener('resize', () => { resize(); buildGrid(); });
+
+  let lastRun = 0;
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    if (ts - lastRun >= FRAME_INTERVAL) {
+      lastRun = ts;
+      evolve();
+    }
+  }
+  requestAnimationFrame(frame);
+})();
