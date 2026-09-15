@@ -175,13 +175,22 @@ async function criarSessaoLogin(usuario) {
 }
 
 async function getAllEquipamentos() {
-  const { data, error } = await sheets.supabase
-    .from('equipamentos')
-    .select('*')
-    .order('data_cadastro', { ascending: false });
-
-  if (error) throw new Error(`Erro ao buscar equipamentos: ${error.message}`);
-  return (data || []).map(item => toCamelCase(item));
+  // PostgREST limita a 1000 linhas por requisição; paginamos em blocos para ler tudo.
+  const BLOCO = 1000;
+  const todos = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await sheets.supabase
+      .from('equipamentos')
+      .select('*')
+      .order('data_cadastro', { ascending: false })
+      .range(offset, offset + BLOCO - 1);
+    if (error) throw new Error(`Erro ao buscar equipamentos: ${error.message}`);
+    todos.push(...(data || []));
+    if (!data || data.length < BLOCO) break;
+    offset += BLOCO;
+  }
+  return todos.map(item => toCamelCase(item));
 }
 
 // ============================================================
