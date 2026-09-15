@@ -118,9 +118,11 @@ export async function initDashboardBase(options = {}) {
 
 async function carregarNomeUsuario() {
   try {
-    const nome = await getNomeUsuario(getToken());
+    const dados = await getNomeUsuario(getToken());
+    // O endpoint retorna um objeto { nome, nivel, filial, email }; extraímos só o nome
+    const nome = (dados && typeof dados === 'object') ? (dados.nome || 'Usuário') : (dados || 'Usuário');
     const el = document.getElementById('nome-usuario') || document.getElementById('nome-tecnico');
-    if (el) el.innerText = nome || 'Usuário';
+    if (el) el.innerText = nome;
   } catch {
     const el = document.getElementById('nome-usuario') || document.getElementById('nome-tecnico');
     if (el) el.innerText = 'Usuário';

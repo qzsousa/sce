@@ -72,7 +72,6 @@ let equipamentoIdManutencaoAtual = null;
 let usuariosCache = [];
 
 let chartStatus = null;
-let chartUnidade = null;
 let chartCategoria = null;
 
 let equipamentosCache = [];
@@ -446,7 +445,6 @@ function atualizarKpisDeStats(total, porStatus) {
 
 function renderGraficosDeStats(stats) {
   const porStatus = stats.porStatus || {};
-  const porUnidade = stats.porUnidade || {};
   const porCategoria = stats.porCategoria || {};
 
   const labelsStatus = Object.keys(porStatus);
@@ -455,15 +453,6 @@ function renderGraficosDeStats(stats) {
   if (chartStatus) chartStatus.destroy();
   chartStatus = new Chart(document.getElementById('canvas-chart-status').getContext('2d'), {
     type: 'pie', data: { labels: labelsStatus, datasets: [{ data: dataStatus, backgroundColor: coresStatus }] },
-    options: { responsive: true, maintainAspectRatio: false }
-  });
-
-  const labelsUnidade = Object.keys(porUnidade);
-  const dataUnidade = labelsUnidade.map(l => porUnidade[l]);
-  const coresUnidade = ['#1b5e20', '#2e7d32', '#388e3c', '#43a047', '#4caf50', '#66bb6a', '#81c784', '#a5d6a7'];
-  if (chartUnidade) chartUnidade.destroy();
-  chartUnidade = new Chart(document.getElementById('canvas-chart-unidade').getContext('2d'), {
-    type: 'pie', data: { labels: labelsUnidade, datasets: [{ data: dataUnidade, backgroundColor: coresUnidade }] },
     options: { responsive: true, maintainAspectRatio: false }
   });
 
