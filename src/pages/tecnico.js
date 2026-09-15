@@ -22,7 +22,14 @@ import {
   abrirHistorico,
   abrirModalRemocao,
   confirmarRemocao,
+  abrirCadastroEquipamento,
+  salvarCadastro,
+  salvarEdicao,
+  exportarCSVUI,
+  registrarManutencaoUI,
   exportarPDFUI,
+  setCarregarEquipamentos,
+  setEquipamentosCache,
 } from './dashboard-base.js';
 import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 
@@ -79,6 +86,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   obterNomeTecnico();
   carregarListasCadastro();
   await carregarEquipamentos();
+
+  // Injeta a função de recarga para o dashboard-base usar após salvar/remover
+  // (volta para a página 1 para o item recém-cadastrado aparecer na tela)
+  setCarregarEquipamentos(() => { paginaAtual = 1; return carregarEquipamentos(); });
 
   document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
   document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentos);
@@ -271,18 +282,19 @@ window.onModeloChange = onModeloChange;
 // ============================================================================
 
 function configurarJustificativas(prefixo) {
-  const campoPat = document.getElementById(prefixo + '-patrimonio');
-  const campoSerie = document.getElementById(prefixo + '-numeroSerie');
+  // Patrimônio é opcional: não exigimos nem patrimônio nem justificativa.
   const justPatContainer = document.getElementById('campo-justificativa-patrimonio' + (prefixo === 'edit' ? '-edit' : ''));
-  const justSerieContainer = document.getElementById('campo-justificativa-serie' + (prefixo === 'edit' ? '-edit' : ''));
+  if (justPatContainer) justPatContainer.style.display = 'none';
   const justPatInput = document.getElementById(prefixo + '-justificativaPatrimonio');
+  if (justPatInput) justPatInput.required = false;
+
+  const campoSerie = document.getElementById(prefixo + '-numeroSerie');
+  const justSerieContainer = document.getElementById('campo-justificativa-serie' + (prefixo === 'edit' ? '-edit' : ''));
   const justSerieInput = document.getElementById(prefixo + '-justificativaNumeroSerie');
-  if (!campoPat || !campoSerie || !justPatContainer || !justSerieContainer) return;
-  function verificarPatrimonio() { if (campoPat.value.trim() === '') { justPatContainer.style.display = 'block'; if (justPatInput) justPatInput.required = true; } else { justPatContainer.style.display = 'none'; if (justPatInput) { justPatInput.value = ''; justPatInput.required = false; } } }
+  if (!campoSerie || !justSerieContainer) return;
   function verificarSerie() { if (campoSerie.value.trim() === '') { justSerieContainer.style.display = 'block'; if (justSerieInput) justSerieInput.required = true; } else { justSerieContainer.style.display = 'none'; if (justSerieInput) { justSerieInput.value = ''; justSerieInput.required = false; } } }
-  campoPat.addEventListener('input', verificarPatrimonio);
   campoSerie.addEventListener('input', verificarSerie);
-  verificarPatrimonio(); verificarSerie();
+  verificarSerie();
 }
 
 // ============================================================================
@@ -327,10 +339,11 @@ async function carregarEquipamentos() {
   showLoading();
   try {
     const res = await fetch(`${getApiBaseUrl()}/equipamentos-da-filial`, { headers: getAuthHeaders() });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-    equipamentosCache = data.data || [];
-    equipamentosCache.forEach(item => {
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      equipamentosCache = data.data || [];
+      setEquipamentosCache(equipamentosCache);
+      equipamentosCache.forEach(item => {
       if (item.status === 'Emprestado' && item.dataPrevistaDevolucao) {
         const hoje = new Date(); const prevista = new Date(item.dataPrevistaDevolucao);
         item.emAtraso = prevista < hoje;

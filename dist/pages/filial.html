@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SCE - Dashboard Filial</title>
   <meta name="api-base-url" content="https://sce-nyjc.onrender.com/api">
+  <link rel="icon" href="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP">
   
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
   <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
@@ -18,10 +19,10 @@
     .obrigatorio::after { content: " *"; color: #d32f2f; font-weight: bold; }
     .campo-texto-marca-modelo { display: none; }
   </style>
-  <script type="module" crossorigin src="/assets/filial-DW0TwhTN.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-BGRmcChJ.js">
-  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-DSjMwml1.js">
-  <link rel="stylesheet" crossorigin href="/assets/auth-Cep402Dj.css">
+  <script type="module" crossorigin src="/assets/filial-n9EoiNu8.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-CjFHMmHJ.js">
+  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-Bl5Y8b5D.js">
+  <link rel="stylesheet" crossorigin href="/assets/auth-ZPHhHppy.css">
 </head>
 <body class="theme-filial">
   <div class="sce-header">
@@ -88,14 +89,10 @@
           <thead>
             <tr>
               <th class="no-print" style="width:40px;"><label><input type="checkbox" id="check-todos"><span></span></label></th>
-              <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons">unfold_more</i></th>
-              <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons">unfold_more</i></th>
-              <th data-sort="modelo" class="sortable" style="cursor:pointer;">Modelo <i class="material-icons">unfold_more</i></th>
+              <th data-sort="modelo" class="sortable" style="cursor:pointer;">Equipamento <i class="material-icons">unfold_more</i></th>
               <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons">unfold_more</i></th>
               <th data-sort="numeroSerie" class="sortable" style="cursor:pointer;">Número de Série <i class="material-icons">unfold_more</i></th>
               <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons">unfold_more</i></th>
-              <th>Manutenção</th>
-              <th>Devolução</th>
               <th class="no-print" style="text-align:center;">Ações</th>
             </tr>
           </thead>
@@ -153,9 +150,9 @@
         <div class="input-field col s12 campo-outro" id="new-outro-modelo-container">
           <input type="text" id="new-outro-modelo" placeholder="Digite o modelo"><label for="new-outro-modelo">Outro modelo</label>
         </div>
-        <div class="input-field col s6"><input type="text" id="new-patrimonio"><label for="new-patrimonio" class="obrigatorio">Patrimônio</label></div>
+        <div class="input-field col s6"><input type="text" id="new-patrimonio"><label for="new-patrimonio">Patrimônio</label></div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
-          <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="new-justificativaPatrimonio" class="obrigatorio">Justificativa para ausência de Patrimônio</label>
+          <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio</label>
         </div>
         <div class="input-field col s6"><input type="text" id="new-numeroSerie"><label for="new-numeroSerie" class="obrigatorio">Número de série</label></div>
         <div class="input-field col s12" id="campo-justificativa-serie" style="display:none;">
@@ -231,9 +228,9 @@
         <div class="input-field col s12 campo-outro" id="edit-outro-modelo-container">
           <input type="text" id="edit-outro-modelo" placeholder="Digite o modelo"><label for="edit-outro-modelo">Outro modelo</label>
         </div>
-        <div class="input-field col s6"><input type="text" id="edit-patrimonio"><label for="edit-patrimonio" class="active obrigatorio">Patrimônio</label></div>
+        <div class="input-field col s6"><input type="text" id="edit-patrimonio"><label for="edit-patrimonio" class="active">Patrimônio</label></div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
-          <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="edit-justificativaPatrimonio" class="active obrigatorio">Justificativa para ausência de Patrimônio</label>
+          <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="edit-justificativaPatrimonio" class="active">Justificativa para ausência de Patrimônio</label>
         </div>
         <div class="input-field col s6"><input type="text" id="edit-numeroSerie"><label for="edit-numeroSerie" class="active obrigatorio">Número de série</label></div>
         <div class="input-field col s12" id="campo-justificativa-serie-edit" style="display:none;">
@@ -281,7 +278,7 @@
 
   <div id="modal-confirmar-remocao" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5><p>Esta ação marcará o item como removido. Deseja continuar?</p></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn red" id="btn-confirmar-remocao">Remover</a></div></div>
 
-  <div id="modal-gerenciar-usuarios" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">people</i>Gerenciar usuários</h5><div style="margin-bottom:20px;"><button class="btn waves-effect" id="btn-novo-usuario"><i class="material-icons left">person_add</i>Novo usuário</button><button class="btn-flat" id="btn-atualizar-usuarios"><i class="material-icons left">refresh</i>Atualizar</button></div><table class="striped" id="tabela-usuarios"><thead><tr><th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
+  <div id="modal-gerenciar-usuarios" class="modal modal-fixed-footer"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">people</i>Gerenciar usuários</h5><div style="margin-bottom:20px;"><button class="btn waves-effect" id="btn-novo-usuario"><i class="material-icons left">person_add</i>Novo usuário</button><button class="btn-flat" id="btn-atualizar-usuarios"><i class="material-icons left">refresh</i>Atualizar</button></div><div class="input-field" style="margin-top:12px;"><input type="text" id="busca-usuarios" placeholder="Pesquisar por e-mail, nome ou filial"></div><table class="striped" id="tabela-usuarios"><thead><tr><th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Primeiro acesso</th><th>Ações</th></tr></thead><tbody></tbody></table></div><div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div></div>
 
   <div id="modal-editar-usuario" class="modal"><div class="modal-content"><h5 id="titulo-modal-usuario">Adicionar usuário</h5><input type="hidden" id="usuario-email-original"><div class="row"><div class="input-field col s12"><input type="email" id="usuario-email"><label for="usuario-email">E-mail</label></div><div class="input-field col s12"><input type="text" id="usuario-nome"><label for="usuario-nome">Nome</label></div><div class="input-field col s12" id="campo-senha-temporaria"><input type="password" id="usuario-senha-temporaria"><label for="usuario-senha-temporaria">Senha temporária</label><span class="helper-text" style="font-size:.75rem;color:var(--sce-muted);">Senha provisória — o usuário deverá redefini-la no primeiro acesso.</span></div><input type="hidden" id="usuario-nivel" value="Filial"><input type="hidden" id="usuario-filial" value=""></div></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-usuario">Salvar</a></div></div>
 

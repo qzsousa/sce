@@ -156,20 +156,15 @@ async function carregarListas() {
 }
 
 function configurarJustificativas(prefixo) {
-  const campoPat = document.getElementById(`${prefixo}-patrimonio`);
-  const campoSerie = document.getElementById(`${prefixo}-numeroSerie`);
+  // Patrimônio é opcional: não exigimos nem patrimônio nem justificativa.
   const justPatContainer = document.getElementById(`campo-justificativa-patrimonio${prefixo === 'edit' ? '-edit' : ''}`);
+  if (justPatContainer) justPatContainer.style.display = 'none';
+
+  const campoSerie = document.getElementById(`${prefixo}-numeroSerie`);
   const justSerieContainer = document.getElementById(`campo-justificativa-serie${prefixo === 'edit' ? '-edit' : ''}`);
-  const justPatInput = document.getElementById(`${prefixo}-justificativaPatrimonio`);
   const justSerieInput = document.getElementById(`${prefixo}-justificativaNumeroSerie`);
 
-  if (!campoPat || !campoSerie || !justPatContainer || !justSerieContainer) return;
-
-  function verificarPatrimonio() {
-    const vazio = campoPat.value.trim() === '';
-    justPatContainer.style.display = vazio ? 'block' : 'none';
-    if (justPatInput) { justPatInput.required = vazio; if (!vazio) justPatInput.value = ''; }
-  }
+  if (!campoSerie || !justSerieContainer) return;
 
   function verificarSerie() {
     const vazio = campoSerie.value.trim() === '';
@@ -177,9 +172,7 @@ function configurarJustificativas(prefixo) {
     if (justSerieInput) { justSerieInput.required = vazio; if (!vazio) justSerieInput.value = ''; }
   }
 
-  campoPat.addEventListener('input', verificarPatrimonio);
   campoSerie.addEventListener('input', verificarSerie);
-  verificarPatrimonio();
   verificarSerie();
 }
 
@@ -361,8 +354,6 @@ async function salvarCadastro() {
   if (!dados.status) { toastError('Selecione um status.'); return; }
 
   const patrimonio = dados.patrimonio || '';
-  const justifPat = dados.justificativaPatrimonio || '';
-  if (!patrimonio && !justifPat) { toastError('Preencha o Patrimônio ou justifique sua ausência.'); return; }
 
   const serie = dados.numeroSerie || '';
   const justifSerie = dados.justificativaNumeroSerie || '';
@@ -520,8 +511,7 @@ async function salvarEdicao() {
   const camposAlterados = {};
 
   const patrimonio = document.getElementById('edit-patrimonio').value.trim();
-  const justifPat = document.getElementById('edit-justificativaPatrimonio').value.trim();
-  if (!patrimonio && !justifPat) { toastError('Preencha o Patrimônio ou justifique sua ausência.'); return; }
+  // Patrimônio é opcional — sem exigência de valor ou justificativa.
 
   const serie = document.getElementById('edit-numeroSerie').value.trim();
   const justifSerie = document.getElementById('edit-justificativaNumeroSerie').value.trim();

@@ -540,14 +540,24 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
   const { data, count, error } = await pageQuery;
   if (error) throw new Error(error.message);
 
-  // Agregados (KPIs + gráficos) apenas com as colunas necessárias, respeitando filtros
-  const { data: statsRows, error: statsError } = await aplicarFiltros(
-    sheets.supabase.from('equipamentos').select('status, unidade, categoria')
-  );
-  if (statsError) throw new Error(statsError.message);
+  // Agregados (KPIs + gráficos) apenas com as colunas necessárias, respeitando filtros.
+  // IMPORTANTE: o PostgREST limita a 1000 linhas por requisição — paginamos em blocos
+  // até o fim para que os KPIs/gráficos considerem TODOS os equipamentos.
+  const BLOCO = 1000;
+  const statsRows = [];
+  let offsetStats = 0;
+  while (true) {
+    const { data: bloco, error: statsError } = await aplicarFiltros(
+      sheets.supabase.from('equipamentos').select('status, unidade, categoria')
+    ).range(offsetStats, offsetStats + BLOCO - 1);
+    if (statsError) throw new Error(statsError.message);
+    statsRows.push(...(bloco || []));
+    if (!bloco || bloco.length < BLOCO) break;
+    offsetStats += BLOCO;
+  }
 
   const porStatus = {}, porUnidade = {}, porCategoria = {};
-  for (const linha of (statsRows || [])) {
+  for (const linha of statsRows) {
     const s = linha.status || 'Não definido';
     porStatus[s] = (porStatus[s] || 0) + 1;
     const u = linha.unidade || 'Sem unidade';
@@ -576,14 +586,15 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   const serie = (dados.numeroSerie || '').trim();
   const justifSerie = (dados.justificativaNumeroSerie || '').trim();
 
-  if (!patrimonio && !justifPat) return res.json(standardResponse(false, null, 'Informe o Patrimônio ou uma justificativa para a sua ausência.'));
+  // Patrimônio é opcional; número de série ainda exige valor ou justificativa.
   if (!serie && !justifSerie) return res.json(standardResponse(false, null, 'Informe o Número de Série ou uma justificativa para a sua ausência.'));
 
+  // Verificação de duplicados (ignora itens removidos; ignora vazios)
   const todos = await getAllEquipamentos();
-  const duplicadoPat = patrimonio ? todos.find(e => e.status !== 'Removido' && String(e.patrimonio || '').trim().toUpperCase() === patrimonio.toUpperCase()) : null;
-  const duplicadoSerie = serie ? todos.find(e => e.status !== 'Removido' && String(e.numeroSerie || '').trim().toUpperCase() === serie.toUpperCase()) : null;
-  if (duplicadoPat) return res.json(standardResponse(false, null, `Já existe um equipamento com o patrimônio "${patrimonio}".`));
-  if (duplicadoSerie) return res.json(standardResponse(false, null, `Já existe um equipamento com o número de série "${serie}".`));
+  const duplicadoPat = patrimonio ? todos.find(e => e.status !== 'Removido' && String(e.patrimonio || '').trim() !== '' && String(e.patrimonio || '').trim().toUpperCase() === patrimonio.toUpperCase()) : null;
+  const duplicadoSerie = serie ? todos.find(e => e.status !== 'Removido' && String(e.numeroSerie || '').trim() !== '' && String(e.numeroSerie || '').trim().toUpperCase() === serie.toUpperCase()) : null;
+  if (duplicadoPat) return res.json(standardResponse(false, null, `Já existe um equipamento com o patrimônio "${patrimonio}" (modelo: ${duplicadoPat.modelo || 'N/A'}, unidade: ${duplicadoPat.unidade || 'N/A'}).`));
+  if (duplicadoSerie) return res.json(standardResponse(false, null, `Já existe um equipamento com o número de série "${serie}" (modelo: ${duplicadoSerie.modelo || 'N/A'}, unidade: ${duplicadoSerie.unidade || 'N/A'}).`));
 
   if (dados.status === 'Extraviado') {
     if (!dados._anexoBoletim) return res.json(standardResponse(false, null, 'Para o status "Extraviado", o anexo do Boletim de Ocorrência é obrigatório.'));
@@ -639,10 +650,10 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
     const serieNova = camposAlterados.numeroSerie !== undefined ? camposAlterados.numeroSerie : equipAtual.numeroSerie;
     const patNovo = camposAlterados.patrimonio !== undefined ? camposAlterados.patrimonio : equipAtual.patrimonio;
     const todos = await getAllEquipamentos();
-    const dupPat = patNovo ? todos.find(e => e.id !== id && e.status !== 'Removido' && String(e.patrimonio || '').trim().toUpperCase() === String(patNovo).trim().toUpperCase()) : null;
-    const dupSerie = serieNova ? todos.find(e => e.id !== id && e.status !== 'Removido' && String(e.numeroSerie || '').trim().toUpperCase() === String(serieNova).trim().toUpperCase()) : null;
-    if (dupPat) return res.json(standardResponse(false, null, `Já existe outro equipamento com o patrimônio "${patNovo}".`));
-    if (dupSerie) return res.json(standardResponse(false, null, `Já existe outro equipamento com o número de série "${serieNova}".`));
+    const dupPat = (patNovo && String(patNovo).trim() !== '') ? todos.find(e => e.id !== id && e.status !== 'Removido' && String(e.patrimonio || '').trim() !== '' && String(e.patrimonio || '').trim().toUpperCase() === String(patNovo).trim().toUpperCase()) : null;
+    const dupSerie = (serieNova && String(serieNova).trim() !== '') ? todos.find(e => e.id !== id && e.status !== 'Removido' && String(e.numeroSerie || '').trim() !== '' && String(e.numeroSerie || '').trim().toUpperCase() === String(serieNova).trim().toUpperCase()) : null;
+    if (dupPat) return res.json(standardResponse(false, null, `Já existe outro equipamento com o patrimônio "${patNovo}" (modelo: ${dupPat.modelo || 'N/A'}, unidade: ${dupPat.unidade || 'N/A'}).`));
+    if (dupSerie) return res.json(standardResponse(false, null, `Já existe outro equipamento com o número de série "${serieNova}" (modelo: ${dupSerie.modelo || 'N/A'}, unidade: ${dupSerie.unidade || 'N/A'}).`));
   }
 
   // Validações de status especial

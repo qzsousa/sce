@@ -82,7 +82,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.M) M.FormSelect.init(document.querySelectorAll('select'));
   
   // Injeta a função de recarga para o dashboard-base usar após salvar/remover
-  setCarregarEquipamentos(carregarEquipamentos);
+  // (volta para a página 1 para o item recém-cadastrado aparecer na tela)
+  setCarregarEquipamentos(() => { paginaAtual = 1; return carregarEquipamentos(); });
   
   await initDashboardBase({ perfil: 'Filial', loadEquipamentos: false });
   

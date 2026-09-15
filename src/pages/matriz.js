@@ -111,7 +111,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSelectCascata('edit');
   
   // Injeta a função de recarga global para o dashboard-base usar após salvar/remover
-  setCarregarEquipamentos(carregarEquipamentosGlobal);
+  // (volta para a página 1 para o item recém-cadastrado aparecer na tela)
+  setCarregarEquipamentos(() => { paginaAtual = 1; return carregarEquipamentosGlobal(); });
   
   await initDashboardBase({ perfil: 'Matriz', loadEquipamentos: false });
   inicializarFiltrosRapidos();
@@ -130,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentosGlobal);
   document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
   document.getElementById('btn-adicionar-usuario').addEventListener('click', adicionarUsuarioUI);
+  document.getElementById('btn-salvar-edicao-usuario')?.addEventListener('click', salvarEdicaoUsuario);
   document.getElementById('btn-confirmar-remocao').addEventListener('click', confirmarRemocao);
   document.getElementById('btn-confirmar-redefinir-senha').addEventListener('click', confirmarRedefinirSenha);
   document.getElementById('btn-salvar-edicao').addEventListener('click', salvarEdicao);
@@ -668,7 +670,58 @@ function adicionarUsuarioUI() {
   }).catch(err => { setButtonLoading(btn, false); toastError('Erro ao adicionar: ' + err.message); });
 }
 
-function editarUsuarioUI(email) { toastError('Edição de usuário não implementada na interface atual.'); }
+function editarUsuarioUI(email) {
+  const usuario = usuariosCache.find(u => String(u.email || '').toLowerCase() === String(email).toLowerCase());
+  if (!usuario) { toastError('Usuário não encontrado.'); return; }
+
+  document.getElementById('edit-user-email-original').value = usuario.email;
+  document.getElementById('edit-user-email').value = usuario.email;
+  document.getElementById('edit-user-nome').value = usuario.nome || '';
+  document.getElementById('edit-user-filial').value = usuario.filial || '';
+
+  const nivelEl = document.getElementById('edit-user-nivel');
+  if (nivelEl) {
+    nivelEl.value = usuario.nivel || 'Filial';
+    if (window.M && M.FormSelect) M.FormSelect.init(nivelEl);
+  }
+
+  if (!window.modalEditarUsuarioInstance && window.M && M.Modal) {
+    window.modalEditarUsuarioInstance = M.Modal.init(document.getElementById('modal-editar-usuario'));
+  }
+  window.modalEditarUsuarioInstance.open();
+  if (window.M) M.updateTextFields();
+}
+
+async function salvarEdicaoUsuario() {
+  const btn = document.getElementById('btn-salvar-edicao-usuario');
+  if (isButtonLoading(btn)) return;
+
+  const emailOriginal = document.getElementById('edit-user-email-original').value;
+  const nome = document.getElementById('edit-user-nome').value.trim();
+  const nivel = document.getElementById('edit-user-nivel').value;
+  const filial = document.getElementById('edit-user-filial').value.trim();
+
+  if (!emailOriginal) { toastError('Usuário inválido.'); return; }
+  if (!nome) { toastError('Informe o nome.'); return; }
+
+  setButtonLoading(btn, true);
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/atualizar-usuario`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ emailOriginal, nome, nivel, filial })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    toastSuccess(data.message || 'Usuário atualizado.');
+    if (window.modalEditarUsuarioInstance) window.modalEditarUsuarioInstance.close();
+    carregarUsuarios();
+  } catch (err) {
+    toastError('Erro ao atualizar: ' + err.message);
+  } finally {
+    setButtonLoading(btn, false);
+  }
+}
 
 function removerUsuarioUI(email, el) {
   if (el && isButtonLoading(el)) return;

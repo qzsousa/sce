@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SCE - Dashboard Matriz</title>
   <meta name="api-base-url" content="https://sce-nyjc.onrender.com/api">
+  <link rel="icon" href="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP">
   
   <!-- Materialize CSS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
@@ -19,10 +20,10 @@
     .campo-outro { margin-top: 0; padding: 0 0 10px 0; display: none; }
     .campo-outro input { width: 100%; }
   </style>
-  <script type="module" crossorigin src="/assets/matriz-BIJF2q7-.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-BGRmcChJ.js">
-  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-DSjMwml1.js">
-  <link rel="stylesheet" crossorigin href="/assets/auth-Cep402Dj.css">
+  <script type="module" crossorigin src="/assets/matriz-lPhi5dHu.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/auth-CjFHMmHJ.js">
+  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-Bl5Y8b5D.js">
+  <link rel="stylesheet" crossorigin href="/assets/auth-ZPHhHppy.css">
 </head>
 <body class="theme-matriz">
   <div class="sce-header">
@@ -61,7 +62,7 @@
       </div>
     </div>
 
-    <div id="kpis" class="row"></div>
+    <div id="kpis" class="kpi-grid"></div>
 
     <div class="sce-panel">
       <div class="row" style="margin-bottom:0;">
@@ -92,6 +93,7 @@
         <div class="campo-filtro"><label for="filtro-categoria">Categoria</label><select id="filtro-categoria" class="browser-default"><option value="">Todas</option></select></div>
         <div class="campo-filtro"><label for="filtro-marca">Marca</label><select id="filtro-marca" class="browser-default"><option value="">Todas</option></select></div>
         <div class="campo-filtro"><label for="filtro-modelo">Modelo</label><select id="filtro-modelo" class="browser-default"><option value="">Todos</option></select></div>
+        <div class="campo-filtro"><label for="limite-exibicao">Exibir</label><select id="limite-exibicao" class="browser-default"><option value="10">10</option><option value="50">50</option><option value="100" selected>100</option><option value="500">500</option></select></div>
       </div>
 
       <div class="tabela-equipamentos">
@@ -99,22 +101,26 @@
         <thead>
           <tr>
             <th class="no-print"><label><input type="checkbox" id="check-todos"><span></span></label></th>
-            <th data-sort="unidade" class="sortable" style="cursor:pointer;">Unidade <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="categoria" class="sortable" style="cursor:pointer;">Categoria <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th data-sort="marca" class="sortable" style="cursor:pointer;">Marca <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="modelo" class="sortable" style="cursor:pointer;">Equipamento <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="patrimonio" class="sortable" style="cursor:pointer;">Patrimônio <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="numeroSerie" class="sortable" style="cursor:pointer;">Número de Série <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
+            <th data-sort="unidade" class="sortable" style="cursor:pointer;">Unidade <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
             <th data-sort="status" class="sortable" style="cursor:pointer;">Status <i class="material-icons" style="font-size:14px;vertical-align:middle;">unfold_more</i></th>
-            <th>Manutenção</th>
-            <th>Devolução</th>
             <th class="no-print">Ações</th>
           </tr>
         </thead>
         <tbody></tbody>
-      </table>
+        </table>
+      </div>
+      <div class="paginacao">
+        <span class="info" id="pagina-info">Página 1 de 1 - 0 itens</span>
+        <div class="botoes">
+          <button id="btn-pagina-anterior" disabled>◀ Anterior</button>
+          <button id="btn-proxima-pagina">Próxima ▶</button>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 </div>
   <div id="modal-cadastrar-equipamento" class="modal modal-fixed-footer">
     <div class="modal-content">
@@ -151,11 +157,11 @@
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-patrimonio">
-          <label for="new-patrimonio">Patrimônio *</label>
+          <label for="new-patrimonio">Patrimônio</label>
         </div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
           <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea>
-          <label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio *</label>
+          <label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="new-numeroSerie">
@@ -262,11 +268,11 @@
         </div>
         <div class="input-field col s6">
           <input type="text" id="edit-patrimonio">
-          <label for="edit-patrimonio" class="active">Patrimônio *</label>
+          <label for="edit-patrimonio" class="active">Patrimônio</label>
         </div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
           <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea>
-          <label for="edit-justificativaPatrimonio" class="active">Justificativa para ausência de Patrimônio *</label>
+          <label for="edit-justificativaPatrimonio" class="active">Justificativa para ausência de Patrimônio</label>
         </div>
         <div class="input-field col s6">
           <input type="text" id="edit-numeroSerie">
@@ -355,8 +361,30 @@
   </div>
 
   <div id="modal-usuarios" class="modal modal-fixed-footer">
-    <div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">group</i>Gerenciar usuários</h5><div class="row" style="margin-bottom:0;"><div class="input-field col s12 m3"><input type="email" id="user-email"><label for="user-email">E-mail</label></div><div class="input-field col s12 m3"><input type="text" id="user-nome"><label for="user-nome">Nome</label></div><div class="input-field col s12 m2"><select id="user-nivel"><option value="Matriz">Matriz</option><option value="AdminFilial">AdminFilial</option><option value="Filial" selected>Filial</option><option value="Tecnico">Técnico</option></select><label>Nível</label></div><div class="input-field col s12 m3"><input type="text" id="user-filial"><label for="user-filial">Filial(is) — separe por vírgula se for Técnico</label></div><div class="col s12 m1" style="display:flex; align-items:center; height:60px;"><button class="btn waves-effect btn-small" id="btn-adicionar-usuario" title="Adicionar" style="width:100%;"><i class="material-icons">add</i></button></div></div><table class="striped" id="tabela-usuarios"><thead><tr><th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+    <div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">group</i>Gerenciar usuários</h5><div class="row" style="margin-bottom:0;"><div class="input-field col s12 m3"><input type="email" id="user-email"><label for="user-email">E-mail</label></div><div class="input-field col s12 m3"><input type="text" id="user-nome"><label for="user-nome">Nome</label></div><div class="input-field col s12 m2"><select id="user-nivel"><option value="Matriz">Matriz</option><option value="AdminFilial">AdminFilial</option><option value="Filial" selected>Filial</option><option value="Tecnico">Técnico</option></select><label>Nível</label></div><div class="input-field col s12 m3"><input type="text" id="user-filial"><label for="user-filial">Filial(is) — separe por vírgula se for Técnico</label></div><div class="col s12 m1" style="display:flex; align-items:center; height:60px;"><button class="btn waves-effect btn-small" id="btn-adicionar-usuario" title="Adicionar" style="width:100%;"><i class="material-icons">add</i></button></div></div><div class="input-field" style="margin-top:12px;"><input type="text" id="busca-usuarios" placeholder="Pesquisar por e-mail, nome ou filial"></div><table class="striped" id="tabela-usuarios"><thead><tr><th>E-mail</th><th>Nome</th><th>Nível</th><th>Filial</th><th>Status</th><th>Primeiro acesso</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
     <div class="modal-footer"><a class="modal-close btn-flat">Fechar</a></div>
+  </div>
+
+  <div id="modal-editar-usuario" class="modal">
+    <div class="modal-content">
+      <h5><i class="material-icons left" style="vertical-align:middle;color:var(--sce-primary);">edit</i>Editar usuário</h5>
+      <input type="hidden" id="edit-user-email-original">
+      <div class="row" style="margin-bottom:0;">
+        <div class="input-field col s12"><input type="email" id="edit-user-email" disabled><label for="edit-user-email" class="active">E-mail</label></div>
+        <div class="input-field col s12"><input type="text" id="edit-user-nome"><label for="edit-user-nome" class="active">Nome</label></div>
+        <div class="input-field col s12 m6">
+          <select id="edit-user-nivel">
+            <option value="Matriz">Matriz</option>
+            <option value="AdminFilial">AdminFilial</option>
+            <option value="Filial">Filial</option>
+            <option value="Tecnico">Técnico</option>
+          </select>
+          <label>Nível</label>
+        </div>
+        <div class="input-field col s12 m6"><input type="text" id="edit-user-filial"><label for="edit-user-filial" class="active">Filial(is) — separe por vírgula se for Técnico</label></div>
+      </div>
+    </div>
+    <div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn" id="btn-salvar-edicao-usuario">Salvar</a></div>
   </div>
 
   <div id="modal-confirmar-remocao" class="modal"><div class="modal-content"><h5><i class="material-icons left" style="vertical-align:middle;color:#d32f2f;">warning</i>Confirmar remoção</h5><p>Esta ação marcará o item como removido. Deseja continuar?</p></div><div class="modal-footer"><a class="modal-close btn-flat">Cancelar</a><a class="btn red" id="btn-confirmar-remocao">Remover</a></div></div>
