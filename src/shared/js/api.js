@@ -17,7 +17,7 @@ export function getApiBaseUrl() {
   } catch (e) {
     /* ignora */
   }
-  return 'https://sce-nyjc.onrender.com/api';
+  return '/api';
 }
 
 function getAuthHeaders(token) {
