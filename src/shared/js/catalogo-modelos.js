@@ -46,6 +46,9 @@ export const CATALOGO_MODELOS = [
   { categoria: 'Celular', marca: 'Multilaser', modelo: 'G2', sistemaOperacional: 'Android', processador: 'Quad Core', memoriaRAM: '2 GB', armazenamento: '32 GB' },
   { categoria: 'Tablet', marca: 'Positivo', modelo: 'T2040', sistemaOperacional: 'Android', processador: 'OCTA-CORE', memoriaRAM: '2 GB', armazenamento: '32 GB' },
   { categoria: 'Tablet', marca: 'Positivo', modelo: 'T2070', sistemaOperacional: 'Android', processador: 'OCTA-CORE', memoriaRAM: '4 GB', armazenamento: '64 GB' },
+  { categoria: 'Impressora'},
+  { categoria: 'TV'},
+  { categoria: 'Projetor'}
 ];
 
 // Retorna as especificações de um modelo (ou null se não encontrado)
