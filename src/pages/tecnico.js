@@ -177,8 +177,9 @@ function processarListas(combinacoes) {
   const combinadas = (combinacoes || []).concat(getCombinacoesDoCatalogo());
   combinadas.forEach(item => {
     const cat = item.categoria, marca = item.marca, modelo = item.modelo;
-    if (!cat || !marca || !modelo) return;
-    categorias.add(cat);
+    if (!cat) return;
+    categorias.add(cat); // categoria declarada sozinha no catálogo (sem marca/modelo) também aparece
+    if (!marca || !modelo) return;
     if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
     marcasPorCategoria[cat].add(marca);
     if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};

@@ -34,8 +34,9 @@ export function setListasCache(data) {
     const cat = item.categoria?.trim();
     const marca = item.marca?.trim();
     const modelo = item.modelo?.trim();
-    if (!cat || !marca || !modelo) return;
-    categorias.add(cat);
+    if (!cat) return;
+    categorias.add(cat); // categoria declarada sozinha no catálogo (sem marca/modelo) também aparece
+    if (!marca || !modelo) return;
     if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
     marcasPorCategoria[cat].add(marca);
     if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};

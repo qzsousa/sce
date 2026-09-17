@@ -203,9 +203,10 @@ function processarListas(combinacoes) {
 
   combinadas.forEach(item => {
     const cat = item.categoria, marca = item.marca, modelo = item.modelo;
-    if (!cat || !marca || !modelo) return;
+    if (!cat) return;
     if (cat === 'Monitor') return; // Exclui Monitor da cascata (conforme original)
-    categorias.add(cat);
+    categorias.add(cat); // categoria declarada sozinha no catálogo (sem marca/modelo) também aparece
+    if (!marca || !modelo) return;
     if (!marcasPorCategoria[cat]) marcasPorCategoria[cat] = new Set();
     marcasPorCategoria[cat].add(marca);
     if (!modelosPorCategoriaMarca[cat]) modelosPorCategoriaMarca[cat] = {};
