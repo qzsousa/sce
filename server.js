@@ -492,6 +492,51 @@ app.get('/api/listas-cadastro', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, result));
 }));
 
+// Adiciona uma combinação categoria/marca/modelo às listas (somente Matriz)
+app.post('/api/listas/adicionar', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const session = await requireSession(token, niveis.MATRIZ);
+
+  const categoria = String(req.body?.categoria || '').trim();
+  const marca = String(req.body?.marca || '').trim();
+  const modelo = String(req.body?.modelo || '').trim();
+  if (!categoria || !marca || !modelo) {
+    return res.json(standardResponse(false, null, 'Informe categoria, marca e modelo.'));
+  }
+
+  const { error } = await supabaseAdmin
+    .from('listas')
+    .upsert({ categoria, marca, modelo }, { onConflict: 'categoria,marca,modelo', ignoreDuplicates: true });
+  if (error) throw new Error(error.message);
+
+  await registrarAuditoria('adicionarLista', session.email, { categoria, marca, modelo });
+  res.json(standardResponse(true, { categoria, marca, modelo }));
+}));
+
+// Remove uma combinação categoria/marca/modelo das listas (somente Matriz)
+app.post('/api/listas/remover', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const session = await requireSession(token, niveis.MATRIZ);
+
+  const categoria = String(req.body?.categoria || '').trim();
+  const marca = String(req.body?.marca || '').trim();
+  const modelo = String(req.body?.modelo || '').trim();
+  if (!categoria || !marca || !modelo) {
+    return res.json(standardResponse(false, null, 'Informe categoria, marca e modelo.'));
+  }
+
+  const { error } = await supabaseAdmin
+    .from('listas')
+    .delete()
+    .eq('categoria', categoria)
+    .eq('marca', marca)
+    .eq('modelo', modelo);
+  if (error) throw new Error(error.message);
+
+  await registrarAuditoria('removerLista', session.email, { categoria, marca, modelo });
+  res.json(standardResponse(true, { categoria, marca, modelo }));
+}));
+
 // ============================================================
 // ROTAS DE EQUIPAMENTOS
 // ============================================================

@@ -28,7 +28,7 @@ import {
   setCarregarEquipamentos,
   setEquipamentosCache,
 } from './dashboard-base.js';
-import { setupSelectCascata, getListasCache } from '../shared/js/lists.js';
+import { setupSelectCascata, getListasCache, setListasCache, ordenarCategorias } from '../shared/js/lists.js';
 import { redefinirSenha } from '../shared/js/api.js';
 
 // Expor funções globais para onclick no HTML (executar imediatamente no load do módulo)
@@ -126,6 +126,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Event listeners
   document.getElementById('btn-abrir-gestao-usuarios').addEventListener('click', abrirGestaoUsuarios);
+  document.getElementById('btn-abrir-listas').addEventListener('click', abrirGestaoListas);
+  document.getElementById('btn-adicionar-lista').addEventListener('click', adicionarListaUI);
+  document.getElementById('busca-listas').addEventListener('input', () => renderTabelaListas());
+  document.getElementById('lista-categoria').addEventListener('input', atualizarDatalistsListas);
   document.getElementById('btn-abrir-cadastro').addEventListener('click', abrirCadastroEquipamento);
   document.getElementById('btn-atualizar-lista').addEventListener('click', carregarEquipamentosGlobal);
   document.getElementById('btn-salvar-cadastro').addEventListener('click', salvarCadastro);
@@ -724,6 +728,161 @@ function removerUsuarioUI(email, el) {
     toastSuccess(data.message || 'Usuário removido.');
     carregarUsuarios();
   }).catch(err => { if (el) setButtonLoading(el, false); toastError('Erro ao remover: ' + err.message); });
+}
+
+// ============================================================================
+// GESTÃO DE LISTAS (CATEGORIA/MARCA/MODELO) — SOMENTE MATRIZ
+// ============================================================================
+
+let listasGestaoCache = [];
+let modalListasInstance = null;
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function abrirGestaoListas() {
+  const el = document.getElementById('modal-listas');
+  if (!modalListasInstance && window.M && M.Modal) {
+    modalListasInstance = M.Modal.init(el);
+  }
+  if (modalListasInstance) modalListasInstance.open();
+  await carregarListasGestao();
+}
+
+async function carregarListasGestao() {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/listas-cadastro`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    listasGestaoCache = data.data || [];
+    renderTabelaListas();
+    atualizarDatalistsListas();
+  } catch (err) {
+    toastError('Erro ao carregar listas: ' + err.message);
+  }
+}
+
+function renderTabelaListas() {
+  const tbody = document.querySelector('#tabela-listas tbody');
+  if (!tbody) return;
+
+  const busca = (document.getElementById('busca-listas')?.value || '').trim().toLowerCase();
+  const categorias = [...new Set(listasGestaoCache.map(i => i.categoria))];
+  const indice = {};
+  ordenarCategorias(categorias).forEach((c, i) => indice[c] = i);
+
+  const linhas = listasGestaoCache
+    .filter(i => !busca || [i.categoria, i.marca, i.modelo].some(v => String(v || '').toLowerCase().includes(busca)))
+    .sort((a, b) =>
+      ((indice[a.categoria] ?? 999) - (indice[b.categoria] ?? 999)) ||
+      String(a.marca).localeCompare(String(b.marca), 'pt-BR') ||
+      String(a.modelo).localeCompare(String(b.modelo), 'pt-BR'));
+
+  tbody.innerHTML = '';
+  if (linhas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--sce-muted);">Nenhum item cadastrado nas listas. Adicione acima.</td></tr>';
+    return;
+  }
+
+  linhas.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + esc(item.categoria) + '</td>' +
+      '<td>' + esc(item.marca) + '</td>' +
+      '<td>' + esc(item.modelo) + '</td>' +
+      '<td><a class="btn-small red waves-effect lista-remover" title="Remover"><i class="material-icons">delete</i></a></td>';
+    tr.querySelector('.lista-remover').addEventListener('click', () => removerListaUI(item));
+    tbody.appendChild(tr);
+  });
+}
+
+function atualizarDatalistsListas() {
+  const dlCat = document.getElementById('dl-listas-categorias');
+  if (dlCat) {
+    const categorias = getListasCache()?.categorias?.length
+      ? getListasCache().categorias
+      : ordenarCategorias([...new Set(listasGestaoCache.map(i => i.categoria))]);
+    dlCat.innerHTML = categorias.map(c => '<option value="' + esc(c) + '"></option>').join('');
+  }
+
+  const dlMarca = document.getElementById('dl-listas-marcas');
+  if (dlMarca) {
+    const cat = (document.getElementById('lista-categoria')?.value || '').trim();
+    const cache = getListasCache();
+    let marcas = [];
+    if (cat && cache?.marcasPorCategoria?.[cat]) {
+      marcas = Array.from(cache.marcasPorCategoria[cat]).sort();
+    } else {
+      const todas = new Set();
+      listasGestaoCache.forEach(i => { if (!cat || i.categoria === cat) todas.add(i.marca); });
+      marcas = Array.from(todas).sort();
+    }
+    dlMarca.innerHTML = marcas.map(m => '<option value="' + esc(m) + '"></option>').join('');
+  }
+}
+
+async function adicionarListaUI() {
+  const btn = document.getElementById('btn-adicionar-lista');
+  if (isButtonLoading(btn)) return;
+
+  const categoria = document.getElementById('lista-categoria').value.trim();
+  const marca = document.getElementById('lista-marca').value.trim();
+  const modelo = document.getElementById('lista-modelo').value.trim();
+  if (!categoria || !marca || !modelo) { toastError('Informe categoria, marca e modelo.'); return; }
+
+  setButtonLoading(btn, true);
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/listas/adicionar`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ categoria, marca, modelo })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    toastSuccess('Item adicionado às listas.');
+    document.getElementById('lista-modelo').value = '';
+    if (window.M) M.updateTextFields();
+    await carregarListasGestao();
+    await recarregarCacheDeListas();
+  } catch (err) {
+    toastError('Erro ao adicionar: ' + err.message);
+  } finally {
+    setButtonLoading(btn, false);
+  }
+}
+
+async function removerListaUI(item) {
+  if (!confirm(`Remover "${item.modelo}" (${item.categoria} / ${item.marca}) das listas?`)) return;
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/listas/remover`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ categoria: item.categoria, marca: item.marca, modelo: item.modelo })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    toastSuccess('Item removido das listas.');
+    await carregarListasGestao();
+    await recarregarCacheDeListas();
+  } catch (err) {
+    toastError('Erro ao remover: ' + err.message);
+  }
+}
+
+// Atualiza o cache compartilhado (selects de cadastro/edição e filtros da tabela)
+async function recarregarCacheDeListas() {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/listas-cadastro`, { headers: getAuthHeaders() });
+    const data = await res.json();
+    if (!data.success) return;
+    setListasCache(data.data || []);
+    popularFiltroCategoria();
+    const filtroCat = document.getElementById('filtro-categoria')?.value || '';
+    popularFiltroMarca(filtroCat);
+    popularFiltroModelo(filtroCat, document.getElementById('filtro-marca')?.value || '');
+  } catch (e) {
+    console.warn('Falha ao atualizar cache de listas:', e);
+  }
 }
 
 // Funções para mostrar/ocultar campos condicionais (chamadas via onchange no HTML)
