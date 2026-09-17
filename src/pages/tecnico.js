@@ -264,7 +264,17 @@ function onMarcaChange(prefixo) {
   const selectMarca = document.getElementById(prefixo + '-marca');
   const selectCategoria = document.getElementById(prefixo + '-categoria');
   toggleOutroCampo(prefixo, 'marca');
-  if (selectMarca && selectCategoria && selectMarca.value && selectMarca.value !== '__outro__' && selectCategoria.value && selectCategoria.value !== '__outro__') popularModelos(prefixo, selectCategoria.value, selectMarca.value);
+  if (selectMarca && selectMarca.value === '__outro__') {
+    // Marca digitada manualmente: não há modelos conhecidos — oferece "Outro" no modelo
+    const selectModelo = document.getElementById(prefixo + '-modelo');
+    if (selectModelo) {
+      selectModelo.innerHTML = '<option value="__outro__" selected>Outro (digitar)</option>';
+      if (window.M && M.FormSelect) M.FormSelect.init(selectModelo);
+    }
+    toggleOutroCampo(prefixo, 'modelo');
+    return;
+  }
+  if (selectMarca && selectCategoria && selectMarca.value && selectCategoria.value && selectCategoria.value !== '__outro__') popularModelos(prefixo, selectCategoria.value, selectMarca.value);
   else limparModelo(prefixo);
 }
 

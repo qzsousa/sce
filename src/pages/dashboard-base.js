@@ -4,7 +4,7 @@
 
 import { getEquipamentosDaFilial, getEquipamentosGlobal, createEquipamento, updateEquipamento, cloneEquipamento, removerEquipamento, atualizarStatusManutencao, registrarManutencao, getRegistrosManutencao, getHistoricoEquipamento, getEspecificacoesModelo, listarUsuarios, adicionarUsuario, atualizarUsuario, removerUsuario, getFiliaisParaEmprestimo, registrarEmprestimo, registrarDevolucao, exportarCSV, exportarEquipamentosPDF, getNomeUsuario, getApiBaseUrl, getAnexoUrl } from '../shared/js/api.js';
 import { showLoading, hideLoading, toastSuccess, toastError, toastInfo, setButtonLoading, isButtonLoading, downloadCsv, openModal, closeModal, initModals, initSelects, updateTextFields, fileToBase64, validateFile } from '../shared/js/ui.js';
-import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache, getListasCache } from '../shared/js/lists.js';
+import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache, getListasCache, habilitarOutroModelo } from '../shared/js/lists.js';
 import { formatDate, formatDateShort, getFormData, clearForm, getNested } from '../shared/js/utils.js';
 import { getToken, initAuthFromUrl, logout, getAuthHeaders, isAuthenticated } from '../shared/js/auth.js';
 
@@ -469,6 +469,11 @@ export async function editarEquipamento(id) {
             else if (item.modelo) { selectModelo.value = '__outro__'; document.getElementById('edit-outro-modelo').value = item.modelo; document.getElementById('edit-outro-modelo-container').style.display = 'block'; }
             if (window.M && M.FormSelect) M.FormSelect.init(selectModelo);
           }
+        } else if (selectMarca.value === '__outro__') {
+          // Marca digitada manualmente: modelo também é "Outro (digitar)"
+          habilitarOutroModelo('edit');
+          const outroModeloInput = document.getElementById('edit-outro-modelo');
+          if (outroModeloInput && item.modelo) outroModeloInput.value = item.modelo;
         } else {
           limparMarcaModelo('edit');
         }

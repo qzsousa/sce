@@ -175,6 +175,30 @@ export function limparModelo(prefixo) {
   hideOutro(prefixo, 'modelo');
 }
 
+// Quando a marca é "Outro (digitar)", não existem modelos conhecidos:
+// o select de modelo oferece apenas "Outro (digitar)" já selecionado,
+// liberando o campo de texto para digitar o modelo.
+export function habilitarOutroModelo(prefixo) {
+  const selectModelo = getSelect(prefixo, 'modelo');
+  if (selectModelo) {
+    selectModelo.innerHTML = `<option value="${OUTRO_VALUE}" selected>Outro (digitar)</option>`;
+    if (window.M && M.FormSelect) M.FormSelect.init(selectModelo);
+  }
+  showOutro(prefixo, 'modelo');
+}
+
+// Mesma lógica para categoria "Outro (digitar)": não há marcas conhecidas,
+// então o select de marca oferece apenas "Outro (digitar)" e já cascateia.
+export function habilitarOutraMarca(prefixo) {
+  const selectMarca = getSelect(prefixo, 'marca');
+  if (selectMarca) {
+    selectMarca.innerHTML = `<option value="${OUTRO_VALUE}" selected>Outro (digitar)</option>`;
+    if (window.M && M.FormSelect) M.FormSelect.init(selectMarca);
+  }
+  showOutro(prefixo, 'marca');
+  habilitarOutroModelo(prefixo);
+}
+
 /* ============================================================================
    OUTRO FIELD HANDLING
    ============================================================================ */
@@ -235,7 +259,9 @@ export function setupSelectCascata(prefixo, onModeloChange) {
   if (selectCat) {
     selectCat.addEventListener('change', () => {
       toggleOutro(prefixo, 'categoria');
-      if (selectCat.value && selectCat.value !== OUTRO_VALUE) {
+      if (selectCat.value === OUTRO_VALUE) {
+        habilitarOutraMarca(prefixo);
+      } else if (selectCat.value) {
         popularMarcas(prefixo, selectCat.value);
       } else {
         limparMarcaModelo(prefixo);
@@ -247,7 +273,9 @@ export function setupSelectCascata(prefixo, onModeloChange) {
     selectMarca.addEventListener('change', () => {
       toggleOutro(prefixo, 'marca');
       const selectCat = getSelect(prefixo, 'categoria');
-      if (selectMarca.value && selectMarca.value !== OUTRO_VALUE && selectCat?.value && selectCat.value !== OUTRO_VALUE) {
+      if (selectMarca.value === OUTRO_VALUE) {
+        habilitarOutroModelo(prefixo);
+      } else if (selectMarca.value && selectCat?.value && selectCat.value !== OUTRO_VALUE) {
         popularModelos(prefixo, selectCat.value, selectMarca.value);
       } else {
         limparModelo(prefixo);
