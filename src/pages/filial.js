@@ -36,6 +36,7 @@ import {
   setEquipamentosCache,
 } from './dashboard-base.js';
 import { preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
+import { ordenarCategorias, garantirCategoriasPrioritarias } from '../shared/js/lists.js';
 
 // Expor funções globais para onclick no HTML
 window.selecionarTipoEmprestimo = selecionarTipoEmprestimo;
@@ -216,9 +217,12 @@ function processarListas(combinacoes) {
   if (!categorias.has('TV')) categorias.add('TV');
   if (!categorias.has('Projetor')) categorias.add('Projetor');
 
+  // Impressora e Projetor sempre em primeiro lugar
+  garantirCategoriasPrioritarias(categorias);
+
   listasCache = {
     combinacoes: combinadas,
-    categorias: Array.from(categorias).sort(),
+    categorias: ordenarCategorias(Array.from(categorias)),
     marcasPorCategoria,
     modelosPorCategoriaMarca
   };

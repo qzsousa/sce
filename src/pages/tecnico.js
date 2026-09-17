@@ -32,6 +32,7 @@ import {
   setEquipamentosCache,
 } from './dashboard-base.js';
 import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
+import { ordenarCategorias, garantirCategoriasPrioritarias } from '../shared/js/lists.js';
 
 // Expor funções globais para onclick no HTML
 window.editarEquipamento = editarEquipamento;
@@ -184,7 +185,8 @@ function processarListas(combinacoes) {
     if (!modelosPorCategoriaMarca[cat][marca]) modelosPorCategoriaMarca[cat][marca] = new Set();
     modelosPorCategoriaMarca[cat][marca].add(modelo);
   });
-  listasCache = { combinacoes: combinadas, categorias: Array.from(categorias).sort(), marcasPorCategoria, modelosPorCategoriaMarca };
+  garantirCategoriasPrioritarias(categorias);
+  listasCache = { combinacoes: combinadas, categorias: ordenarCategorias(Array.from(categorias)), marcasPorCategoria, modelosPorCategoriaMarca };
 }
 
 function preencherSelectCategoria(prefixo) {

@@ -4,6 +4,22 @@
 
 import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from './catalogo-modelos.js';
 
+// Categorias prioritárias: aparecem sempre em primeiro lugar nos selects
+export const CATEGORIAS_PRIORITARIAS = ['Impressora', 'Projetor'];
+
+// Garante que as categorias prioritárias existam no conjunto
+export function garantirCategoriasPrioritarias(categoriasSet) {
+  CATEGORIAS_PRIORITARIAS.forEach(c => categoriasSet.add(c));
+}
+
+// Ordena categorias: prioritárias primeiro (na ordem definida), resto alfabético
+export function ordenarCategorias(categorias) {
+  const set = new Set(categorias);
+  const prioritarias = CATEGORIAS_PRIORITARIAS.filter(c => set.delete(c));
+  const resto = Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return prioritarias.concat(resto);
+}
+
 let listasCache = null;
 
 export function setListasCache(data) {
@@ -27,9 +43,11 @@ export function setListasCache(data) {
     modelosPorCategoriaMarca[cat][marca].add(modelo);
   });
 
+  garantirCategoriasPrioritarias(categorias);
+
   listasCache = {
     combinacoes,
-    categorias: Array.from(categorias).sort(),
+    categorias: ordenarCategorias(Array.from(categorias)),
     marcasPorCategoria,
     modelosPorCategoriaMarca,
   };
