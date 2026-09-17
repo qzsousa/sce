@@ -1,11 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
+import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 import PDFDocument from 'pdfkit';
 import 'dotenv/config';
 
-import sheets, { supabase as supabaseAdmin, toCamelCase } from './supabaseService.js';
+import sheets, { supabase as supabaseAdmin, toCamelCase, toSnakeCase } from './supabaseService.js';
 
 const supabaseAuth = createClient(
   process.env.SUPABASE_URL,
@@ -65,6 +66,33 @@ const statusUsuario = {
 
 const statusManutencaoValidos = ['Pendente', 'Em andamento', 'Concluído'];
 
+// ============================================================
+// SSO — access token JWT emitido pelo PORTAL (backend de chamados)
+// O SCE valida a assinatura com o segredo compartilhado (SSO_SECRET)
+// e resolve usuário/nível/filial na PRÓPRIA tabela usuarios.
+// ============================================================
+const SSO_SECRET = process.env.SSO_SECRET || null;
+
+async function trySsoSession(token) {
+  if (!SSO_SECRET) return null;
+  let payload;
+  try {
+    payload = jwt.verify(token, SSO_SECRET);
+  } catch {
+    return null;
+  }
+  if (!payload || payload.type !== 'access' || !payload.email) return null;
+  const usuario = await findUsuarioByEmail(payload.email);
+  if (!usuario || usuario.status !== statusUsuario.ATIVO) return null;
+  return {
+    token: `sso:${payload.sub || usuario.email}`,
+    email: usuario.email,
+    nivel: usuario.nivel,
+    filial: usuario.filial,
+    sso: true,
+  };
+}
+
 async function validateSession(token) {
   if (!token) return null;
   const data = await sheets.getValues('Sessoes');
@@ -80,7 +108,8 @@ async function validateSession(token) {
       return { token: sheetToken, email: sheetEmail, nivel: row.nivel, filial: row.filial };
     }
   }
-  return null;
+  // Não achou sessão local: aceita JWT do portal (SSO)
+  return await trySsoSession(token);
 }
 
 async function requireSession(token, niveisPermitidos = null) {
@@ -352,6 +381,75 @@ app.post('/api/redefinir-senha', asyncHandler(async (req, res) => {
 }));
 
 // ============================================================
+// SYNC DE USUÁRIOS (chamados → SCE)
+// Endpoint interno chamado pelo backend de chamados sempre que um
+// usuário é criado/editado/desativado no portal. Protegido por chave
+// compartilhada (SCE_SYNC_KEY) — NUNCA expor ao frontend.
+// ============================================================
+const SYNC_KEY = process.env.SCE_SYNC_KEY || null;
+
+const MAPA_NIVEL_PORTAL_PARA_SCE = {
+  ADMIN: niveis.MATRIZ,
+  GESTOR: niveis.ADMIN_FILIAL,
+  TECNICO: niveis.TECNICO,
+  VISUALIZADOR: niveis.FILIAL,
+};
+
+app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
+  if (!SYNC_KEY) return res.status(503).json(standardResponse(false, null, 'Sync não configurado.'));
+  if (req.headers['x-sync-key'] !== SYNC_KEY) {
+    return res.status(401).json(standardResponse(false, null, 'Não autorizado.'));
+  }
+
+  const { email, nome, nivel, filial, status } = req.body || {};
+  if (!email || !nome || !nivel) {
+    return res.json(standardResponse(false, null, 'email, nome e nivel são obrigatórios.'));
+  }
+  const nivelSce = MAPA_NIVEL_PORTAL_PARA_SCE[String(nivel).toUpperCase()];
+  if (!nivelSce) {
+    return res.json(standardResponse(false, null, `Nível desconhecido: ${nivel}`));
+  }
+
+  const emailNorm = String(email).trim().toLowerCase();
+  const inativo = String(status || 'ATIVO').toUpperCase() !== 'ATIVO';
+  const agora = new Date().toISOString();
+
+  const existente = await findUsuarioByEmail(emailNorm);
+  if (existente) {
+    const { error } = await supabaseAdmin
+      .from('usuarios')
+      .update({
+        nome: String(nome).trim(),
+        nivel: nivelSce,
+        filial: String(filial || '').trim(),
+        status: inativo ? statusUsuario.REMOVIDO : statusUsuario.ATIVO,
+        data_remocao: inativo ? agora : null,
+        atualizado_em: agora,
+      })
+      .eq('email', existente.email);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabaseAdmin
+      .from('usuarios')
+      .insert({
+        email: emailNorm,
+        nome: String(nome).trim(),
+        nivel: nivelSce,
+        filial: String(filial || '').trim(),
+        status: inativo ? statusUsuario.REMOVIDO : statusUsuario.ATIVO,
+        data_remocao: inativo ? agora : null,
+        senha_definida: false,
+        criado_em: agora,
+        atualizado_em: agora,
+      });
+    if (error) throw new Error(error.message);
+  }
+
+  await registrarAuditoria('syncUsuario', 'portal-sync', { email: emailNorm, nivel: nivelSce, inativo });
+  res.json(standardResponse(true, { email: emailNorm, nivel: nivelSce }));
+}));
+
+// ============================================================
 // ROTAS DE USUÁRIO
 // ============================================================
 
@@ -487,12 +585,15 @@ app.get('/api/listas-cadastro', asyncHandler(async (req, res) => {
     const cat = row.categoria ? String(row.categoria).trim() : '';
     const marca = row.marca ? String(row.marca).trim() : '';
     const modelo = row.modelo ? String(row.modelo).trim() : '';
-    if (cat && marca && modelo) result.push({ categoria: cat, marca, modelo });
+    // Linhas só com categoria também valem: a categoria aparece nos selects
+    // e marca/modelo ficam sob "Outro (digitar)" no cadastro.
+    if (!cat) continue;
+    result.push({ id: row.id, categoria: cat, marca, modelo });
   }
   res.json(standardResponse(true, result));
 }));
 
-// Adiciona uma combinação categoria/marca/modelo às listas (somente Matriz)
+// Adiciona item às listas: categoria obrigatória; marca e modelo opcionais (somente Matriz)
 app.post('/api/listas/adicionar', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token, niveis.MATRIZ);
@@ -500,8 +601,11 @@ app.post('/api/listas/adicionar', asyncHandler(async (req, res) => {
   const categoria = String(req.body?.categoria || '').trim();
   const marca = String(req.body?.marca || '').trim();
   const modelo = String(req.body?.modelo || '').trim();
-  if (!categoria || !marca || !modelo) {
-    return res.json(standardResponse(false, null, 'Informe categoria, marca e modelo.'));
+  if (!categoria) {
+    return res.json(standardResponse(false, null, 'Informe ao menos a categoria.'));
+  }
+  if (modelo && !marca) {
+    return res.json(standardResponse(false, null, 'Informe a marca para cadastrar um modelo.'));
   }
 
   const { error } = await supabaseAdmin
@@ -513,24 +617,43 @@ app.post('/api/listas/adicionar', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { categoria, marca, modelo }));
 }));
 
-// Remove uma combinação categoria/marca/modelo das listas (somente Matriz)
+// Remove item das listas por id ou pela combinação exata categoria/marca/modelo (somente Matriz)
 app.post('/api/listas/remover', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token, niveis.MATRIZ);
 
+  const id = req.body?.id;
+  if (id) {
+    const { error } = await supabaseAdmin.from('listas').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    await registrarAuditoria('removerLista', session.email, { id });
+    return res.json(standardResponse(true, { id }));
+  }
+
   const categoria = String(req.body?.categoria || '').trim();
   const marca = String(req.body?.marca || '').trim();
   const modelo = String(req.body?.modelo || '').trim();
-  if (!categoria || !marca || !modelo) {
-    return res.json(standardResponse(false, null, 'Informe categoria, marca e modelo.'));
+  if (!categoria) {
+    return res.json(standardResponse(false, null, 'Informe ao menos a categoria.'));
   }
 
-  const { error } = await supabaseAdmin
+  // Localiza a(s) linha(s) pela combinação exata (marca/modelo vazios também casam)
+  let consulta = supabaseAdmin
     .from('listas')
-    .delete()
-    .eq('categoria', categoria)
-    .eq('marca', marca)
-    .eq('modelo', modelo);
+    .select('id, categoria, marca, modelo')
+    .eq('categoria', categoria);
+  if (marca) consulta = consulta.eq('marca', marca);
+  if (modelo) consulta = consulta.eq('modelo', modelo);
+  const { data: linhas, error: errBusca } = await consulta;
+  if (errBusca) throw new Error(errBusca.message);
+
+  const alvos = (linhas || []).filter(r =>
+    String(r.marca || '').trim() === marca && String(r.modelo || '').trim() === modelo);
+  if (alvos.length === 0) {
+    return res.json(standardResponse(false, null, 'Item não encontrado nas listas.'));
+  }
+
+  const { error } = await supabaseAdmin.from('listas').delete().in('id', alvos.map(a => a.id));
   if (error) throw new Error(error.message);
 
   await registrarAuditoria('removerLista', session.email, { categoria, marca, modelo });
@@ -547,6 +670,43 @@ app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
   const todos = await getAllEquipamentos();
   const filtrados = todos.filter(item => item.status !== 'Removido' && sheets.sessaoTemAcessoAUnidade(session, item.unidade));
   res.json(standardResponse(true, filtrados));
+}));
+
+app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const session = await requireSession(token);
+
+  const todos = await getAllEquipamentos();
+  const mapa = new Map();
+
+  const ensure = (nome) => {
+    if (!mapa.has(nome)) mapa.set(nome, { nome, total: 0, disponiveis: 0, manutencao: 0, quebrados: 0, extraviados: 0 });
+    return mapa.get(nome);
+  };
+
+  for (const eq of todos) {
+    if (eq.status === 'Removido') continue;
+    if (!sheets.sessaoTemAcessoAUnidade(session, eq.unidade)) continue;
+    const u = ensure(eq.unidade || 'Sem unidade');
+    u.total += 1;
+    if (eq.status === 'Disponível') u.disponiveis += 1;
+    else if (eq.status === 'Manutenção') u.manutencao += 1;
+    else if (eq.status === 'Quebrado') u.quebrados += 1;
+    else if (eq.status === 'Extraviado') u.extraviados += 1;
+  }
+
+  // Inclui filiais ativas do escopo mesmo sem equipamentos (contagens zeradas)
+  const { data: filiais, error: errFiliais } = await sheets.supabase
+    .from('filiais')
+    .select('nome')
+    .eq('ativo', true);
+  if (errFiliais) throw new Error(errFiliais.message);
+  for (const f of filiais || []) {
+    if (sheets.sessaoTemAcessoAUnidade(session, f.nome)) ensure(f.nome);
+  }
+
+  const lista = [...mapa.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  res.json(standardResponse(true, lista));
 }));
 
 app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
@@ -625,6 +785,48 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
     total: count || 0,
     stats: { porStatus, porUnidade, porCategoria },
   }));
+}));
+
+app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const session = await requireSession(token);
+  const isMatriz = session.nivel === niveis.MATRIZ;
+
+  const [todos, filiais] = await Promise.all([
+    getAllEquipamentos(),
+    sheets.getValues('Filiais'),
+  ]);
+
+  const novoResumo = () => ({ total: 0, disponiveis: 0, manutencao: 0, quebrados: 0, extraviados: 0 });
+  const porUnidade = new Map();
+
+  for (const eq of todos) {
+    if (eq.status === 'Removido') continue;
+    if (!isMatriz && !sheets.sessaoTemAcessoAUnidade(session, eq.unidade)) continue;
+    const nome = eq.unidade || 'Sem unidade';
+    if (!porUnidade.has(nome)) porUnidade.set(nome, novoResumo());
+    const r = porUnidade.get(nome);
+    r.total += 1;
+    if (eq.status === 'Disponível') r.disponiveis += 1;
+    else if (eq.status === 'Manutenção') r.manutencao += 1;
+    else if (eq.status === 'Quebrado') r.quebrados += 1;
+    else if (eq.status === 'Extraviado') r.extraviados += 1;
+  }
+
+  // Inclui filiais ativas no escopo do usuário, mesmo sem equipamentos
+  for (const filial of filiais) {
+    if (!filial.ativo) continue;
+    const nome = String(filial.nome || '').trim();
+    if (!nome) continue;
+    if (!isMatriz && !sheets.sessaoTemAcessoAUnidade(session, nome)) continue;
+    if (!porUnidade.has(nome)) porUnidade.set(nome, novoResumo());
+  }
+
+  const resumo = [...porUnidade.entries()]
+    .map(([nome, r]) => ({ nome, ...r }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  res.json(standardResponse(true, resumo));
 }));
 
 app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
@@ -761,7 +963,7 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
   if (Object.keys(updates).length > 0) {
     const { error } = await sheets.supabase
       .from('equipamentos')
-      .update(updates)
+      .update(toSnakeCase(updates))
       .eq('id', id);
     if (error) throw new Error(`Erro ao atualizar equipamento: ${error.message}`);
   }
@@ -874,7 +1076,7 @@ app.post('/api/atualizar-status-manutencao', asyncHandler(async (req, res) => {
 
   const { data: equipAtual, error } = await sheets.supabase
     .from('equipamentos')
-    .select('unidade, statusManutencao')
+    .select('unidade, status_manutencao')
     .eq('id', equipamentoId)
     .single();
 
@@ -884,12 +1086,12 @@ app.post('/api/atualizar-status-manutencao', asyncHandler(async (req, res) => {
     return res.json(standardResponse(false, null, 'Você não tem permissão para alterar este equipamento.'));
   }
 
-  const statusAntigo = equipAtual.statusManutencao;
+  const statusAntigo = equipAtual.status_manutencao;
   if (String(statusAntigo) === String(novoStatus)) return res.json(standardResponse(true));
 
   const { error: updError } = await sheets.supabase
     .from('equipamentos')
-    .update({ statusManutencao: novoStatus, ultimaAlteracaoPor: session.email, dataUltimaAtualizacao: new Date() })
+    .update(toSnakeCase({ statusManutencao: novoStatus, ultimaAlteracaoPor: session.email, dataUltimaAtualizacao: new Date() }))
     .eq('id', equipamentoId);
 
   if (updError) throw new Error(`Erro ao atualizar status: ${updError.message}`);
@@ -943,7 +1145,7 @@ app.post('/api/registrar-manutencao', asyncHandler(async (req, res) => {
   // Atualiza statusManutencao no equipamento também
   await sheets.supabase
     .from('equipamentos')
-    .update({ statusManutencao: status || 'Pendente' })
+    .update(toSnakeCase({ statusManutencao: status || 'Pendente' }))
     .eq('id', equipamentoId);
 
   res.json(standardResponse(true));

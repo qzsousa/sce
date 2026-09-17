@@ -42,7 +42,7 @@ export function toCamelCase(obj) {
   return result;
 }
 
-function toSnakeCase(obj) {
+export function toSnakeCase(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   const result = {};
   for (const [key, value] of Object.entries(obj)) {

@@ -1078,3 +1078,9 @@ Importe esta collection no Postman:
 
 **Manual gerado automaticamente com base no c√≥digo do projeto SCE.**  
 Para d√∫vidas, consulte o c√≥digo-fonte em `server.js`, `googleSheetsService.js` e `api.js`.
+## SSO com o Portal URE Leste 3 (nov. 2026)
+
+Duas vari·veis novas no .env:
+
+- `SSO_SECRET` ó deve ser **idÍntico** ao `JWT_SECRET` do backend de chamados. Com ele, o SCE aceita os access tokens JWT emitidos pelo portal (usu·rio resolvido por e-mail na tabela `usuarios` local; nÌvel/filial continuam vindo do SCE).
+- `SCE_SYNC_KEY` ó chave do endpoint interno `POST /api/internal/sync-usuario` (header `x-sync-key`), usado pelo backend de chamados para manter a tabela `usuarios` do SCE sincronizada.
