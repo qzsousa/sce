@@ -664,6 +664,43 @@ app.post('/api/listas/remover', asyncHandler(async (req, res) => {
 // ROTAS DE EQUIPAMENTOS
 // ============================================================
 
+app.get('/api/catalogo-equipamentos', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  await requireSession(token);
+
+  const BLOCO = 1000;
+  const vistos = new Map(); // chave: cat|marca|modelo
+  const add = (categoria, marca, modelo) => {
+    const c = String(categoria || '').trim();
+    const m1 = String(marca || '').trim();
+    const m2 = String(modelo || '').trim();
+    if (!c || !m1 || !m2) return;
+    vistos.set(`${c}||${m1}||${m2}`, { categoria: c, marca: m1, modelo: m2 });
+  };
+
+  // União: catálogo gerenciado (Listas) + o que de fato existe nos equipamentos
+  const listas = await sheets.getValues('Listas');
+  for (const row of listas) add(row.categoria, row.marca, row.modelo);
+
+  let offset = 0;
+  while (true) {
+    const { data, error } = await sheets.supabase
+      .from('equipamentos')
+      .select('categoria, marca, modelo')
+      .neq('status', 'Removido')
+      .range(offset, offset + BLOCO - 1);
+    if (error) throw new Error(error.message);
+    for (const r of data || []) add(r.categoria, r.marca, r.modelo);
+    if (!data || data.length < BLOCO) break;
+    offset += BLOCO;
+  }
+
+  const resultado = [...vistos.values()].sort((a, b) =>
+    a.categoria.localeCompare(b.categoria, 'pt-BR') || a.marca.localeCompare(b.marca, 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR'),
+  );
+  res.json(standardResponse(true, resultado));
+}));
+
 app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
