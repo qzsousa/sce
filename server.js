@@ -967,6 +967,11 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
     if (h === 'dataUltimaAtualizacao') return now;
     if (h === 'cadastradoPor') return session.email;
     if (h === 'ultimaAlteracaoPor') return session.email;
+    if (h === 'numeroSerie' || h === 'patrimonio') {
+      // campos-chave: vazio vira NULL para não colidir com o índice único
+      const v = String(dados[h] || '').trim();
+      return v === '' ? null : v;
+    }
     if (h in dados) return dados[h];
     return null;
   });
