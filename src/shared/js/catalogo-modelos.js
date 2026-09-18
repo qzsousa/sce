@@ -1,7 +1,9 @@
 // ============================================================================
 // CATÁLOGO DE MODELOS — Especificações padronizadas por categoria/marca/modelo
-// Usado para a cascata de categoria → marca → modelo e autopreenchimento de
-// sistema operacional, processador, memória RAM e armazenamento.
+// Usado APENAS para autopreencher especificações (sistema operacional,
+// processador, memória RAM, armazenamento) na tela de cadastro/edição.
+// A cascata categoria → marca → modelo vem da tabela `listas` no banco,
+// gerenciada pelo painel da Matriz ("Gerenciar listas").
 // ============================================================================
 
 export const CATALOGO_MODELOS = [
@@ -46,9 +48,6 @@ export const CATALOGO_MODELOS = [
   { categoria: 'Celular', marca: 'Multilaser', modelo: 'G2', sistemaOperacional: 'Android', processador: 'Quad Core', memoriaRAM: '2 GB', armazenamento: '32 GB' },
   { categoria: 'Tablet', marca: 'Positivo', modelo: 'T2040', sistemaOperacional: 'Android', processador: 'OCTA-CORE', memoriaRAM: '2 GB', armazenamento: '32 GB' },
   { categoria: 'Tablet', marca: 'Positivo', modelo: 'T2070', sistemaOperacional: 'Android', processador: 'OCTA-CORE', memoriaRAM: '4 GB', armazenamento: '64 GB' },
-  { categoria: 'Impressora'},
-  { categoria: 'TV'},
-  { categoria: 'Projetor'}
 ];
 
 // Retorna as especificações de um modelo (ou null se não encontrado)
@@ -82,7 +81,3 @@ export function preencherEspecificacoesModelo(prefixo, modelo) {
   return true;
 }
 
-// Retorna as combinações de categoria/marca/modelo no formato esperado por setListasCache
-export function getCombinacoesDoCatalogo() {
-  return CATALOGO_MODELOS.map(({ categoria, marca, modelo }) => ({ categoria, marca, modelo }));
-}

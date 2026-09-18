@@ -2,14 +2,17 @@
 // LISTS — Categoria / Marca / Modelo cascata com suporte a "Outro"
 // ============================================================================
 
-import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from './catalogo-modelos.js';
+import { preencherEspecificacoesModelo } from './catalogo-modelos.js';
 
 // Categorias prioritárias: aparecem sempre em primeiro lugar nos selects
 export const CATEGORIAS_PRIORITARIAS = ['Impressora', 'Projetor'];
 
+// Categorias que sempre aparecem nos selects, mesmo sem itens no banco
+const CATEGORIAS_SEMPRE = [...CATEGORIAS_PRIORITARIAS, 'TV'];
+
 // Garante que as categorias prioritárias existam no conjunto
 export function garantirCategoriasPrioritarias(categoriasSet) {
-  CATEGORIAS_PRIORITARIAS.forEach(c => categoriasSet.add(c));
+  CATEGORIAS_SEMPRE.forEach(c => categoriasSet.add(c));
 }
 
 // Ordena categorias: prioritárias primeiro (na ordem definida), resto alfabético
@@ -27,8 +30,10 @@ export function setListasCache(data) {
   const marcasPorCategoria = {};
   const modelosPorCategoriaMarca = {};
 
-  // Mescla os dados fornecidos com o catálogo padrão (planilha de modelos)
-  const combinacoes = (data || []).concat(getCombinacoesDoCatalogo());
+  // Fonte única da cascata: tabela `listas` no banco (gerenciada pelo painel Matriz).
+  // O catálogo embutido (catalogo-modelos.js) serve apenas para autopreencher
+  // especificações (SO, processador, memória, armazenamento).
+  const combinacoes = data || [];
 
   combinacoes.forEach(item => {
     const cat = item.categoria?.trim();

@@ -754,16 +754,7 @@ async function carregarListasGestao() {
   try {
     const res = await fetch(`${getApiBaseUrl()}/listas-cadastro`, { headers: getAuthHeaders() });
     const data = await res.json();
-    // Mescla banco de dados + catálogo embutido (mesmo cache usado nas cascatas)
-    setListasCache(data.data || []);
-    const combinacoes = getListasCache()?.combinacoes || [];
-    // De-duplica: mesma combinação no banco e no catálogo → prefere a do banco (removível)
-    const mapa = new Map();
-    for (const i of combinacoes) {
-      const chave = `${i.categoria}|||${i.marca}|||${i.modelo}`;
-      if (!mapa.has(chave) || (i.id && !mapa.get(chave).id)) mapa.set(chave, i);
-    }
-    listasGestaoCache = Array.from(mapa.values());
+    listasGestaoCache = data.data || [];
     renderTabelaListas();
     atualizarDatalistsListas();
   } catch (err) {
@@ -795,16 +786,12 @@ function renderTabelaListas() {
 
   linhas.forEach(item => {
     const tr = document.createElement('tr');
-    const acao = item.id
-      ? '<a class="btn-small red waves-effect lista-remover" title="Remover"><i class="material-icons">delete</i></a>'
-      : '<span style="color:var(--sce-muted);font-size:0.75rem;">catálogo</span>';
     tr.innerHTML =
       '<td>' + esc(item.categoria) + '</td>' +
       '<td>' + (item.marca ? esc(item.marca) : '<span style="color:var(--sce-muted);">—</span>') + '</td>' +
       '<td>' + (item.modelo ? esc(item.modelo) : '<span style="color:var(--sce-muted);">—</span>') + '</td>' +
-      '<td>' + acao + '</td>';
-    const btnRemover = tr.querySelector('.lista-remover');
-    if (btnRemover) btnRemover.addEventListener('click', () => removerListaUI(item));
+      '<td><a class="btn-small red waves-effect lista-remover" title="Remover"><i class="material-icons">delete</i></a></td>';
+    tr.querySelector('.lista-remover').addEventListener('click', () => removerListaUI(item));
     tbody.appendChild(tr);
   });
 }

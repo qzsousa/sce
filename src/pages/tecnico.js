@@ -31,7 +31,7 @@ import {
   setCarregarEquipamentos,
   setEquipamentosCache,
 } from './dashboard-base.js';
-import { getCombinacoesDoCatalogo, preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
+import { preencherEspecificacoesModelo } from '../shared/js/catalogo-modelos.js';
 import { ordenarCategorias, garantirCategoriasPrioritarias } from '../shared/js/lists.js';
 
 // Expor funções globais para onclick no HTML
@@ -174,7 +174,7 @@ function processarListas(combinacoes) {
   const categorias = new Set();
   const marcasPorCategoria = {};
   const modelosPorCategoriaMarca = {};
-  const combinadas = (combinacoes || []).concat(getCombinacoesDoCatalogo());
+  const combinadas = combinacoes || [];
   combinadas.forEach(item => {
     const cat = item.categoria, marca = item.marca, modelo = item.modelo;
     if (!cat) return;

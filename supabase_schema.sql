@@ -425,6 +425,59 @@ INSERT INTO filiais (nome) VALUES
 ON CONFLICT (nome) DO NOTHING;
 
 -- ============================================================
+-- DADOS INICIAIS (SEED) - LISTAS (catálogo inicial das cascatas)
+-- A cascata categoria/marca/modelo vem SOMENTE desta tabela
+-- (a Matriz gerencia em "Gerenciar listas"). Linhas com marca e
+-- modelo vazios criam a categoria sem itens (usa "Outro (digitar)").
+-- ============================================================
+INSERT INTO listas (categoria, marca, modelo) VALUES
+  ('Notebook', 'Lenovo', 'ThinkPad L14 Gen 2'),
+  ('Notebook', 'Positivo', 'Master N1110'),
+  ('Notebook', 'Positivo', 'Master N1210'),
+  ('Notebook', 'Multilaser', 'PC114'),
+  ('Notebook', 'Multilaser', 'Ultra UL150'),
+  ('Notebook', 'Samsung', 'Chromebook'),
+  ('Desktop', 'Diebold', 'TW9850'),
+  ('Desktop', 'Lenovo', 'ThinkCentre M75S-2'),
+  ('Desktop', 'Lenovo', 'ThinkCentre'),
+  ('Plataforma de Carregamento', 'TES', 'K2X - 40V'),
+  ('Plataforma de Carregamento', 'TES', 'K4CG - 40V'),
+  ('Celular', 'Redmi', '12'),
+  ('Celular', 'Redmi', '12C'),
+  ('Celular', 'Redmi', '13C'),
+  ('Celular', 'Redmi', '9C'),
+  ('Celular', 'Redmi', 'A1'),
+  ('Celular', 'Redmi', 'A1 +'),
+  ('Celular', 'Redmi', 'A3'),
+  ('Celular', 'Redmi', 'Note 11S'),
+  ('Celular', 'Redmi', 'Note 11'),
+  ('Celular', 'Redmi', 'Note 11 Pro'),
+  ('Celular', 'Redmi', 'Note 12'),
+  ('Celular', 'Redmi', 'Note 12 Pro'),
+  ('Celular', 'Redmi', 'Note 12S'),
+  ('Celular', 'Redmi', 'Note 13'),
+  ('Celular', 'Redmi', 'Note 13 PRO'),
+  ('Celular', 'Redmi', 'Note 14'),
+  ('Celular', 'Redmi', 'Note 9'),
+  ('Celular', 'Redmi', 'Note 8'),
+  ('Celular', 'Motorola', 'G13'),
+  ('Celular', 'Xiaomi', 'Poco C65'),
+  ('Celular', 'Xiaomi', 'Poco M3 PRO'),
+  ('Celular', 'Xiaomi', 'Poco M5'),
+  ('Celular', 'Xiaomi', 'Poco M6 PRO'),
+  ('Celular', 'Xiaomi', 'Poco X5'),
+  ('Celular', 'Realme', 'C51'),
+  ('Celular', 'Realme', 'C61'),
+  ('Celular', 'Realme', 'Note 50'),
+  ('Celular', 'Multilaser', 'G2'),
+  ('Tablet', 'Positivo', 'T2040'),
+  ('Tablet', 'Positivo', 'T2070'),
+  ('Impressora', '', ''),
+  ('Projetor', '', ''),
+  ('TV', '', '')
+ON CONFLICT (categoria, marca, modelo) DO NOTHING;
+
+-- ============================================================
 -- VERIFICAÇÃO FINAL
 -- ============================================================
 -- Listar tabelas criadas

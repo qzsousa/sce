@@ -197,9 +197,8 @@ function processarListas(combinacoes) {
   const marcasPorCategoria = {};
   const modelosPorCategoriaMarca = {};
 
-  // Mescla os dados da API com o catálogo padrão
-  const catalogoItens = CATALOGO_PARA_LISTAS();
-  const combinadas = (combinacoes || []).concat(catalogoItens);
+  // Fonte única da cascata: tabela `listas` no banco (gerenciada pelo painel Matriz)
+  const combinadas = combinacoes || [];
 
   combinadas.forEach(item => {
     const cat = item.categoria, marca = item.marca, modelo = item.modelo;
@@ -214,11 +213,7 @@ function processarListas(combinacoes) {
     modelosPorCategoriaMarca[cat][marca].add(modelo);
   });
 
-  // Garante TV e Projetor nas categorias (caso especial sem marca/modelo)
-  if (!categorias.has('TV')) categorias.add('TV');
-  if (!categorias.has('Projetor')) categorias.add('Projetor');
-
-  // Impressora e Projetor sempre em primeiro lugar
+  // Impressora e Projetor sempre em primeiro lugar; TV sempre visível
   garantirCategoriasPrioritarias(categorias);
 
   listasCache = {
@@ -228,17 +223,6 @@ function processarListas(combinacoes) {
     modelosPorCategoriaMarca
   };
 }
-
-// Retorna itens do catálogo no formato esperado por setListasCache
-function CATALOGO_PARA_LISTAS() {
-  // Importa do módulo catalogo-modelos (dados estáticos)
-  return window.CATALOGO_LISTAS_CACHE || [];
-}
-
-// Carrega o catálogo estático no window para uso em processarListas
-import('../shared/js/catalogo-modelos.js').then(mod => {
-  window.CATALOGO_LISTAS_CACHE = mod.getCombinacoesDoCatalogo?.() || [];
-});
 
 function preencherSelectCategoria(prefixo) {
   const select = document.getElementById(prefixo + '-categoria');
