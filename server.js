@@ -585,12 +585,71 @@ app.get('/api/listas-cadastro', asyncHandler(async (req, res) => {
     const cat = row.categoria ? String(row.categoria).trim() : '';
     const marca = row.marca ? String(row.marca).trim() : '';
     const modelo = row.modelo ? String(row.modelo).trim() : '';
-    // Linhas só com categoria também valem: a categoria aparece nos selects
-    // e marca/modelo ficam sob "Outro (digitar)" no cadastro.
-    if (!cat) continue;
-    result.push({ id: row.id, categoria: cat, marca, modelo });
+    if (cat && marca && modelo) result.push({ id: row.id, categoria: cat, marca, modelo });
   }
   res.json(standardResponse(true, result));
+}));
+
+// Gerenciamento do catálogo (somente Matriz)
+app.post('/api/listas-adicionar', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const session = await requireSession(token, niveis.MATRIZ);
+  const { categoria, marca, modelo } = req.body || {};
+  const c = String(categoria || '').trim();
+  const m = String(marca || '').trim();
+  const mo = String(modelo || '').trim();
+  if (!c || !m || !mo) return res.json(standardResponse(false, null, 'Categoria, marca e modelo são obrigatórios.'));
+
+  // dedup (case-insensitive)
+  const existentes = await sheets.getValues('Listas');
+  const dup = existentes.find(r =>
+    String(r.categoria || '').trim().toLowerCase() === c.toLowerCase() &&
+    String(r.marca || '').trim().toLowerCase() === m.toLowerCase() &&
+    String(r.modelo || '').trim().toLowerCase() === mo.toLowerCase());
+  if (dup) return res.json(standardResponse(false, null, 'Esta combinação já existe no catálogo.'));
+
+  const { data, error } = await sheets.supabase
+    .from('listas')
+    .insert({ categoria: c, marca: m, modelo: mo })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+
+  await registrarAuditoria('catalogoAdicionar', session.email, { categoria: c, marca: m, modelo: mo });
+  res.json(standardResponse(true, { id: data.id, categoria: c, marca: m, modelo: mo }));
+}));
+
+app.post('/api/listas-remover', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const session = await requireSession(token, niveis.MATRIZ);
+  const { id, categoria, marca, modelo } = req.body || {};
+
+  let q = sheets.supabase.from('listas').delete();
+  if (id) q = q.eq('id', id);
+  else if (categoria && marca && modelo) q = q.eq('categoria', categoria).eq('marca', marca).eq('modelo', modelo);
+  else return res.json(standardResponse(false, null, 'Informe o id (ou categoria+marca+modelo) a remover.'));
+
+  const { error } = await q;
+  if (error) throw new Error(error.message);
+
+  await registrarAuditoria('catalogoRemover', session.email, { id, categoria, marca, modelo });
+  res.json(standardResponse(true));
+}));
+
+// Últimas ações do sistema (auditoria) — somente Matriz
+app.get('/api/auditoria', asyncHandler(async (req, res) => {
+  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  await requireSession(token, niveis.MATRIZ);
+  const limite = Math.max(1, Math.min(parseInt(req.query.limite, 10) || 50, 200));
+
+  const { data, error } = await sheets.supabase
+    .from('auditoria')
+    .select('*')
+    .order('data', { ascending: false })
+    .limit(limite);
+  if (error) throw new Error(error.message);
+
+  res.json(standardResponse(true, (data || []).map(toCamelCase)));
 }));
 
 // Adiciona item às listas: categoria obrigatória; marca e modelo opcionais (somente Matriz)
