@@ -585,7 +585,7 @@ app.get('/api/listas-cadastro', asyncHandler(async (req, res) => {
     const cat = row.categoria ? String(row.categoria).trim() : '';
     const marca = row.marca ? String(row.marca).trim() : '';
     const modelo = row.modelo ? String(row.modelo).trim() : '';
-    if (cat && marca && modelo) result.push({ id: row.id, categoria: cat, marca, modelo });
+    if (cat) result.push({ id: row.id, categoria: cat, marca, modelo });
   }
   res.json(standardResponse(true, result));
 }));
@@ -598,9 +598,9 @@ app.post('/api/listas-adicionar', asyncHandler(async (req, res) => {
   const c = String(categoria || '').trim();
   const m = String(marca || '').trim();
   const mo = String(modelo || '').trim();
-  if (!c || !m || !mo) return res.json(standardResponse(false, null, 'Categoria, marca e modelo são obrigatórios.'));
+  if (!c) return res.json(standardResponse(false, null, 'Categoria é obrigatória.'));
 
-  // dedup (case-insensitive)
+  // dedup (case-insensitive) — marca/modelo vazios comparam como vazios
   const existentes = await sheets.getValues('Listas');
   const dup = existentes.find(r =>
     String(r.categoria || '').trim().toLowerCase() === c.toLowerCase() &&
@@ -610,7 +610,7 @@ app.post('/api/listas-adicionar', asyncHandler(async (req, res) => {
 
   const { data, error } = await sheets.supabase
     .from('listas')
-    .insert({ categoria: c, marca: m, modelo: mo })
+    .insert({ categoria: c, marca: m || null, modelo: mo || null })
     .select('id')
     .single();
   if (error) throw new Error(error.message);
@@ -733,7 +733,7 @@ app.get('/api/catalogo-equipamentos', asyncHandler(async (req, res) => {
     const c = String(categoria || '').trim();
     const m1 = String(marca || '').trim();
     const m2 = String(modelo || '').trim();
-    if (!c || !m1 || !m2) return;
+    if (!c) return; // categoria é o mínimo; marca/modelo podem ser vazios
     vistos.set(`${c}||${m1}||${m2}`, { categoria: c, marca: m1, modelo: m2 });
   };
 
