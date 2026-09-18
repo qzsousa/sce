@@ -788,8 +788,8 @@ function renderTabelaListas() {
     const tr = document.createElement('tr');
     tr.innerHTML =
       '<td>' + esc(item.categoria) + '</td>' +
-      '<td>' + esc(item.marca) + '</td>' +
-      '<td>' + esc(item.modelo) + '</td>' +
+      '<td>' + (item.marca ? esc(item.marca) : '<span style="color:var(--sce-muted);">—</span>') + '</td>' +
+      '<td>' + (item.modelo ? esc(item.modelo) : '<span style="color:var(--sce-muted);">—</span>') + '</td>' +
       '<td><a class="btn-small red waves-effect lista-remover" title="Remover"><i class="material-icons">delete</i></a></td>';
     tr.querySelector('.lista-remover').addEventListener('click', () => removerListaUI(item));
     tbody.appendChild(tr);
@@ -814,7 +814,7 @@ function atualizarDatalistsListas() {
       marcas = Array.from(cache.marcasPorCategoria[cat]).sort();
     } else {
       const todas = new Set();
-      listasGestaoCache.forEach(i => { if (!cat || i.categoria === cat) todas.add(i.marca); });
+      listasGestaoCache.forEach(i => { if (i.marca && (!cat || i.categoria === cat)) todas.add(i.marca); });
       marcas = Array.from(todas).sort();
     }
     dlMarca.innerHTML = marcas.map(m => '<option value="' + esc(m) + '"></option>').join('');
@@ -828,7 +828,8 @@ async function adicionarListaUI() {
   const categoria = document.getElementById('lista-categoria').value.trim();
   const marca = document.getElementById('lista-marca').value.trim();
   const modelo = document.getElementById('lista-modelo').value.trim();
-  if (!categoria || !marca || !modelo) { toastError('Informe categoria, marca e modelo.'); return; }
+  if (!categoria) { toastError('Informe ao menos a categoria.'); return; }
+  if (modelo && !marca) { toastError('Informe a marca para cadastrar um modelo.'); return; }
 
   setButtonLoading(btn, true);
   try {
@@ -852,12 +853,16 @@ async function adicionarListaUI() {
 }
 
 async function removerListaUI(item) {
-  if (!confirm(`Remover "${item.modelo}" (${item.categoria} / ${item.marca}) das listas?`)) return;
+  const descricao = [item.categoria, item.marca, item.modelo].filter(Boolean).join(' / ');
+  if (!confirm(`Remover "${descricao}" das listas?`)) return;
   try {
+    const payload = item.id
+      ? { id: item.id }
+      : { categoria: item.categoria, marca: item.marca, modelo: item.modelo };
     const res = await fetch(`${getApiBaseUrl()}/listas/remover`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ categoria: item.categoria, marca: item.marca, modelo: item.modelo })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error);
