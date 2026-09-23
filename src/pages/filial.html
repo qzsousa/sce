@@ -151,6 +151,9 @@
         <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
           <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio</label>
         </div>
+        <div class="col s12" style="margin-bottom:2px;">
+          <button type="button" class="btn-flat waves-effect" style="text-transform:none;color:var(--sce-primary);padding:0 8px;" onclick="gerarNumeroSerieAleatorio('new')"><i class="material-icons left" style="font-size:18px;">shuffle</i>Sem número de série? Gerar número aleatório</button>
+        </div>
         <div class="input-field col s6"><input type="text" id="new-numeroSerie"><label for="new-numeroSerie" class="obrigatorio">Número de série</label></div>
         <div class="input-field col s12" id="campo-justificativa-serie" style="display:none;">
           <textarea id="new-justificativaNumeroSerie" class="materialize-textarea"></textarea><label for="new-justificativaNumeroSerie" class="obrigatorio">Justificativa para ausência de Número de Série</label>
@@ -228,6 +231,9 @@
         <div class="input-field col s6"><input type="text" id="edit-patrimonio"><label for="edit-patrimonio" class="active">Patrimônio</label></div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
           <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea><label for="edit-justificativaPatrimonio" class="active">Justificativa para ausência de Patrimônio</label>
+        </div>
+        <div class="col s12" style="margin-bottom:2px;">
+          <button type="button" class="btn-flat waves-effect" style="text-transform:none;color:var(--sce-primary);padding:0 8px;" onclick="gerarNumeroSerieAleatorio('edit')"><i class="material-icons left" style="font-size:18px;">shuffle</i>Sem número de série? Gerar número aleatório</button>
         </div>
         <div class="input-field col s6"><input type="text" id="edit-numeroSerie"><label for="edit-numeroSerie" class="active obrigatorio">Número de série</label></div>
         <div class="input-field col s12" id="campo-justificativa-serie-edit" style="display:none;">

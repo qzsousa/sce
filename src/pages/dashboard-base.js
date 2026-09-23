@@ -179,6 +179,26 @@ function configurarJustificativas(prefixo) {
 }
 
 /* ============================================================================
+   NÚMERO DE SÉRIE ALEATÓRIO (equipamentos sem número de série físico)
+   ============================================================================
+   numero_serie é único no banco; valores genéricos como "01", "1" ou "02"
+   digitados por uma unidade impedem o cadastro nas demais. Este gerador cria
+   um número praticamente único (timestamp + sufixo aleatório) para esses casos. */
+function gerarNumeroSerieAleatorio(prefixo) {
+  const input = document.getElementById(`${prefixo}-numeroSerie`);
+  if (!input) return;
+  const base = Date.now().toString().slice(-9);
+  const sufixo = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  input.value = base + sufixo;
+  // Notifica listeners (verificarSerie oculta a justificativa) e atualiza o
+  // label flutuante do Materialize.
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if (window.M && M.updateTextFields) M.updateTextFields();
+  toastInfo(`Número de série gerado: ${input.value}`);
+}
+window.gerarNumeroSerieAleatorio = gerarNumeroSerieAleatorio;
+
+/* ============================================================================
    CARREGAMENTO DE EQUIPAMENTOS (abstrato - o dashboard específico injeta a imp)
    ============================================================================ */
 
