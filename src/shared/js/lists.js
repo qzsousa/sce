@@ -243,6 +243,15 @@ export function toggleOutro(prefixo, tipo) {
 }
 
 export function getValorFinal(prefixo, tipo) {
+  // Alguns formulários (ex.: filial, categorias sem marca/modelo no banco
+  // como TV/Projetor) trocam o select por um input de texto livre
+  // (`{prefixo}-{tipo}-text`). Se esse container estiver visível, o valor
+  // digitado nele é o que vale.
+  const textContainer = document.getElementById(`${prefixo}-${tipo}-text-container`);
+  if (textContainer && textContainer.style.display !== 'none') {
+    const textInput = document.getElementById(`${prefixo}-${tipo}-text`);
+    return textInput ? textInput.value.trim() : '';
+  }
   const select = getSelect(prefixo, tipo);
   if (!select) return '';
   if (select.value === OUTRO_VALUE) {
