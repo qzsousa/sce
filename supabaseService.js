@@ -168,6 +168,62 @@ export function parseFiliais(filialRaw) {
     .filter(f => f.length > 0);
 }
 
+// ============================================================
+// CASAMENTO TOLERANTE DE UNIDADES
+// O nome da escola varia entre sistemas e épocas: "E.E. CESAR DONATO
+// CALABREZ" (chamados, padronizado), "Cesar Donato Calabrez" (legado SCE) e
+// a linha composta de escolas irmãs "E.E. A / E.E. B" precisam casar entre
+// si — escolas irmãs compartilham o mesmo painel de equipamentos.
+// Normalização: sem prefixo "E.E.", sem acentos/pontuação, sem honoríficos
+// no final; casa quando um lado contém o outro em palavras completas.
+// ============================================================
+const HONORIFICOS_FIM = /(\s+(PROF(A)?|DR(A)?|DEPUTAD[OA]|PRESIDENTE|MAESTRO|GOVERNADOR|BIBLIOTECARIA))+\s*$/;
+
+export function chaveUnidade(nome) {
+  return String(nome || '')
+    .trim()
+    .toUpperCase()
+    // remove o prefixo "E.E." em qualquer posição (início ou após a barra do composto)
+    .replace(/\bE\.?E\.?\s*/g, '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function semHonorificos(chave) {
+  return chave.replace(HONORIFICOS_FIM, '').trim();
+}
+
+/** Conjunto de chaves de um nome: inteiro, sem honoríficos e cada parte de composto ("A / B"). */
+function chavesUnidade(nome) {
+  const chaves = new Set();
+  const add = (valor) => {
+    const k = chaveUnidade(valor);
+    if (!k) return;
+    chaves.add(k);
+    const s = semHonorificos(k);
+    if (s) chaves.add(s);
+  };
+  add(nome);
+  for (const parte of String(nome || '').split('/')) add(parte);
+  return [...chaves];
+}
+
+/** Duas unidades casam quando alguma chave de um lado é igual ou contém a do outro (limite em palavra). */
+function unidadesCasam(a, b) {
+  const ka = chavesUnidade(a);
+  const kb = chavesUnidade(b);
+  for (const x of ka) {
+    for (const y of kb) {
+      if (x === y) return true;
+      if (x.length > 3 && y.startsWith(x + ' ')) return true;
+      if (y.length > 3 && x.startsWith(y + ' ')) return true;
+    }
+  }
+  return false;
+}
+
 export function sessaoTemAcessoAUnidade(session, unidade) {
   const niveis = {
     MATRIZ: 'Matriz',
@@ -176,15 +232,11 @@ export function sessaoTemAcessoAUnidade(session, unidade) {
     TECNICO: 'Tecnico',
   };
   if (session.nivel === niveis.MATRIZ) return true;
-  if (session.nivel === niveis.ADMIN_FILIAL) {
-    return String(unidade).trim().toUpperCase() === String(session.filial).trim().toUpperCase();
-  }
   if (session.nivel === niveis.TECNICO) {
-    const unidadeNormalizada = String(unidade || '').trim().toUpperCase();
-    const unidadesDaSessao = parseFiliais(session.filial).map(f => f.toUpperCase());
-    return unidadesDaSessao.includes(unidadeNormalizada);
+    return parseFiliais(session.filial).some((f) => unidadesCasam(f, unidade));
   }
-  return String(unidade).trim().toUpperCase() === String(session.filial).trim().toUpperCase();
+  // AdminFilial/Filial: casamento tolerante (cobre legado, "E.E." e compostos)
+  return unidadesCasam(session.filial, unidade);
 }
 
 export function resolverUnidadeParaEscrita(session, unidadeInformada) {
@@ -198,7 +250,7 @@ export function resolverUnidadeParaEscrita(session, unidadeInformada) {
     return unidadeInformada || session.filial;
   }
   if (session.nivel === niveis.ADMIN_FILIAL) {
-    if (unidadeInformada && unidadeInformada.trim().toUpperCase() !== session.filial.trim().toUpperCase()) {
+    if (unidadeInformada && !unidadesCasam(unidadeInformada, session.filial)) {
       throw new Error('Você só pode cadastrar equipamentos na sua própria unidade.');
     }
     return session.filial;
