@@ -46,7 +46,7 @@ const HEADER_MAP = {
     'criadoPor', 'devolvidoPor', 'observacoes', 'tipoEmprestimo', 'escolaDestino'],
   AUDITORIA: ['data', 'usuario', 'acao', 'detalhes'],
   REGISTROS_MANUTENCAO: ['id', 'equipamentoId', 'autor', 'data', 'descricao', 'status'],
-  USUARIOS: ['email', 'nome', 'nivel', 'filial', 'status', 'dataRemocao', 'senhaDefinida'],
+  USUARIOS: ['email', 'nome', 'nivel', 'filial', 'status', 'dataRemocao', 'senhaDefinida', 'papelUnidade'],
   SESSOES: ['token', 'email', 'nivel', 'filial', 'criadoEm', 'expiraEm'],
 };
 
@@ -89,6 +89,7 @@ async function trySsoSession(token) {
     email: usuario.email,
     nivel: usuario.nivel,
     filial: usuario.filial,
+    papelUnidade: usuario.papelUnidade,
     sso: true,
   };
 }
@@ -105,7 +106,7 @@ async function validateSession(token) {
       if (isNaN(expiraEm) || now > expiraEm) return null;
       const usuario = await findUsuarioByEmail(sheetEmail);
       if (!usuario || usuario.status === statusUsuario.REMOVIDO) return null;
-      return { token: sheetToken, email: sheetEmail, nivel: row.nivel, filial: row.filial };
+      return { token: sheetToken, email: sheetEmail, nivel: row.nivel, filial: row.filial, papelUnidade: usuario.papelUnidade };
     }
   }
   // Não achou sessão local: aceita JWT do portal (SSO)
@@ -122,6 +123,24 @@ async function requireSession(token, niveisPermitidos = null) {
   return session;
 }
 
+// ============================================================
+// ESCOLA FILHA — SOMENTE LEITURA EM EQUIPAMENTOS
+// Escolas irmãs (mesmo prédio) compartilham o painel de
+// equipamentos do grupo, mas a FILHA não administra esse painel:
+// ela apenas visualiza. A distinção vem do portal (que conhece a
+// lista-mestra MÃE/FILHA) e chega aqui por `usuarios.papel_unidade`
+// (sync interno). NULL = não sincronizado ainda → comportamento
+// antigo, sem risco de travar a MÃE.
+// ============================================================
+const PAPEL_FILHA = 'FILHA';
+const SOMENTE_LEITURA_MSG =
+  'Sua unidade divide o prédio com outra escola e tem acesso somente de visualização aos equipamentos. ' +
+  'Para alterar, cadastrar ou remover equipamentos, solicite à escola principal do grupo.';
+
+function sessaoSomenteLeitura(session) {
+  return String(session?.papelUnidade || '').toUpperCase() === PAPEL_FILHA;
+}
+
 async function findUsuarioByEmail(email) {
   const data = await sheets.getValues('Usuarios');
   for (const row of data) {
@@ -134,6 +153,7 @@ async function findUsuarioByEmail(email) {
         status: row.status,
         dataRemocao: row.data_remocao,
         senhaDefinida: row.senha_definida !== false,
+        papelUnidade: row.papel_unidade || null,
       };
     }
   }
@@ -220,6 +240,68 @@ async function getAllEquipamentos() {
     offset += BLOCO;
   }
   return todos.map(item => toCamelCase(item));
+}
+
+// ============================================================
+// NOME OFICIAL DAS UNIDADES
+// `equipamentos.unidade` é TEXT livre: a mesma escola pode estar
+// gravada como "E.E. HAYDEE HIDALGO" (oficial, de `filiais`) ou
+// "Haydee Hidalgo Professora" (legado). Agrupar pela string exata
+// fazia a escola aparecer duplicada no filtro de unidades. O índice
+// resolve as duas para o nome oficial.
+// ============================================================
+const TTL_INDICE_UNIDADES_MS = 5 * 60 * 1000;
+let cacheIndiceUnidades = { em: 0, indice: null };
+
+/** Índice oficial (nomes de `filiais`) com cache curto — a lista muda pouco. */
+async function indiceUnidades(forcar = false) {
+  const agora = Date.now();
+  if (!forcar && cacheIndiceUnidades.indice && agora - cacheIndiceUnidades.em < TTL_INDICE_UNIDADES_MS) {
+    return cacheIndiceUnidades.indice;
+  }
+  const { data, error } = await sheets.supabase.from('filiais').select('nome');
+  if (error) throw new Error(`Erro ao ler filiais: ${error.message}`);
+  const indice = sheets.criarIndiceUnidades((data || []).map((f) => f.nome));
+  cacheIndiceUnidades = { em: agora, indice };
+  return indice;
+}
+
+/**
+ * Resolve o nome oficial de uma unidade para gravação/exibição. Ao não achar,
+ * recarrega o índice uma vez — cobre a filial recém-cadastrada que ainda não
+ * entrou no cache — e só então mantém o texto de origem.
+ */
+async function resolverNomeOficial(nome) {
+  const alvo = String(nome || '').trim();
+  if (!alvo) return { nome: '', oficial: null };
+  let oficial = (await indiceUnidades()).canonico(alvo);
+  if (!oficial) oficial = (await indiceUnidades(true)).canonico(alvo);
+  return { nome: oficial || alvo, oficial };
+}
+
+/**
+ * Grafias de `unidade` que existem de fato na coluna (as legadas inclusas).
+ * O filtro de unidade precisa delas para responder pela escola inteira,
+ * mesmo antes de a migração de dados rodar.
+ */
+async function listarGrafiasUnidade() {
+  const BLOCO = 1000;
+  const grafias = new Set();
+  let offset = 0;
+  while (true) {
+    const { data, error } = await sheets.supabase
+      .from('equipamentos')
+      .select('unidade')
+      .range(offset, offset + BLOCO - 1);
+    if (error) throw new Error(`Erro ao ler unidades: ${error.message}`);
+    for (const linha of data || []) {
+      const g = String(linha.unidade || '').trim();
+      if (g) grafias.add(g);
+    }
+    if (!data || data.length < BLOCO) break;
+    offset += BLOCO;
+  }
+  return [...grafias];
 }
 
 // ============================================================
@@ -401,7 +483,7 @@ app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
     return res.status(401).json(standardResponse(false, null, 'Não autorizado.'));
   }
 
-  const { email, nome, nivel, filial, status } = req.body || {};
+  const { email, nome, nivel, filial, status, papelUnidade } = req.body || {};
   if (!email || !nome || !nivel) {
     return res.json(standardResponse(false, null, 'email, nome e nivel são obrigatórios.'));
   }
@@ -409,6 +491,11 @@ app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
   if (!nivelSce) {
     return res.json(standardResponse(false, null, `Nível desconhecido: ${nivel}`));
   }
+
+  // Papel no grupo de escolas irmãs: 'MAE' administra o painel compartilhado,
+  // 'FILHA' só visualiza. Ausente/desconhecido => null (sem restrição).
+  const papel = String(papelUnidade || '').trim().toUpperCase();
+  const papelUnidadeSce = papel === 'MAE' || papel === 'FILHA' ? papel : null;
 
   const emailNorm = String(email).trim().toLowerCase();
   const inativo = String(status || 'ATIVO').toUpperCase() !== 'ATIVO';
@@ -422,6 +509,7 @@ app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
         nome: String(nome).trim(),
         nivel: nivelSce,
         filial: String(filial || '').trim(),
+        papel_unidade: papelUnidadeSce,
         status: inativo ? statusUsuario.REMOVIDO : statusUsuario.ATIVO,
         data_remocao: inativo ? agora : null,
         atualizado_em: agora,
@@ -436,6 +524,7 @@ app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
         nome: String(nome).trim(),
         nivel: nivelSce,
         filial: String(filial || '').trim(),
+        papel_unidade: papelUnidadeSce,
         status: inativo ? statusUsuario.REMOVIDO : statusUsuario.ATIVO,
         data_remocao: inativo ? agora : null,
         senha_definida: false,
@@ -445,8 +534,8 @@ app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
     if (error) throw new Error(error.message);
   }
 
-  await registrarAuditoria('syncUsuario', 'portal-sync', { email: emailNorm, nivel: nivelSce, inativo });
-  res.json(standardResponse(true, { email: emailNorm, nivel: nivelSce }));
+  await registrarAuditoria('syncUsuario', 'portal-sync', { email: emailNorm, nivel: nivelSce, papelUnidade: papelUnidadeSce, inativo });
+  res.json(standardResponse(true, { email: emailNorm, nivel: nivelSce, papelUnidade: papelUnidadeSce }));
 }));
 
 // ============================================================
@@ -763,8 +852,12 @@ app.get('/api/catalogo-equipamentos', asyncHandler(async (req, res) => {
 app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
-  const todos = await getAllEquipamentos();
-  const filtrados = todos.filter(item => item.status !== 'Removido' && sheets.sessaoTemAcessoAUnidade(session, item.unidade));
+  const [todos, indice] = await Promise.all([getAllEquipamentos(), indiceUnidades()]);
+  const filtrados = todos
+    .filter(item => item.status !== 'Removido' && sheets.sessaoTemAcessoAUnidade(session, item.unidade))
+    // Sai no nome oficial: o agrupamento do filtro acontece no cliente (a filial
+    // carrega tudo e filtra localmente), então normalizar aqui evita a duplicata.
+    .map((item) => ({ ...item, unidade: indice.resolver(item.unidade) }));
   res.json(standardResponse(true, filtrados));
 }));
 
@@ -772,18 +865,28 @@ app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
 
-  const todos = await getAllEquipamentos();
+  // Esta rota alimenta o select de "Unidade escolar" do cadastro de equipamento.
+  // Agrupar pela string exata fazia a mesma escola aparecer duas vezes no select
+  // (uma pela grafia oficial, outra pela legada) — e escolher a errada criava
+  // mais uma variante no banco. A chave é sempre o nome oficial de `filiais`.
+  const [todos, indice, { data: filiais, error: errFiliais }] = await Promise.all([
+    getAllEquipamentos(),
+    indiceUnidades(),
+    sheets.supabase.from('filiais').select('nome').eq('ativo', true),
+  ]);
+  if (errFiliais) throw new Error(errFiliais.message);
   const mapa = new Map();
 
   const ensure = (nome) => {
-    if (!mapa.has(nome)) mapa.set(nome, { nome, total: 0, disponiveis: 0, manutencao: 0, quebrados: 0, extraviados: 0 });
-    return mapa.get(nome);
+    const chave = indice.agrupar(nome);
+    if (!mapa.has(chave)) mapa.set(chave, { nome: chave, total: 0, disponiveis: 0, manutencao: 0, quebrados: 0, extraviados: 0 });
+    return mapa.get(chave);
   };
 
   for (const eq of todos) {
     if (eq.status === 'Removido') continue;
     if (!sheets.sessaoTemAcessoAUnidade(session, eq.unidade)) continue;
-    const u = ensure(eq.unidade || 'Sem unidade');
+    const u = ensure(eq.unidade);
     u.total += 1;
     if (eq.status === 'Disponível') u.disponiveis += 1;
     else if (eq.status === 'Manutenção') u.manutencao += 1;
@@ -792,11 +895,6 @@ app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
   }
 
   // Inclui filiais ativas do escopo mesmo sem equipamentos (contagens zeradas)
-  const { data: filiais, error: errFiliais } = await sheets.supabase
-    .from('filiais')
-    .select('nome')
-    .eq('ativo', true);
-  if (errFiliais) throw new Error(errFiliais.message);
   for (const f of filiais || []) {
     if (sheets.sessaoTemAcessoAUnidade(session, f.nome)) ensure(f.nome);
   }
@@ -828,10 +926,17 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
   const ordem = colunasOrdem[req.query.ordem] || 'data_cadastro';
   const ascendente = req.query.direcao !== 'desc';
 
+  // Filtro de unidade tolerante: em vez de `eq('unidade', X)` (que ignoraria as
+  // grafias legadas da mesma escola), resolve TODAS as grafias que representam
+  // a unidade pedida. Sem isso, filtrar por "E.E. HAYDEE HIDALGO" esconderia os
+  // equipamentos gravados como "Haydee Hidalgo Professora".
+  const indice = await indiceUnidades();
+  const grafiasUnidade = unidade ? indice.grafiasIguais(unidade, await listarGrafiasUnidade()) : [];
+
   const aplicarFiltros = (q) => {
     let query = q.neq('status', 'Removido');
     if (status) query = query.eq('status', status);
-    if (unidade) query = query.eq('unidade', unidade);
+    if (unidade) query = query.in('unidade', grafiasUnidade.length ? grafiasUnidade : [unidade]);
     if (categoria) query = query.eq('categoria', categoria);
     if (marca) query = query.eq('marca', marca);
     if (modelo) query = query.eq('modelo', modelo);
@@ -866,18 +971,26 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
     offsetStats += BLOCO;
   }
 
+  // `porUnidade` é a origem do filtro de escolas no portal: agrupar pela string
+  // exata era o que produzia a escola duplicada. A chave é o nome oficial.
   const porStatus = {}, porUnidade = {}, porCategoria = {};
   for (const linha of statsRows) {
     const s = linha.status || 'Não definido';
     porStatus[s] = (porStatus[s] || 0) + 1;
-    const u = linha.unidade || 'Sem unidade';
+    const u = indice.agrupar(linha.unidade);
     porUnidade[u] = (porUnidade[u] || 0) + 1;
     const c = linha.categoria || 'Sem categoria';
     porCategoria[c] = (porCategoria[c] || 0) + 1;
   }
 
   res.json(standardResponse(true, {
-    data: (data || []).map(toCamelCase),
+    // A coluna "Unidade Escolar" da tabela também sai no nome oficial, para bater
+    // com o filtro mesmo antes de a migração de dados rodar.
+    data: (data || []).map((linha) => {
+      const item = toCamelCase(linha);
+      item.unidade = indice.resolver(item.unidade);
+      return item;
+    }),
     total: count || 0,
     stats: { porStatus, porUnidade, porCategoria },
   }));
@@ -928,10 +1041,22 @@ app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
 app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const dados = req.body;
 
-  const unidade = sheets.resolverUnidadeParaEscrita(session, dados.unidade);
-  if (!unidade) return res.json(standardResponse(false, null, 'Não foi possível determinar a unidade deste usuário. Verifique o cadastro da filial.'));
+  const unidadeInformada = sheets.resolverUnidadeParaEscrita(session, dados.unidade);
+  if (!unidadeInformada) return res.json(standardResponse(false, null, 'Não foi possível determinar a unidade deste usuário. Verifique o cadastro da filial.'));
+
+  // Grava sempre no nome oficial da escola. Sem isso, a Matriz podia cadastrar
+  // "Haydee Hidalgo Professora" ao lado de "E.E. HAYDEE HIDALGO" e a escola
+  // passava a duplicar no filtro de unidades. Escola fora de `filiais` mantém o
+  // texto informado (não quebra o cadastro) e só o log denuncia o cadastro ausente.
+  const { nome: unidade, oficial } = await resolverNomeOficial(unidadeInformada);
+  if (unidade !== String(unidadeInformada).trim()) {
+    console.log(`[unidades] "${unidadeInformada}" gravado como "${unidade}" (nome oficial)`);
+  } else if (!oficial) {
+    console.warn(`[unidades] "${unidade}" não está em filiais — gravada como está. Cadastre a escola em filiais.`);
+  }
 
   const patrimonio = (dados.patrimonio || '').trim();
   const justifPat = (dados.justificativaPatrimonio || '').trim();
@@ -986,6 +1111,7 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
 app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { id, ...camposAlterados } = req.body;
 
   // Buscar equipamento atual
@@ -1000,6 +1126,12 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
   // Verificar permissão
   if (!sheets.sessaoTemAcessoAUnidade(session, equipAtual.unidade)) {
     return res.json(standardResponse(false, null, 'Você não tem permissão para editar este equipamento.'));
+  }
+
+  // Transfere de unidade: grava no nome oficial, para não nascer uma nova
+  // variante da mesma escola no filtro de unidades.
+  if (camposAlterados.unidade !== undefined && String(camposAlterados.unidade).trim()) {
+    camposAlterados.unidade = (await resolverNomeOficial(camposAlterados.unidade)).nome;
   }
 
   // Validação de duplicidade se alterou serie/patrimonio
@@ -1101,6 +1233,7 @@ app.get('/api/anexo-url', asyncHandler(async (req, res) => {
 app.post('/api/clone-equipamento', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { idOrigem } = req.body;
 
   const data = await sheets.getValues('Equipamentos');
@@ -1138,6 +1271,7 @@ app.post('/api/clone-equipamento', asyncHandler(async (req, res) => {
 app.post('/api/remover-equipamento', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { id } = req.body;
 
   const { data: equipAtual, error } = await sheets.supabase
@@ -1169,6 +1303,7 @@ app.post('/api/remover-equipamento', asyncHandler(async (req, res) => {
 app.post('/api/atualizar-status-manutencao', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { equipamentoId, novoStatus } = req.body;
 
   if (!statusManutencaoValidos.includes(novoStatus)) {
@@ -1225,6 +1360,7 @@ app.get('/api/registros-manutencao', asyncHandler(async (req, res) => {
 app.post('/api/registrar-manutencao', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { equipamentoId, descricao, status } = req.body;
 
   if (!descricao?.trim()) return res.json(standardResponse(false, null, 'Descrição é obrigatória.'));
@@ -1291,6 +1427,7 @@ app.get('/api/filiais-para-emprestimo', asyncHandler(async (req, res) => {
 app.post('/api/registrar-emprestimo', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { ids, ...dados } = req.body;
 
   if (!ids?.length) return res.json(standardResponse(false, null, 'Nenhum equipamento selecionado.'));
@@ -1351,6 +1488,7 @@ app.post('/api/registrar-emprestimo', asyncHandler(async (req, res) => {
 app.post('/api/registrar-devolucao', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { ids, observacao } = req.body;
 
   if (!ids?.length) return res.json(standardResponse(false, null, 'Nenhum equipamento selecionado.'));

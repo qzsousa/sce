@@ -84,7 +84,11 @@ CREATE TABLE usuarios (
   status        status_usuario NOT NULL DEFAULT 'Ativo',
   data_remocao  TIMESTAMPTZ,
   criado_em     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- papel_unidade: 'MAE' | 'FILHA' â€” escolas irmÃ£s (mesmo prÃ©dio) compartilham
+  -- o painel de equipamentos, mas a FILHA sÃ³ pode VISUALIZAR (sem criar, editar,
+  -- alterar status ou remover). NULL = sem par ou usuÃ¡rio ainda nÃ£o sincronizado.
+  papel_unidade TEXT
 );
 
 CREATE INDEX idx_usuarios_nivel ON usuarios(nivel);
@@ -1080,7 +1084,7 @@ Importe esta collection no Postman:
 Para dÃºvidas, consulte o cÃ³digo-fonte em `server.js`, `googleSheetsService.js` e `api.js`.
 ## SSO com o Portal URE Leste 3 (nov. 2026)
 
-Duas variáveis novas no .env:
+Duas variï¿½veis novas no .env:
 
-- `SSO_SECRET` — deve ser **idêntico** ao `JWT_SECRET` do backend de chamados. Com ele, o SCE aceita os access tokens JWT emitidos pelo portal (usuário resolvido por e-mail na tabela `usuarios` local; nível/filial continuam vindo do SCE).
-- `SCE_SYNC_KEY` — chave do endpoint interno `POST /api/internal/sync-usuario` (header `x-sync-key`), usado pelo backend de chamados para manter a tabela `usuarios` do SCE sincronizada.
+- `SSO_SECRET` ï¿½ deve ser **idï¿½ntico** ao `JWT_SECRET` do backend de chamados. Com ele, o SCE aceita os access tokens JWT emitidos pelo portal (usuï¿½rio resolvido por e-mail na tabela `usuarios` local; nï¿½vel/filial continuam vindo do SCE).
+- `SCE_SYNC_KEY` ï¿½ chave do endpoint interno `POST /api/internal/sync-usuario` (header `x-sync-key`), usado pelo backend de chamados para manter a tabela `usuarios` do SCE sincronizada.

@@ -32,11 +32,19 @@ CREATE TABLE usuarios (
   data_remocao   TIMESTAMPTZ,
   senha_definida BOOLEAN NOT NULL DEFAULT TRUE,
   criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- papel_unidade: 'MAE' | 'FILHA' — escola FILHA (irmã que divide o prédio com
+  -- a MÃE) só pode VISUALIZAR os equipamentos compartilhados do grupo.
+  -- NULL = unidade sem par ou usuário ainda não sincronizado (acesso atual).
+  papel_unidade  TEXT
 );
 
+-- papel_unidade: 'MAE' | 'FILHA' — escola FILHA (irmã que divide o prédio com
+-- a MÃE) só pode VISUALIZAR os equipamentos compartilhados do grupo. NULL =
+-- unidade sem par ou usuário ainda não sincronizado (mantém o acesso atual).
 -- Para bancos já existentes, aplicar a migração abaixo:
 -- ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS senha_definida BOOLEAN NOT NULL DEFAULT TRUE;
+-- ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS papel_unidade TEXT;
 
 CREATE INDEX idx_usuarios_nivel ON usuarios(nivel);
 CREATE INDEX idx_usuarios_filial ON usuarios(filial);

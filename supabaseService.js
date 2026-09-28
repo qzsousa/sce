@@ -177,7 +177,24 @@ export function parseFiliais(filialRaw) {
 // Normalização: sem prefixo "E.E.", sem acentos/pontuação, sem honoríficos
 // no final; casa quando um lado contém o outro em palavras completas.
 // ============================================================
-const HONORIFICOS_FIM = /(\s+(PROF(A)?|DR(A)?|DEPUTAD[OA]|PRESIDENTE|MAESTRO|GOVERNADOR|BIBLIOTECARIA))+\s*$/;
+/**
+ * Honoríficos que aparecem no FIM do nome da escola. Sem esta lista,
+ * "Haydee Hidalgo Professora" (legado) não se reconhecia como a mesma escola
+ * de "E.E. HAYDEE HIDALGO" (oficial) — a forma completa precisa estar aqui,
+ * porque abreviação tipo "PROF"/"PROFA" não cobre "PROFESSORA".
+ */
+const HONORIFICOS = new Set([
+  'PROF', 'PROFA', 'PROFESSOR', 'PROFESSORA', 'PROFESSORES',
+  'DR', 'DRA', 'DOUTOR', 'DOUTORA',
+  'DEP', 'DEPUTADO', 'DEPUTADA',
+  'PRESIDENTE', 'PRESIDENTA',
+  'MAESTRO', 'MAESTRA',
+  'GOVERNADOR', 'GOVERNADORA',
+  'VEREADOR', 'VEREADORA',
+  'DIRETOR', 'DIRETORA',
+  'COORDENADOR', 'COORDENADORA',
+  'BIBLIOTECA', 'BIBLIOTECARIA',
+]);
 
 export function chaveUnidade(nome) {
   return String(nome || '')
@@ -191,12 +208,21 @@ export function chaveUnidade(nome) {
     .trim();
 }
 
+/** Tira honoríficos do fim do nome ("... PROFESSORA" → "..."), sem esvaziar a chave. */
 function semHonorificos(chave) {
-  return chave.replace(HONORIFICOS_FIM, '').trim();
+  let atual = chave;
+  while (atual) {
+    const partes = atual.split(' ');
+    // nunca esvazia: a chave cheia já foi registrada por quem chama
+    if (partes.length < 2) break;
+    if (!HONORIFICOS.has(partes[partes.length - 1])) break;
+    atual = partes.slice(0, -1).join(' ');
+  }
+  return atual;
 }
 
 /** Conjunto de chaves de um nome: inteiro, sem honoríficos e cada parte de composto ("A / B"). */
-function chavesUnidade(nome) {
+export function chavesUnidade(nome) {
   const chaves = new Set();
   const add = (valor) => {
     const k = chaveUnidade(valor);
@@ -210,8 +236,15 @@ function chavesUnidade(nome) {
   return [...chaves];
 }
 
-/** Duas unidades casam quando alguma chave de um lado é igual ou contém a do outro (limite em palavra). */
-function unidadesCasam(a, b) {
+/**
+ * Duas unidades casam quando alguma chave de um lado é igual OU uma contém a
+ * outra em palavras completas ("E.E. A" dentro de "E.E. A SOBRINHO").
+ *
+ * Usado só para CONTROLE DE ACESSO, onde errar para mais é o lado seguro: a
+ * filial enxerga um pouco mais do que devia, mas nunca perde o próprio parque.
+ * NÃO usar para canonicalizar nome — ver `mesmaEscola`.
+ */
+export function unidadesCasam(a, b) {
   const ka = chavesUnidade(a);
   const kb = chavesUnidade(b);
   for (const x of ka) {
@@ -222,6 +255,134 @@ function unidadesCasam(a, b) {
     }
   }
   return false;
+}
+
+/**
+ * Matcher ESTREITO: as duas grafias são a mesma escola quando compartilham
+ * alguma chave normalizada (o conjunto inclui a variante sem honoríficos, o
+ * que faz "Haydee Hidalgo Professora" casar com "E.E. HAYDEE HIDALGO").
+ *
+ * Diferente de `unidadesCasam` de propósito: aqui errar para o lado oposto
+ * seria grave. "E.E. JOAO SILVA" e "E.E. JOAO SILVA SOBRINHO" compartilham
+ * prefixo, mas são escolas distintas — se casassem, a canonicalização
+ * trocaria o equipamento de uma escola para o nome da outra, corrompendo o
+ * dado. Por isso a interseção precisa ser exata, não por contenção.
+ */
+export function mesmaEscola(a, b) {
+  const chavesA = new Set(chavesUnidade(a));
+  return chavesUnidade(b).some((k) => chavesA.has(k));
+}
+
+// ============================================================
+// NOME OFICIAL DA UNIDADE
+// A coluna `equipamentos.unidade` é TEXT livre (não é FK para
+// `filiais.nome`), então a mesma escola pode estar gravada com
+// grafias diferentes — "E.E. HAYDEE HIDALGO" (oficial) e
+// "Haydee Hidalgo Professora" (legado do Google Sheets). Como o
+// filtro e os agregados agrupavam pela string exata, a escola
+// aparecia duplicada na lista de unidades.
+//
+// O índice abaixo resolve qualquer grafia para o nome oficial de
+// `filiais`, usando o matcher estrito. Sem correspondência, o texto
+// de origem é preservado (uma escola fora de `filiais` não pode
+// quebrar o cadastro).
+// ============================================================
+export function criarIndiceUnidades(nomesOficiais = []) {
+  const oficiais = [...new Set(nomesOficiais.map((n) => String(n || '').trim()).filter(Boolean))];
+  const memo = new Map();
+
+  const canonico = (nome) => {
+    const alvo = String(nome || '').trim();
+    if (!alvo) return null;
+    if (memo.has(alvo)) return memo.get(alvo);
+    const achado =
+      oficiais.find((o) => o === alvo) || oficiais.find((o) => mesmaEscola(o, alvo)) || null;
+    memo.set(alvo, achado);
+    return achado;
+  };
+
+  return {
+    oficiais,
+    /** Nome oficial da unidade, ou null quando ela não está em `filiais`. */
+    canonico,
+    /** Grafia a persistir/exibir: o oficial quando conhecido, senão a de origem. */
+    resolver(nome) {
+      const limpo = String(nome || '').trim();
+      if (!limpo) return '';
+      return canonico(limpo) || limpo;
+    },
+    /** Chave de agrupamento (agregados/gráficos): 'Sem unidade' quando vazio. */
+    agrupar(nome) {
+      return this.resolver(nome) || 'Sem unidade';
+    },
+    /**
+     * Todas as grafias conhecidas que representam a mesma unidade que `nome`.
+     * Serve para o filtro no banco (`in`) e para o relatório de migração.
+     * Sem correspondência em `filiais`, devolve o próprio nome.
+     */
+    grafiasIguais(nome, grafiasConhecidas = oficiais) {
+      const alvo = String(nome || '').trim();
+      if (!alvo) return [];
+      const oficial = canonico(alvo);
+      if (!oficial) return [alvo];
+      const grupo = new Set([oficial]);
+      for (const g of grafiasConhecidas || []) {
+        const limpo = String(g || '').trim();
+        if (limpo && mesmaEscola(limpo, oficial)) grupo.add(limpo);
+      }
+      return [...grupo];
+    },
+  };
+}
+
+/**
+ * Junta grafias que representam a MESMA escola, por transitividade: se duas
+ * compartilham alguma chave normalizada, caem no mesmo grupo. O composto
+ * "E.E. A / E.E. B" traz as partes, então uma grafia simples casa com ele.
+ *
+ * Devolve `[{ chaves, grafias }]` — `chaves` é o acumulado do grupo, para a
+ * comparação seguinte. É a MESMA regra que `criarIndiceUnidades` usa: quem
+ * precisa agrupar (script de migração, conferência) tem de chamar isto, nunca
+ * reimplementar a comparação.
+ */
+export function agruparGrafiasUnidade(grafias) {
+  const grupos = [];
+  for (const g of grafias) {
+    const nome = String(g || '').trim();
+    if (!nome) continue;
+    const chaves = new Set(chavesUnidade(nome));
+    const alvo = grupos.find((grp) => [...chaves].some((k) => grp.chaves.has(k)));
+    if (alvo) {
+      alvo.grafias.push(nome);
+      for (const k of chaves) alvo.chaves.add(k);
+    } else {
+      grupos.push({ chaves, grafias: [nome] });
+    }
+  }
+  return grupos;
+}
+
+/** Prefixos de ensino: marcam o nome que vem do cadastro de chamados. */
+const PREFIXO_ENSINO = /^(E\.[EFMAPI]|C\.[EFM])\b/;
+
+/**
+ * Escolhe o nome oficial entre as grafias de uma mesma escola, por:
+ * 1) a que tem prefixo de ensino (E.E., E.M., C.E.…) — o nome "de sistema";
+ * 2) em empate, a de maior volume de equipamentos;
+ * 3) em empate, a primeira em ordem alfabética (determinístico).
+ *
+ * `volumes` é um Map { grafia: nº de equipamentos }.
+ */
+export function escolherNomeOficial(grafias, volumes = new Map()) {
+  return [...grafias].sort((a, b) => {
+    const pa = PREFIXO_ENSINO.test(String(a).trim().toUpperCase()) ? 1 : 0;
+    const pb = PREFIXO_ENSINO.test(String(b).trim().toUpperCase()) ? 1 : 0;
+    if (pa !== pb) return pb - pa;
+    const qa = volumes.get(a) || 0;
+    const qb = volumes.get(b) || 0;
+    if (qa !== qb) return qb - qa;
+    return a.localeCompare(b, 'pt-BR');
+  })[0];
 }
 
 export function sessaoTemAcessoAUnidade(session, unidade) {
@@ -418,6 +579,12 @@ export default {
   parseFiliais,
   sessaoTemAcessoAUnidade,
   resolverUnidadeParaEscrita,
+  criarIndiceUnidades,
+  unidadesCasam,
+  mesmaEscola,
+  chavesUnidade,
+  agruparGrafiasUnidade,
+  escolherNomeOficial,
   findUsuarioByEmail,
   createSession,
   validateSession,
