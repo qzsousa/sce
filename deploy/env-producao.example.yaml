@@ -16,9 +16,15 @@ env:
     # em modo de desenvolvimento sem voce perceber.
     value: production
 
-  # Dominio do frontend do SCE (Vercel). Usado em redirects e no CORS.
+  # Dominio do frontend do SCE na Vercel.
+  #
+  # IMPORTANTE: o server.js:214 monta o redirectUrl do pos-login a partir
+  # daqui. Se este valor estiver errado, o usuario autentica com sucesso e cai
+  # num dominio morto. O default hardcoded no codigo e sce-ebon.vercel.app, mas
+  # o projeto real em uso e sce-nu.vercel.app - por isso o valor e fixado aqui
+  # em vez de deixar o default assumir.
   - name: FRONTEND_URL
-    value: https://sce-ebon.vercel.app
+    value: https://sce-nu.vercel.app
 
   # ---- Sobre o que NAO precisa ir aqui -------------------------------------
   # GOOGLE_PRIVATE_KEY, GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PROJECT_ID e os
