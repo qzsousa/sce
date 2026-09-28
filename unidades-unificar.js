@@ -22,6 +22,7 @@
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 import { criarIndiceUnidades } from './supabaseService.js';
+import { CORRECOES } from './mapa-unidades.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -79,19 +80,55 @@ async function main() {
   const colunas = TABELA === 'emprestimos' ? 'id, unidade' : 'id, unidade, modelo, status';
   const linhas = await lerUnidades(TABELA, colunas);
 
+  /**
+   * Grafia de origem → nome oficial.
+   *
+   * O mapa tem prioridade: as grafias encurtadas que ele cobre
+   * ("Francisco De Assis Pires Correa Prof") não atravessam o casamento
+   * estrito contra o oficial ("E.E. FRANCISCO DE ASSIS P. CORRÊA"), porque
+   * "PIRES CORREA" e "P CORREA" são chaves diferentes. Sem consultar o mapa,
+   * essas linhas ficariam para trás mesmo com `filiais` já corrigido.
+   */
+  const oficialDe = (grafia) => {
+    if (Object.prototype.hasOwnProperty.call(CORRECOES, grafia)) return CORRECOES[grafia];
+    return indice.canonico(grafia);
+  };
+
   // Grafia de origem → nome oficial, só quando mudaria de fato.
   const plano = new Map();
   for (const linha of linhas) {
     const atual = String(linha.unidade || '').trim();
     if (!atual) continue;
-    const oficial = indice.canonico(atual);
+    const oficial = oficialDe(atual);
     if (!oficial || oficial === atual) continue;
     if (!plano.has(atual)) plano.set(atual, { oficial, ids: [] });
     plano.get(atual).ids.push(linha.id);
   }
 
+  // Grafia que não resolve para nenhum oficial: não entra em `plano`, então
+  // sumiria do relatório e ficaria virando linha própria no filtro sem ninguém
+  // perceber. Contamos à parte, separando o que o usuário ainda vê do que já
+  // está com status Removido (esse nem aparece no filtro).
+  const orfaosVisiveis = new Map();
+  const orfaosRemovidos = new Map();
+  for (const linha of linhas) {
+    const atual = String(linha.unidade || '').trim();
+    if (!atual) continue;
+    if (oficialDe(atual)) continue;
+    const alvo = linha.status === 'Removido' ? orfaosRemovidos : orfaosVisiveis;
+    alvo.set(atual, (alvo.get(atual) || 0) + 1);
+  }
+  const orfaos = new Map([...orfaosVisiveis, ...orfaosRemovidos]);
+
   if (plano.size === 0) {
-    console.log('\n✅ Nenhuma grafia duplicada encontrada. Banco já está unificado.\n');
+    console.log('\n✅ Nenhuma grafia duplicada encontrada. Banco já está unificado.');
+    if (orfaosVisiveis.size) {
+      console.log(`\n⚠️  ${orfaosVisiveis.size} grafia(s) visíveis sem nome oficial em filiais (viram linha própria no filtro):`);
+      for (const [g, q] of orfaosVisiveis) console.log(`  ${String(q).padStart(5)}  "${g}"`);
+      console.log('   Resolva em CORRECOES (mapa-unidades.js) e rode de novo.\n');
+    } else {
+      console.log('');
+    }
     return;
   }
 
@@ -113,6 +150,16 @@ async function main() {
   }
   const totalRegistros = [...plano.values()].reduce((s, v) => s + v.ids.length, 0);
   console.log(`\n  Total: ${plano.size} grafia(s) divergente(s) em ${totalRegistros} registro(s).`);
+
+  if (orfaosVisiveis.size) {
+    console.log(`\n⚠️  ${orfaosVisiveis.size} grafia(s) visíveis SEM nome oficial em filiais — viram linha própria no filtro:`);
+    for (const [g, q] of orfaosVisiveis) console.log(`  ${String(q).padStart(5)}  "${g}"`);
+    console.log('   Resolva em CORRECOES (mapa-unidades.js) e rode de novo.');
+  }
+  if (orfaosRemovidos.size) {
+    console.log(`\nℹ️  ${orfaosRemovidos.size} grafia(s) sem oficial, mas com status Removido (não aparecem no filtro):`);
+    for (const [g, q] of orfaosRemovidos) console.log(`  ${String(q).padStart(5)}  "${g}"`);
+  }
 
   if (!APLICAR) {
     console.log('\n💡 Rode com --aplicar para corrigir o banco.\n');
