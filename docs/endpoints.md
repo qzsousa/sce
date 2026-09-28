@@ -107,19 +107,47 @@ Dois matchers, de propósito:
 | `unidadesCasam` | containment por palavra | **só** controle de acesso — errar para mais é seguro |
 | `mesmaEscola` | interseção exata de chaves | canonicalização — "E.E. JOAO SILVA" ≠ "E.E. JOAO SILVA SOBRINHO" |
 
-A lista oficial é gerenciada com dois scripts na raiz (o primeiro **precisa**
-rodar antes do segundo):
+A lista oficial é gerenciada por três scripts na raiz. A ordem importa: o
+`filiais` precisa existir **antes** de reescrever o equipamento, senão o
+`unidades-unificar` não tem contra o que resolver.
 
 ```bash
-node filiais-sincronizar.js    # relatório: quais escolas têm nome duplicado
-node filiais-sincronizar.js --aplicar   # grava os oficiais em filiais
-node unidades-unificar.js      # relatório do que será reescrito
-node unidades-unificar.js --aplicar     # reescreve equipamentos.unidade
+# 1. dedup: descobre e grava os oficiais a partir do próprio parque
+node filiais-sincronizar.js                    # relatório
+node filiais-sincronizar.js --aplicar          # grava
+
+# 2. alinha com a lista-mestra do backend de chamados (opcional)
+node filiais-importar-mestra.js                # relatório
+node filiais-importar-mestra.js --aplicar      # renomeia filiais + insere prédios
+
+# 3. reescreve a coluna do equipamento
+node unidades-unificar.js                      # relatório
+node unidades-unificar.js --aplicar            # reescreve equipamentos.unidade
 ```
 
-Ambos são **relatório por padrão** e só gravam com `--aplicar`. Nome já
+Todos são **relatório por padrão** e só gravam com `--aplicar`. Nome já
 cadastrado em `filiais` sempre tem prioridade — para corrigir um oficial
 inferido, cadastre o nome certo em `filiais` antes de aplicar.
+
+### Lista-mestra do backend de chamados
+
+`filiais-importar-mestra.js` lê `NOMES_PADRONIZADOS` de
+`chamados/backend/src/services/normalization.ts` (roda com `--lista <arquivo>`
+para outra fonte). O SCE não tem acesso a essa lista em tempo de execução: o
+backend de chamados está em **outro projeto Supabase**, então a lista é lida do
+fonte, não por API. Rode o script de novo sempre que a lista mudar lá.
+
+A lista-mestra traz **prédios** (irmãs na mesma linha, "E.E. A / E.E. B"),
+enquanto o `equipamentos.unidade` gravou **escolas individuais**. Importar
+consolida: 17 escolas viram o prédio inteiro, e a equipmentação da irmã passa a
+contar junto — o mesmo agrupamento que o painel de unidades do portal faz.
+
+Como a lista tem nomes encurtados que o casamento tolerante não atravessa
+("Francisco De Assis Pires Correa Prof" ≠ "E.E. FRANCISCO DE ASSIS P. CORRÊA"),
+o **`mapa-unidades.js`** traz essas correções à mão. Sem ele a importação criaria
+duas linhas para a mesma escola — justamente o bug que o dedup elimina. As
+entradas do mapa são decisão de negócio ("esta escola é aquela"), por isso ficam
+num arquivo revisável em vez de embutidas na regra.
 
 ## Endpoints citados no passado, mas inexistentes
 
