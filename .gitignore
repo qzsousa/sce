@@ -2,6 +2,11 @@ node_modules/
 dist/
 .env
 .env.local
+# Backups de .env carregam segredo real: Google private key,
+# SUPABASE_SERVICE_ROLE_KEY, SSO_SECRET, SCE_SYNC_KEY. NUNCA versionar.
+.env.*
+!.env.example
+*.bak
 *.log
 .DS_Store
 *.swp
@@ -10,3 +15,8 @@ dist/
 .idea/
 *.local
 test.json
+
+# Deploy (Cloud Run) - segredos reais nunca entram no git.
+# Os arquivos .example.* continuam versionados de proposito.
+deploy/secrets.env
+deploy/env-producao.yaml

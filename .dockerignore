@@ -1,0 +1,49 @@
+# Contexto de build: a raiz do repo do sce.
+# O Docker so respeita ESTE arquivo (o .gitignore nao vale para o build).
+
+# --- Segredos: NUNCA podem entrar na imagem -------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*service-account*.json
+# deploy/secrets.env e deploy/env-producao.yaml: fora do contexto do build.
+deploy
+
+# --- Dependencies ----------------------------------------------------------
+node_modules
+
+# --- Artefatos locais ------------------------------------------------------
+dist
+build
+
+# --- Git / editor / Supabase Functions --------------------------------------
+.git
+.gitignore
+.github
+.vscode
+.idea
+.clasp.json
+.claspignore
+appsscript.json
+Code.js
+
+# --- Nao usados pela imagem da API ------------------------------------------
+# src/ e public/ sao o frontend do vite, servido pelo Vercel.
+src
+public
+*.html
+# scripts e utilitarios executados so localmente.
+migrate.js
+diagnostico-migracao.js
+find-duplicados.js
+googleSheetsService.js
+api.js
+supabase_schema.sql
+test.json
+docs
+*.md
+!README.md
+*.bak
+*.log

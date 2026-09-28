@@ -1,0 +1,30 @@
+# Variaveis NAO sensiveis do backend do SCE (Cloud Run).
+#
+#   cp env-producao.example.yaml env-producao.yaml
+#
+# Confirmei quais dessas o server.js realmente le (setembro/2026):
+#   server.js        -> SUPABASE_URL, SUPABASE_ANON_KEY, SSO_SECRET,
+#                       FRONTEND_URL, SCE_SYNC_KEY, PORT, NODE_ENV
+#   supabaseService  -> SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#
+# As chaves ficam no Secret Manager (veja secrets.example.env).
+# NAO defina PORT aqui: o Cloud Run injeta PORT=8080 e usa esse valor.
+
+env:
+  - name: NODE_ENV
+    # ATENCAO: server.js:1627 tem default 'development'. Sem isto, a API sobe
+    # em modo de desenvolvimento sem voce perceber.
+    value: production
+
+  # Dominio do frontend do SCE (Vercel). Usado em redirects e no CORS.
+  - name: FRONTEND_URL
+    value: https://sce-ebon.vercel.app
+
+  # ---- Sobre o que NAO precisa ir aqui -------------------------------------
+  # GOOGLE_PRIVATE_KEY, GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PROJECT_ID e os
+  # SPREADSHEET_*_ID sao do fluxo antigo de Google Sheets e NAO sao usados
+  # pelo container da API: o googleSheetsService.js so e importado pelos
+  # scripts locais (migrate.js, find-duplicados.js, diagnostico-migracao.js),
+  # e nao pelo server.js. Se voce mover esses scripts para a nuvem, inclua-os
+  # de volta e use o Secret Manager para a private key (que e multilinha e
+  # quebra em --set-env-vars).
