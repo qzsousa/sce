@@ -45,7 +45,7 @@ normais — ver `migracao-papel-mae-filha.md`.
 |---|---|---|---|
 | GET | `/api/equipamentos-da-filial` | autenticado | Todos do escopo (filtragem em memória); `unidade` sai no nome oficial |
 | GET | `/api/unidades-resumo` | autenticado | KPIs por unidade, chaveado pelo nome oficial; ⚠️ **registrada 2× (linhas 771 e 886)**; a 2ª nunca executa |
-| GET | `/api/equipamentos-global` | Matriz | `limite` (1–500, default 100), `offset`, `busca`, `status`, `unidade`, `categoria`, `marca`, `modelo`, `ordem`, `direcao` + `stats`. `unidade` e os agregados usam o nome oficial (ver *Nomes de unidade*) |
+| GET | `/api/equipamentos-global` | Matriz | `limite` (1–500, default 100), `offset`, `busca`, `status`, `unidade`, `categoria`, `marca`, `modelo`, `ordem`, `direcao` + `stats` (`porStatus`, `porUnidade`, `porCategoria`, `porModelo: [{categoria,marca,modelo,qtd}]` — o drilldown de modelos do portal, ~12 KB). `unidade` e os agregados usam o nome oficial (ver *Nomes de unidade*) |
 | POST | `/api/create-equipamento` | autenticado (escopo) | Série ou justificativa obrigatória; dedup patrimônio/série; `unidade` gravada no nome oficial; `Extraviado` exige `_anexoBoletim` |
 | POST | `/api/update-equipamento` | autenticado (escopo) | `{id, ...campos}`; histórico por campo ⚠️ bug camel×snake (ver `riscos-e-melhorias.md`) |
 | POST | `/api/clone-equipamento` | autenticado (escopo) | ⚠️ **quebrado** (lógica de array de planilha sobre resultado de objetos) |

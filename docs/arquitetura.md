@@ -130,7 +130,7 @@ Deploy: a Vercel hospeda o front e faz rewrite de `/api/*` para a Render. O `ser
 
 ### 4.9 Listagens e export
 - Filial/Técnico: `GET /api/equipamentos-da-filial` (varredura paginada em blocos de 1000, filtragem por escopo em memória).
-- Matriz: `GET /api/equipamentos-global` (paginação/filtros/ordenação no Postgres + agregados por status/unidade/categoria em blocos).
+- Matriz: `GET /api/equipamentos-global` (paginação/filtros/ordenação no Postgres + agregados por status/unidade/categoria/**modelo** em blocos). O agregado por modelo é o que o PORTAL abre no clique do gráfico de categorias: sem ele o portal teria de baixar a lista inteira (MB) só para contar, e contar requisição a requisição não fecharia — a ordenação é por `modelo`, coluna que se repete milhares de vezes, então o mesmo equipamento volta em duas páginas e outros nunca aparecem.
 - Export: `GET /api/exportar-csv` (JSON com CSV) e `POST /api/exportar-pdf` (stream pdfkit, A4 paisagem).
 
 ### 4.10 Catálogo (listas)

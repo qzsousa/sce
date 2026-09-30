@@ -963,7 +963,12 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
   let offsetStats = 0;
   while (true) {
     const { data: bloco, error: statsError } = await aplicarFiltros(
-      sheets.supabase.from('equipamentos').select('status, unidade, categoria')
+      // `marca`/`modelo` alimentam o drilldown de modelos do gráfico de categorias
+      // do portal. Sem eles o cliente teria de baixar a lista inteira (MB) só para
+      // contar, e contar requisição a requisição não fecha: a ordenação é por
+      // `modelo`, que se repete milhares de vezes, então o mesmo equipamento volta
+      // em duas páginas e outros nunca aparecem.
+      sheets.supabase.from('equipamentos').select('status, unidade, categoria, marca, modelo')
     ).range(offsetStats, offsetStats + BLOCO - 1);
     if (statsError) throw new Error(statsError.message);
     statsRows.push(...(bloco || []));
@@ -974,6 +979,10 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
   // `porUnidade` é a origem do filtro de escolas no portal: agrupar pela string
   // exata era o que produzia a escola duplicada. A chave é o nome oficial.
   const porStatus = {}, porUnidade = {}, porCategoria = {};
+  // `porModelo` é uma LISTA, não um mapa: a chave é texto livre (pode conter
+  // qualquer caractere) e ~155 itens saem em ~12 KB, contra os MB que custaria
+  // ao portal baixar a lista inteira só para contar os modelos por categoria.
+  const porModelo = new Map();
   for (const linha of statsRows) {
     const s = linha.status || 'Não definido';
     porStatus[s] = (porStatus[s] || 0) + 1;
@@ -981,6 +990,12 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
     porUnidade[u] = (porUnidade[u] || 0) + 1;
     const c = linha.categoria || 'Sem categoria';
     porCategoria[c] = (porCategoria[c] || 0) + 1;
+    const marca = linha.marca || '';
+    const modelo = linha.modelo || '';
+    const chave = `${c}||${marca}||${modelo}`;
+    const jaContado = porModelo.get(chave);
+    if (jaContado) jaContado.qtd += 1;
+    else porModelo.set(chave, { categoria: c, marca, modelo, qtd: 1 });
   }
 
   res.json(standardResponse(true, {
@@ -992,7 +1007,15 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
       return item;
     }),
     total: count || 0,
-    stats: { porStatus, porUnidade, porCategoria },
+    stats: {
+      porStatus,
+      porUnidade,
+      porCategoria,
+      // Ordenado no servidor para o portal não precisar reorganizar.
+      porModelo: [...porModelo.values()].sort((a, b) =>
+        a.categoria.localeCompare(b.categoria, 'pt-BR') || b.qtd - a.qtd ||
+        a.marca.localeCompare(b.marca, 'pt-BR') || a.modelo.localeCompare(b.modelo, 'pt-BR')),
+    },
   }));
 }));
 
