@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import PDFDocument from 'pdfkit';
 import 'dotenv/config';
 
-import sheets, { supabase as supabaseAdmin, toCamelCase, toSnakeCase } from './supabaseService.js';
+import sheets, { supabase as supabaseAdmin, toCamelCase, toSnakeCase, chaveUnidade } from './supabaseService.js';
 
 const supabaseAuth = createClient(
   process.env.SUPABASE_URL,
@@ -1061,6 +1061,45 @@ app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, resumo));
 }));
 
+/**
+ * Escola fora de `filiais` quando o equipamento é criado/movido.
+ *
+ * O nome gravado não casa com o catálogo, então o item some das telas sem
+ * nenhum aviso visível — foi assim que 439 equipamentos de Isaac e Luiz Vaz
+ * de Camões desapareceram do painel /unidades do portal. O `console.warn`
+ * anterior morria no restart e não deixava rastro.
+ *
+ * Não bloqueia o cadastro (escola nova precisa poder entrar), mas deixa
+ * registro em `auditoria` e devolve as grafias mais parecidas, para a correção
+ * ser óbvia em vez de adivinhada.
+ */
+async function alertarUnidadeNaoCatalogada(unidade, quem) {
+  const { oficiais } = await indiceUnidades();
+  const palavras = (n) => new Set(chaveUnidade(n).split(' ').filter((p) => p.length > 2));
+  const doAlvo = palavras(unidade);
+  const parecidos = oficiais
+    .map((o) => {
+      const po = palavras(o);
+      let inter = 0;
+      for (const p of doAlvo) if (po.has(p)) inter++;
+      return { o, s: doAlvo.size ? inter / doAlvo.size : 0 };
+    })
+    .filter((x) => x.s >= 0.6 && x.o !== unidade)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 3)
+    .map((x) => x.o);
+  try {
+    await registrarAuditoria('unidadeNaoCatalogada', quem, { unidade, parecidos });
+  } catch (e) {
+    console.warn(`[unidades] falha ao registrar auditoria de "${unidade}":`, e.message);
+  }
+  console.warn(
+    `[unidades] "${unidade}" não está em filiais — gravada como está.` +
+    (parecidos.length ? ` Parecidas: ${parecidos.join(', ')}` : '')
+  );
+  return parecidos;
+}
+
 app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
   const session = await requireSession(token);
@@ -1073,12 +1112,17 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   // Grava sempre no nome oficial da escola. Sem isso, a Matriz podia cadastrar
   // "Haydee Hidalgo Professora" ao lado de "E.E. HAYDEE HIDALGO" e a escola
   // passava a duplicar no filtro de unidades. Escola fora de `filiais` mantém o
-  // texto informado (não quebra o cadastro) e só o log denuncia o cadastro ausente.
+  // texto informado (não quebra o cadastro), mas o nome gravado não casa com o
+  // catálogo do portal e o equipamento some das telas — por isso o desvio é
+  // registrado em auditoria e devolvido como aviso, em vez de só ir para o log.
   const { nome: unidade, oficial } = await resolverNomeOficial(unidadeInformada);
+  let avisos = [];
   if (unidade !== String(unidadeInformada).trim()) {
     console.log(`[unidades] "${unidadeInformada}" gravado como "${unidade}" (nome oficial)`);
   } else if (!oficial) {
-    console.warn(`[unidades] "${unidade}" não está em filiais — gravada como está. Cadastre a escola em filiais.`);
+    const parecidos = await alertarUnidadeNaoCatalogada(unidade, session.email);
+    avisos = [`"${unidade}" não está no catálogo de filiais. O equipamento foi gravado assim mesmo, mas não vai aparecer nas telas até a escola ser cadastrada.`];
+    if (parecidos.length) avisos.push(`Você quis dizer: ${parecidos.join(' | ')}?`);
   }
 
   const patrimonio = (dados.patrimonio || '').trim();
@@ -1128,7 +1172,7 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   await registrarHistorico(id, 'criação', '', 'Equipamento cadastrado', session.email);
   await registrarAuditoria('createEquipamento', session.email, { id, unidade });
 
-  res.json(standardResponse(true, { id }));
+  res.json(standardResponse(true, { id, avisos }));
 }));
 
 app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
