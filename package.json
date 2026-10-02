@@ -8,7 +8,8 @@
     "start": "node server.js",
     "dev": "concurrently \"node --watch server.js\" \"vite\"",
     "build": "npx vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:seguranca": "node scripts/verificar-seguranca.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",
@@ -16,13 +17,18 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.5.1",
     "googleapis": "^128.0.0",
+    "helmet": "^7.2.0",
     "jsonwebtoken": "^9.0.3",
     "pdfkit": "^0.15.0",
-    "uuid": "^9.0.0",
+    "uuid": "^11.1.1",
     "vite": "^8.2.2"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

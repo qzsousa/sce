@@ -400,6 +400,20 @@ export function sessaoTemAcessoAUnidade(session, unidade) {
   return unidadesCasam(session.filial, unidade);
 }
 
+/**
+ * Erro de permissão/permissão de escrita.
+ *
+ * `status` para que o handler do servidor responda 403 em vez de 500 (antes
+ * estas viravam "erro interno"). Não importa `security.js` para não criar
+ * ciclo de imports.
+ */
+function erroPermissao(mensagem) {
+  const err = new Error(mensagem);
+  err.status = 403;
+  err.expose = true;
+  return err;
+}
+
 export function resolverUnidadeParaEscrita(session, unidadeInformada) {
   const niveis = {
     MATRIZ: 'Matriz',
@@ -412,7 +426,7 @@ export function resolverUnidadeParaEscrita(session, unidadeInformada) {
   }
   if (session.nivel === niveis.ADMIN_FILIAL) {
     if (unidadeInformada && !unidadesCasam(unidadeInformada, session.filial)) {
-      throw new Error('Você só pode cadastrar equipamentos na sua própria unidade.');
+      throw erroPermissao('Você só pode cadastrar equipamentos na sua própria unidade.');
     }
     return session.filial;
   }
@@ -420,12 +434,12 @@ export function resolverUnidadeParaEscrita(session, unidadeInformada) {
     const unidadesTecnico = parseFiliais(session.filial);
     if (unidadeInformada) {
       if (!sessaoTemAcessoAUnidade(session, unidadeInformada)) {
-        throw new Error(`Você não atende a unidade "${unidadeInformada}".`);
+        throw erroPermissao(`Você não atende a unidade "${unidadeInformada}".`);
       }
       return unidadeInformada;
     }
     if (unidadesTecnico.length === 1) return unidadesTecnico[0];
-    throw new Error('Informe para qual unidade este equipamento deve ser cadastrado.');
+    throw erroPermissao('Informe para qual unidade este equipamento deve ser cadastrado.');
   }
   return session.filial;
 }

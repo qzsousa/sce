@@ -1,12 +1,20 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
 import PDFDocument from 'pdfkit';
 import 'dotenv/config';
 
 import sheets, { supabase as supabaseAdmin, toCamelCase, toSnakeCase, chaveUnidade } from './supabaseService.js';
+import {
+  securityHeaders, corsOptions, limiteGeral, limiteAuth, limiteEscrita,
+  extrairToken, verificarTokenPortal, politicaSenha,
+  exigirAcessoAEquipamento, registrarLeitorEquipamento,
+  validarAnexoBoletim, normalizarCaminhoAnexo, escaparFiltroPostgrest,
+  HttpError, naoAutorizado, negado,
+} from './security.js';
 
 const supabaseAuth = createClient(
   process.env.SUPABASE_URL,
@@ -15,8 +23,17 @@ const supabaseAuth = createClient(
 );
 
 const app = express();
-app.use(cors());
+
+// Atrás de proxy (Render/Vercel/Cloud Run) o `req.ip` viria do proxy e o
+// rate limiter contaria o proxy inteiro como um único cliente.
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+app.use(helmet(securityHeaders));
+app.use(cors(corsOptions()));
+// 10MB: o maior payload é o anexo do B.O. em base64 (~8MB binário).
 app.use(express.json({ limit: '10mb' }));
+app.use(limiteGeral);
 
 const standardResponse = (success, data = null, error = null) => ({
   success,
@@ -26,6 +43,19 @@ const standardResponse = (success, data = null, error = null) => ({
 
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
+
+/**
+ * Leitor de equipamento injetado em `security.js` (evita import circular com
+ * `supabaseService.js`, que é importado por `server.js`).
+ */
+registrarLeitorEquipamento(async (id) => {
+  const { data, error } = await sheets.supabase
+    .from('equipamentos')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  return { data: data ? toCamelCase(data) : null, error };
+});
 
 const HEADER_MAP = {
   EQUIPAMENTOS: [
@@ -75,12 +105,9 @@ const SSO_SECRET = process.env.SSO_SECRET || null;
 
 async function trySsoSession(token) {
   if (!SSO_SECRET) return null;
-  let payload;
-  try {
-    payload = jwt.verify(token, SSO_SECRET);
-  } catch {
-    return null;
-  }
+  // Algoritmo fixado: sem `algorithms`, o `jsonwebtoken` aceita qualquer alg
+  // da família HMAC e o payload deixa de ser confiável.
+  const payload = verificarTokenPortal(token);
   if (!payload || payload.type !== 'access' || !payload.email) return null;
   const usuario = await findUsuarioByEmail(payload.email);
   if (!usuario || usuario.status !== statusUsuario.ATIVO) return null;
@@ -115,10 +142,10 @@ async function validateSession(token) {
 
 async function requireSession(token, niveisPermitidos = null) {
   const session = await validateSession(token);
-  if (!session) throw new Error('Sessão inválida ou expirada. Faça login novamente.');
+  if (!session) throw naoAutorizado();
   if (niveisPermitidos) {
     const allowed = Array.isArray(niveisPermitidos) ? niveisPermitidos : [niveisPermitidos];
-    if (!allowed.includes(session.nivel)) throw new Error('Você não tem permissão para executar esta ação.');
+    if (!allowed.includes(session.nivel)) throw negado();
   }
   return session;
 }
@@ -308,33 +335,27 @@ async function listarGrafiasUnidade() {
 // STORAGE (ANEXOS) - Supabase Storage (bucket privado)
 // ============================================================
 const STORAGE_BUCKET = 'anexos';
-const MAX_ANEXO_MB = 8;
 
-function sanitizeFileName(name) {
-  return String(name || '')
-    .replace(/\s+/g, '_')
-    .replace(/[^a-zA-Z0-9._-]/g, '');
-}
-
-async function uploadAnexoBoletim(base64, mimeType, fileName) {
+/**
+ * Upload do anexo do Boletim de Ocorrência.
+ *
+ * Antes aceitava qualquer `mimeType` declarado pelo cliente e usava a
+ * extensão do NOME do arquivo. Um HTML/SVG com script ficava armazenado e
+ * era servido por URL assinada — XSS armazenado para quem abrisse o anexo.
+ * Agora o tipo é derivado dos magic bytes e a extensão vem dessa verificação.
+ */
+async function uploadAnexoBoletim(base64) {
   if (!base64) return null;
-  const buf = Buffer.from(base64, 'base64');
-  if (buf.length > MAX_ANEXO_MB * 1024 * 1024) {
-    throw new Error(`Arquivo muito grande. O tamanho máximo é de ${MAX_ANEXO_MB}MB.`);
-  }
-  let ext = 'bin';
-  if (fileName && fileName.includes('.')) ext = fileName.split('.').pop().toLowerCase();
-  else if (mimeType) {
-    if (mimeType.includes('pdf')) ext = 'pdf';
-    else if (mimeType.includes('png')) ext = 'png';
-    else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
-  }
-  const nomeBase = sanitizeFileName((fileName || 'anexo').replace(/\.[^.]+$/, '')) || 'anexo';
-  const path = `boletins/${uuidv4()}-${nomeBase}.${ext}`;
+
+  const check = validarAnexoBoletim(base64);
+  if (!check.ok) throw new Error(check.erro);
+
+  const nomeBase = `anexo.${check.extensao}`;
+  const path = `boletins/${uuidv4()}-${nomeBase}`;
   const { error } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
-    .upload(path, buf, { contentType: mimeType || 'application/octet-stream', upsert: true });
-  if (error) throw new Error(`Erro ao salvar anexo: ${error.message}`);
+    .upload(path, check.buffer, { contentType: check.mimeType, upsert: false });
+  if (error) throw new Error('Erro ao salvar anexo.');
   return path;
 }
 
@@ -379,12 +400,12 @@ async function cleanupExpiredSessions() {
 // LOGIN COM EMAIL/SENHA
 // ============================================================
 
-app.post('/api/login-password', asyncHandler(async (req, res) => {
+app.post('/api/login-password', limiteAuth, asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.json(standardResponse(false, null, 'E-mail e senha são obrigatórios.'));
 
   const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
-  if (error) return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
+  if (error || !data?.user) return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
 
   const usuario = await findUsuarioByEmail(email);
   if (!usuario || usuario.status === 'REMOVIDO' || usuario.status === 'Removido') {
@@ -402,7 +423,14 @@ app.post('/api/login-password', asyncHandler(async (req, res) => {
 // PRIMEIRO ACESSO / DEFINIÇÃO DE SENHA
 // ============================================================
 
-app.post('/api/verificar-usuario', asyncHandler(async (req, res) => {
+/**
+ * Existence check do primeiro acesso.
+ *
+ * Antes devolvia também `nome` e `nivel` sem autenticação — qualquer pessoa
+ * podia listar nome e PERFIL DE ACESSO de cada professor/dirigente da rede
+ * (enumeration). Agora responde só o necessário para o fluxo de senha.
+ */
+app.post('/api/verificar-usuario', limiteAuth, asyncHandler(async (req, res) => {
   const { email } = req.body;
   if (!email) return res.json(standardResponse(false, null, 'E-mail é obrigatório.'));
 
@@ -414,15 +442,12 @@ app.post('/api/verificar-usuario', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, {
     existe: true,
     senhaDefinida: usuario.senhaDefinida !== false,
-    nome: usuario.nome,
-    nivel: usuario.nivel,
   }));
 }));
 
-app.post('/api/definir-senha', asyncHandler(async (req, res) => {
+app.post('/api/definir-senha', limiteAuth, asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.json(standardResponse(false, null, 'E-mail e senha são obrigatórios.'));
-  if (String(password).length < 6) return res.json(standardResponse(false, null, 'A senha deve ter pelo menos 6 caracteres.'));
 
   const usuario = await findUsuarioByEmail(email);
   if (!usuario || usuario.status === 'REMOVIDO' || usuario.status === 'Removido') {
@@ -430,6 +455,11 @@ app.post('/api/definir-senha', asyncHandler(async (req, res) => {
   }
   if (usuario.senhaDefinida !== false) {
     return res.json(standardResponse(false, null, 'Este usuário já possui senha. Faça login normalmente.'));
+  }
+
+  const politica = politicaSenha.validar(password);
+  if (!politica.valida) {
+    return res.json(standardResponse(false, null, politica.erros.join(' ')));
   }
 
   await upsertAuthUser(email, password, usuario);
@@ -441,12 +471,16 @@ app.post('/api/definir-senha', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { message: 'Senha criada com sucesso.', token, redirectUrl }));
 }));
 
-app.post('/api/redefinir-senha', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/redefinir-senha', limiteAuth, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const { email, novaSenha } = req.body;
   if (!email || !novaSenha) return res.json(standardResponse(false, null, 'E-mail e nova senha são obrigatórios.'));
-  if (String(novaSenha).length < 6) return res.json(standardResponse(false, null, 'A senha deve ter pelo menos 6 caracteres.'));
+
+  const politica = politicaSenha.validar(novaSenha);
+  if (!politica.valida) {
+    return res.json(standardResponse(false, null, politica.erros.join(' ')));
+  }
 
   const usuario = await findUsuarioByEmail(email);
   if (!usuario) return res.json(standardResponse(false, null, 'Usuário não encontrado.'));
@@ -462,6 +496,21 @@ app.post('/api/redefinir-senha', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { message: 'Senha redefinida com sucesso.' }));
 }));
 
+/**
+ * Logout.
+ *
+ * Não existia: a sessão (24h) continuava válida na tabela `sessoes` mesmo
+ * depois de o usuário sair pela interface.
+ */
+app.post('/api/logout', asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
+  if (token && !token.startsWith('sso:')) {
+    await sheets.supabase.from('sessoes').delete().eq('token', token);
+  }
+  await registrarAuditoria('logout', '', { via: token?.startsWith('sso:') ? 'sso' : 'sessao' });
+  res.json(standardResponse(true, { message: 'Sessão encerrada.' }));
+}));
+
 // ============================================================
 // SYNC DE USUÁRIOS (chamados → SCE)
 // Endpoint interno chamado pelo backend de chamados sempre que um
@@ -469,6 +518,17 @@ app.post('/api/redefinir-senha', asyncHandler(async (req, res) => {
 // compartilhada (SCE_SYNC_KEY) — NUNCA expor ao frontend.
 // ============================================================
 const SYNC_KEY = process.env.SCE_SYNC_KEY || null;
+
+/**
+ * Comparação em tempo constante.
+ *
+ * `req.headers['x-sync-key'] !== SYNC_KEY` retornava assim que um byte
+ * divergia, o que permitia descobrir a chave um caractere por tentativa.
+ */
+function chaveConfere(informada) {
+  if (!SYNC_KEY || typeof informada !== 'string' || informada.length !== SYNC_KEY.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(informada), Buffer.from(SYNC_KEY));
+}
 
 const MAPA_NIVEL_PORTAL_PARA_SCE = {
   ADMIN: niveis.MATRIZ,
@@ -479,7 +539,7 @@ const MAPA_NIVEL_PORTAL_PARA_SCE = {
 
 app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
   if (!SYNC_KEY) return res.status(503).json(standardResponse(false, null, 'Sync não configurado.'));
-  if (req.headers['x-sync-key'] !== SYNC_KEY) {
+  if (!chaveConfere(req.headers['x-sync-key'])) {
     return res.status(401).json(standardResponse(false, null, 'Não autorizado.'));
   }
 
@@ -543,14 +603,14 @@ app.post('/api/internal/sync-usuario', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/get-nome-usuario', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   const session = await requireSession(token);
   const usuario = await findUsuarioByEmail(session.email);
   res.json(standardResponse(true, { nome: usuario?.nome, nivel: session.nivel, filial: session.filial, email: session.email }));
 }));
 
 app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const data = await sheets.getValues('Usuarios');
   let usuarios = data.map(row => ({
@@ -568,8 +628,8 @@ app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, usuarios));
 }));
 
-app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/adicionar-usuario', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   let { email, nome, nivel, filial, senhaTemporaria } = req.body;
 
@@ -611,8 +671,8 @@ app.post('/api/adicionar-usuario', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { message: 'Usuário adicionado com sucesso.' }));
 }));
 
-app.post('/api/atualizar-usuario', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/atualizar-usuario', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const { emailOriginal, ...dados } = req.body;
 
@@ -639,8 +699,8 @@ app.post('/api/atualizar-usuario', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { message: 'Usuário atualizado.' }));
 }));
 
-app.post('/api/remover-usuario', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/remover-usuario', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   const { email } = req.body;
 
@@ -664,7 +724,7 @@ app.post('/api/remover-usuario', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/listas-cadastro', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   await requireSession(token);
   const data = await sheets.getValues('Listas');
   if (!data || data.length === 0) return res.json(standardResponse(true, []));
@@ -680,8 +740,8 @@ app.get('/api/listas-cadastro', asyncHandler(async (req, res) => {
 }));
 
 // Gerenciamento do catálogo (somente Matriz)
-app.post('/api/listas-adicionar', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/listas-adicionar', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, niveis.MATRIZ);
   const { categoria, marca, modelo } = req.body || {};
   const c = String(categoria || '').trim();
@@ -708,8 +768,8 @@ app.post('/api/listas-adicionar', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { id: data.id, categoria: c, marca: m, modelo: mo }));
 }));
 
-app.post('/api/listas-remover', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/listas-remover', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, niveis.MATRIZ);
   const { id, categoria, marca, modelo } = req.body || {};
 
@@ -727,7 +787,7 @@ app.post('/api/listas-remover', asyncHandler(async (req, res) => {
 
 // Últimas ações do sistema (auditoria) — somente Matriz
 app.get('/api/auditoria', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   await requireSession(token, niveis.MATRIZ);
   const limite = Math.max(1, Math.min(parseInt(req.query.limite, 10) || 50, 200));
 
@@ -742,8 +802,8 @@ app.get('/api/auditoria', asyncHandler(async (req, res) => {
 }));
 
 // Adiciona item às listas: categoria obrigatória; marca e modelo opcionais (somente Matriz)
-app.post('/api/listas/adicionar', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/listas/adicionar', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, niveis.MATRIZ);
 
   const categoria = String(req.body?.categoria || '').trim();
@@ -766,8 +826,8 @@ app.post('/api/listas/adicionar', asyncHandler(async (req, res) => {
 }));
 
 // Remove item das listas por id ou pela combinação exata categoria/marca/modelo (somente Matriz)
-app.post('/api/listas/remover', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/listas/remover', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, niveis.MATRIZ);
 
   const id = req.body?.id;
@@ -813,7 +873,7 @@ app.post('/api/listas/remover', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/catalogo-equipamentos', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   await requireSession(token);
 
   const BLOCO = 1000;
@@ -850,7 +910,7 @@ app.get('/api/catalogo-equipamentos', asyncHandler(async (req, res) => {
 }));
 
 app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   const session = await requireSession(token);
   const [todos, indice] = await Promise.all([getAllEquipamentos(), indiceUnidades()]);
   const filtrados = todos
@@ -862,7 +922,7 @@ app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
 }));
 
 app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   const session = await requireSession(token);
 
   // Esta rota alimenta o select de "Unidade escolar" do cadastro de equipamento.
@@ -904,7 +964,7 @@ app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
 }));
 
 app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   await requireSession(token, niveis.MATRIZ);
 
   const limite = Math.max(1, Math.min(parseInt(req.query.limite, 10) || 100, 500));
@@ -941,8 +1001,11 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
     if (marca) query = query.eq('marca', marca);
     if (modelo) query = query.eq('modelo', modelo);
     if (busca) {
-      const b = `%${busca}%`;
-      query = query.or(`patrimonio.ilike.${b},numero_serie.ilike.${b},modelo.ilike.${b},unidade.ilike.${b}`);
+      // Valor interpolado num filtro PostgREST: precisa ser escapado. Com a
+      // busca crua, `busca = "x,unidade.eq.EscolaSecreta"` injetava um filtro
+      // novo e trazia equipamentos de outra escola.
+      const b = escaparFiltroPostgrest(busca);
+      query = query.or(`patrimonio.ilike.%${b}%,numero_serie.ilike.%${b}%,modelo.ilike.%${b}%,unidade.ilike.%${b}%`);
     }
     return query;
   };
@@ -1019,47 +1082,16 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
   }));
 }));
 
-app.get('/api/unidades-resumo', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  const session = await requireSession(token);
-  const isMatriz = session.nivel === niveis.MATRIZ;
-
-  const [todos, filiais] = await Promise.all([
-    getAllEquipamentos(),
-    sheets.getValues('Filiais'),
-  ]);
-
-  const novoResumo = () => ({ total: 0, disponiveis: 0, manutencao: 0, quebrados: 0, extraviados: 0 });
-  const porUnidade = new Map();
-
-  for (const eq of todos) {
-    if (eq.status === 'Removido') continue;
-    if (!isMatriz && !sheets.sessaoTemAcessoAUnidade(session, eq.unidade)) continue;
-    const nome = eq.unidade || 'Sem unidade';
-    if (!porUnidade.has(nome)) porUnidade.set(nome, novoResumo());
-    const r = porUnidade.get(nome);
-    r.total += 1;
-    if (eq.status === 'Disponível') r.disponiveis += 1;
-    else if (eq.status === 'Manutenção') r.manutencao += 1;
-    else if (eq.status === 'Quebrado') r.quebrados += 1;
-    else if (eq.status === 'Extraviado') r.extraviados += 1;
-  }
-
-  // Inclui filiais ativas no escopo do usuário, mesmo sem equipamentos
-  for (const filial of filiais) {
-    if (!filial.ativo) continue;
-    const nome = String(filial.nome || '').trim();
-    if (!nome) continue;
-    if (!isMatriz && !sheets.sessaoTemAcessoAUnidade(session, nome)) continue;
-    if (!porUnidade.has(nome)) porUnidade.set(nome, novoResumo());
-  }
-
-  const resumo = [...porUnidade.entries()]
-    .map(([nome, r]) => ({ nome, ...r }))
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-
-  res.json(standardResponse(true, resumo));
-}));
+/**
+ * SEGUNDA definição de `/api/unidades-resumo` — REMOVIDA.
+ *
+ * O Express casa rotas na ordem de declaração, então esta versão era a que
+ * respondia e a primeira (mais acima, com normalização do nome oficial da
+ * unidade) nunca rodava. A segunda agrupava por `equipamentos.unidade` cru,
+ * o que fazia a mesma escola aparecer duplicada no filtro de unidades do
+ * portal e — por usar `sheets.getValues('Filiais')` cru — sem o mesmo
+ * tratamento de nome oficial. A primeira versão é a correta.
+ */
 
 /**
  * Escola fora de `filiais` quando o equipamento é criado/movido.
@@ -1100,8 +1132,8 @@ async function alertarUnidadeNaoCatalogada(unidade, quem) {
   return parecidos;
 }
 
-app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/create-equipamento', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const dados = req.body;
@@ -1143,8 +1175,7 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   if (dados.status === 'Extraviado') {
     if (!dados._anexoBoletim) return res.json(standardResponse(false, null, 'Para o status "Extraviado", o anexo do Boletim de Ocorrência é obrigatório.'));
     // Faz upload do anexo e guarda o caminho no storage
-    const anexoPath = await uploadAnexoBoletim(dados._anexoBoletim.base64, dados._anexoBoletim.mimeType, dados._anexoBoletim.fileName);
-    dados.boletimOcorrenciaAnexoUrl = anexoPath;
+    dados.boletimOcorrenciaAnexoUrl = await uploadAnexoBoletim(dados._anexoBoletim.base64);
   }
 
   const id = uuidv4();
@@ -1175,11 +1206,39 @@ app.post('/api/create-equipamento', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { id, avisos }));
 }));
 
-app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+/**
+ * Campos que o cliente pode alterar via `POST /api/update-equipamento`.
+ *
+ * Sem allowlist, `Object.keys(camposAlterados)` virava o `update` do Prisma:
+ * o usuário de uma filial podia **transferir o equipamento para outra
+ * escola** (o check de unidade olhava só a unidade ATUAL) e mexer em
+ * qualquer coluna, incluindo as de auditoria.
+ */
+const CAMPOS_EDITAVEIS = new Set([
+  'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie',
+  'status', 'statusManutencao', 'vinculadoBlueMonitor', 'numeroChamadoManutencao',
+  'boletimOcorrencia', 'justificativaVerificacao', 'descricaoQuebrado',
+  'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
+  'tamanhoTela', 'responsavelAtual', 'observacoes',
+  'justificativaPatrimonio', 'justificativaNumeroSerie',
+  'tipoEmprestimo', 'escolaDestino',
+]);
+
+app.post('/api/update-equipamento', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
-  const { id, ...camposAlterados } = req.body;
+  const { id, ...resto } = req.body;
+  if (!id) return res.json(standardResponse(false, null, 'Informe o id do equipamento.'));
+
+  // Descarta tudo que não está na allowlist (`unidade` é tratada à parte).
+  const camposAlterados = {};
+  for (const [chave, valor] of Object.entries(resto)) {
+    if (CAMPOS_EDITAVEIS.has(chave)) camposAlterados[chave] = valor;
+  }
+  if (Object.keys(camposAlterados).length === 0 && resto.unidade === undefined) {
+    return res.json(standardResponse(false, null, 'Nenhum campo válido para atualização.'));
+  }
 
   // Buscar equipamento atual
   const { data: equipAtual, error: errEquip } = await sheets.supabase
@@ -1195,9 +1254,17 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
     return res.json(standardResponse(false, null, 'Você não tem permissão para editar este equipamento.'));
   }
 
-  // Transfere de unidade: grava no nome oficial, para não nascer uma nova
-  // variante da mesma escola no filtro de unidades.
-  if (camposAlterados.unidade !== undefined && String(camposAlterados.unidade).trim()) {
+  // Transferência de unidade: só a Matriz pode mudar a escola dona, e o
+  // destino precisa existir. Sem isso, uma filial "doava" o equipamento para
+  // outra escola passando pelo endpoint de edição.
+  if (resto.unidade !== undefined && String(resto.unidade).trim() !== String(equipAtual.unidade).trim()) {
+    if (session.nivel !== niveis.MATRIZ) {
+      return res.json(standardResponse(false, null, 'Somente a Matriz pode transferir um equipamento de unidade.'));
+    }
+    const destino = (await resolverNomeOficial(resto.unidade)).nome;
+    if (!destino) return res.json(standardResponse(false, null, 'Unidade de destino inválida.'));
+    camposAlterados.unidade = destino;
+  } else if (camposAlterados.unidade !== undefined) {
     camposAlterados.unidade = (await resolverNomeOficial(camposAlterados.unidade)).nome;
   }
 
@@ -1223,8 +1290,7 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
   // Upload do anexo do B.O. (se enviado)
   let novoAnexoPath = null;
   if (camposAlterados._anexoBoletim) {
-    const anexo = camposAlterados._anexoBoletim;
-    novoAnexoPath = await uploadAnexoBoletim(anexo.base64, anexo.mimeType, anexo.fileName);
+    novoAnexoPath = await uploadAnexoBoletim(camposAlterados._anexoBoletim.base64);
     delete camposAlterados._anexoBoletim;
   }
 
@@ -1245,14 +1311,12 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
   const updates = {};
   const historico = [];
 
-  Object.keys(camposAlterados).forEach(campo => {
-    if (['id', 'dataCadastro', 'cadastradoPor'].includes(campo)) return;
+  for (const [campo, valorNovo] of Object.entries(camposAlterados)) {
     const valorAntigo = equipAtual[campo];
-    const valorNovo = camposAlterados[campo];
-    if (String(valorAntigo) === String(valorNovo)) return;
+    if (String(valorAntigo) === String(valorNovo)) continue;
     updates[campo] = valorNovo;
     historico.push({ campo, antigo: valorAntigo, novo: valorNovo });
-  });
+  }
 
   // Campos automáticos
   if (Object.keys(updates).length > 0) {
@@ -1287,18 +1351,30 @@ app.post('/api/update-equipamento', asyncHandler(async (req, res) => {
   res.json(standardResponse(true));
 }));
 
-// Gera link temporário (assinado) para baixar um anexo do B.O.
+/**
+ * URL assinada para o anexo do B.O.
+ *
+ * O `path` vinha direto do cliente e era usado como está: qualquer usuário
+ * autenticado gerava link de QUALQUER objeto do bucket `anexos`, inclusive o
+ * boletim de outra escola. O caminho é normalizado e precisa estar no
+ * prefixo `boletins/` no formato gerado pelo upload.
+ */
 app.get('/api/anexo-url', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   await requireSession(token);
   const { path } = req.query;
-  if (!path) return res.json(standardResponse(false, null, 'Caminho do anexo não informado.'));
-  const url = await gerarUrlAnexo(path);
+
+  const caminho = normalizarCaminhoAnexo(path);
+  if (!caminho) {
+    return res.json(standardResponse(false, null, 'Caminho do anexo inválido.'));
+  }
+
+  const url = await gerarUrlAnexo(caminho);
   res.json(standardResponse(true, { url }));
 }));
 
-app.post('/api/clone-equipamento', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/clone-equipamento', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { idOrigem } = req.body;
@@ -1335,8 +1411,8 @@ app.post('/api/clone-equipamento', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { id: novoId }));
 }));
 
-app.post('/api/remover-equipamento', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/remover-equipamento', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { id } = req.body;
@@ -1367,8 +1443,8 @@ app.post('/api/remover-equipamento', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { message: 'Equipamento removido (soft-delete).' }));
 }));
 
-app.post('/api/atualizar-status-manutencao', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/atualizar-status-manutencao', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { equipamentoId, novoStatus } = req.body;
@@ -1410,9 +1486,15 @@ app.post('/api/atualizar-status-manutencao', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/registros-manutencao', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  await requireSession(token);
+  const token = extrairToken(req);
+  const session = await requireSession(token);
   const { equipamentoId } = req.query;
+  if (!equipamentoId) return res.json(standardResponse(false, null, 'Informe o equipamento.'));
+
+  // Sem esta checagem, qualquer usuário autenticado lia o histórico de
+  // manutenção de equipamento de qualquer escola.
+  const acesso = await exigirAcessoAEquipamento(session, equipamentoId);
+  if (!acesso.ok) return res.json(standardResponse(false, null, acesso.motivo));
 
   const { data, error } = await sheets.supabase
     .from('registros_manutencao')
@@ -1420,17 +1502,24 @@ app.get('/api/registros-manutencao', asyncHandler(async (req, res) => {
     .eq('equipamento_id', equipamentoId)
     .order('data', { ascending: false });
 
-  if (error) throw new Error(`Erro ao buscar manutenções: ${error.message}`);
+  if (error) throw new Error('Erro ao buscar manutenções.');
   res.json(standardResponse(true, data || []));
 }));
 
-app.post('/api/registrar-manutencao', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/registrar-manutencao', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { equipamentoId, descricao, status } = req.body;
 
   if (!descricao?.trim()) return res.json(standardResponse(false, null, 'Descrição é obrigatória.'));
+  if (statusManutencaoValidos && !statusManutencaoValidos.includes(status || 'Pendente')) {
+    return res.json(standardResponse(false, null, 'Status de manutenção inválido.'));
+  }
+
+  // Sem esta checagem, dava para registrar manutenção em equipamento alheio.
+  const acesso = await exigirAcessoAEquipamento(session, equipamentoId);
+  if (!acesso.ok) return res.json(standardResponse(false, null, acesso.motivo));
 
   const id = uuidv4();
   const { error } = await sheets.supabase
@@ -1440,17 +1529,19 @@ app.post('/api/registrar-manutencao', asyncHandler(async (req, res) => {
       equipamento_id: equipamentoId,
       autor: session.email,
       data: new Date().toISOString(),
-      descricao,
+      descricao: String(descricao).slice(0, 2000),
       status: status || 'Pendente',
     });
 
-  if (error) throw new Error(`Erro ao registrar manutenção: ${error.message}`);
+  if (error) throw new Error('Erro ao registrar manutenção.');
 
   // Atualiza statusManutencao no equipamento também
   await sheets.supabase
     .from('equipamentos')
     .update(toSnakeCase({ statusManutencao: status || 'Pendente' }))
     .eq('id', equipamentoId);
+
+  await registrarAuditoria('registrarManutencao', session.email, { id: equipamentoId, status });
 
   res.json(standardResponse(true));
 }));
@@ -1460,9 +1551,15 @@ app.post('/api/registrar-manutencao', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/historico-equipamento', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
-  await requireSession(token);
+  const token = extrairToken(req);
+  const session = await requireSession(token);
   const { equipamentoId } = req.query;
+  if (!equipamentoId) return res.json(standardResponse(false, null, 'Informe o equipamento.'));
+
+  // O histórico traz campo/valorAntigo/valorNovo de todas as alterações —
+  // inclusive patrimônio e responsável. Precisa do mesmo escopo do equipamento.
+  const acesso = await exigirAcessoAEquipamento(session, equipamentoId);
+  if (!acesso.ok) return res.json(standardResponse(false, null, acesso.motivo));
 
   const { data, error } = await sheets.supabase
     .from('historico_itens')
@@ -1470,7 +1567,7 @@ app.get('/api/historico-equipamento', asyncHandler(async (req, res) => {
     .eq('equipamento_id', equipamentoId)
     .order('data', { ascending: false });
 
-  if (error) throw new Error(`Erro ao buscar histórico: ${error.message}`);
+  if (error) throw new Error('Erro ao buscar histórico.');
   res.json(standardResponse(true, data || []));
 }));
 
@@ -1479,7 +1576,7 @@ app.get('/api/historico-equipamento', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/filiais-para-emprestimo', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   await requireSession(token);
   const { data, error } = await sheets.supabase
     .from('filiais')
@@ -1491,8 +1588,8 @@ app.get('/api/filiais-para-emprestimo', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, (data || []).map(r => r.nome)));
 }));
 
-app.post('/api/registrar-emprestimo', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/registrar-emprestimo', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { ids, ...dados } = req.body;
@@ -1505,55 +1602,64 @@ app.post('/api/registrar-emprestimo', asyncHandler(async (req, res) => {
 
   const now = new Date();
 
+  // Valida o escopo de TODOS os ids antes de gravar qualquer um. Sem isso,
+  // dava para registrar empréstimo (guardando CPF e e-mail de uma pessoa) em
+  // equipamento de qualquer escola.
+  const alvos = [];
   for (const id of ids) {
-    const { data: equip, error: equipError } = await sheets.supabase
-      .from('equipamentos')
-      .select('patrimonio, unidade')
-      .eq('id', id)
-      .single();
+    const acesso = await exigirAcessoAEquipamento(session, id);
+    if (!acesso.ok) {
+      return res.json(standardResponse(false, null, acesso.motivo));
+    }
+    if (acesso.equipamento.status === 'Removido') continue;
+    alvos.push({ id, patrimonio: acesso.equipamento.patrimonio, unidade: acesso.equipamento.unidade });
+  }
 
-    if (equipError || !equip) continue;
+  if (alvos.length === 0) {
+    return res.json(standardResponse(false, null, 'Nenhum equipamento válido para empréstimo.'));
+  }
 
+  for (const alvo of alvos) {
     const empId = uuidv4();
     const { error: empError } = await sheets.supabase
       .from('emprestimos')
       .insert({
         id: empId,
-        equipamento_id: id,
-        patrimonio: equip.patrimonio || '',
-        unidade: equip.unidade || '',
-        responsavel: dados.responsavel,
-        cpf: dados.cpf || '',
-        email_responsavel: dados.emailResponsavel || '',
+        equipamento_id: alvo.id,
+        patrimonio: alvo.patrimonio || '',
+        unidade: alvo.unidade || '',
+        responsavel: String(dados.responsavel).slice(0, 200),
+        cpf: String(dados.cpf || '').slice(0, 20),
+        email_responsavel: String(dados.emailResponsavel || '').slice(0, 320),
         data_emprestimo: now.toISOString(),
-        data_prevista_devolucao: dados.dataPrevistaDevolucao,
+        data_prevista_devolucao: dados.dataPrevistaDevolucao || null,
         data_devolucao: null,
         status: 'Emprestado',
         termo_pdf_url: '',
         criado_por: session.email,
         devolvido_por: null,
-        observacoes: dados.observacoes || '',
-        tipo_emprestimo: dados.tipoEmprestimo,
-        escola_destino: dados.escolaDestino || '',
+        observacoes: String(dados.observacoes || '').slice(0, 2000),
+        tipo_emprestimo: dados.tipoEmprestimo || null,
+        escola_destino: String(dados.escolaDestino || '').slice(0, 200),
       });
 
-    if (empError) console.error(`Erro ao criar empréstimo para ${id}:`, empError.message);
+    if (empError) console.error(`Erro ao criar empréstimo para ${alvo.id}:`, empError.message);
 
     // Atualiza status do equipamento
     await sheets.supabase
       .from('equipamentos')
       .update({ status: 'Emprestado' })
-      .eq('id', id);
+      .eq('id', alvo.id);
 
-    await registrarHistorico(id, 'status', 'Disponível', 'Emprestado', session.email);
+    await registrarHistorico(alvo.id, 'status', 'Disponível', 'Emprestado', session.email);
   }
 
-  await registrarAuditoria('registrarEmprestimo', session.email, { ids, ...dados });
+  await registrarAuditoria('registrarEmprestimo', session.email, { ids: alvos.map(a => a.id) });
   res.json(standardResponse(true, { message: 'Empréstimo(s) registrado(s).' }));
 }));
 
-app.post('/api/registrar-devolucao', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/registrar-devolucao', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
   if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
   const { ids, observacao } = req.body;
@@ -1563,13 +1669,17 @@ app.post('/api/registrar-devolucao', asyncHandler(async (req, res) => {
   const now = new Date();
 
   for (const id of ids) {
+    // Devolver equipamento de outra filial também altera o estoque alheio.
+    const acesso = await exigirAcessoAEquipamento(session, id);
+    if (!acesso.ok) return res.json(standardResponse(false, null, acesso.motivo));
+
     // Encontra empréstimo ativo
     const { data: empAtivo, error: empError } = await sheets.supabase
       .from('emprestimos')
       .select('id')
       .eq('equipamento_id', id)
       .eq('status', 'Emprestado')
-      .single();
+      .maybeSingle();
 
     if (empError || !empAtivo) continue;
 
@@ -1580,18 +1690,11 @@ app.post('/api/registrar-devolucao', asyncHandler(async (req, res) => {
         status: 'Devolvido',
         devolvido_por: session.email,
         data_devolucao: now.toISOString(),
-        observacoes: observacao || '',
+        observacoes: String(observacao || '').slice(0, 2000),
       })
       .eq('id', empAtivo.id);
 
-    // Atualiza equipamento
-    const { data: equipAtual } = await sheets.supabase
-      .from('equipamentos')
-      .select('status')
-      .eq('id', id)
-      .single();
-
-    const statusAntigo = equipAtual?.status || 'Emprestado';
+    const statusAntigo = acesso.equipamento.status || 'Emprestado';
     await sheets.supabase
       .from('equipamentos')
       .update({ status: 'Disponível' })
@@ -1609,7 +1712,7 @@ app.post('/api/registrar-devolucao', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/especificacoes-modelo', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   await requireSession(token);
   const { modelo } = req.query;
 
@@ -1634,7 +1737,7 @@ app.get('/api/especificacoes-modelo', asyncHandler(async (req, res) => {
 // ============================================================
 
 app.get('/api/exportar-csv', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   const session = await requireSession(token);
 
   const todos = await getAllEquipamentos();
@@ -1647,8 +1750,8 @@ app.get('/api/exportar-csv', asyncHandler(async (req, res) => {
   res.json(standardResponse(true, { csv: csv.join('\n'), fileName: `sce-equipamentos-${Date.now()}.csv` }));
 }));
 
-app.post('/api/exportar-pdf', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+app.post('/api/exportar-pdf', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
   const session = await requireSession(token);
 
   const todos = await getAllEquipamentos();
@@ -1716,8 +1819,24 @@ app.post('/api/exportar-pdf', asyncHandler(async (req, res) => {
 // ============================================================
 // ROTAS DE DIAGNÓSTICO
 // ============================================================
+//
+// Estas duas rotas NÃO tinham autenticação: qualquer visitante recebia a
+// primeira linha da tabela `equipamentos` (com `boletim_ocorrencia_anexo_url`,
+// `responsavelAtual`, observações e especificações) e o total de linhas.
+// Agora exigem Matriz e ficam desabilitadas fora de desenvolvimento.
 
-app.get('/api/testar-planilha', asyncHandler(async (req, res) => {
+const diagnosticLiberado = process.env.NODE_ENV !== 'production' || process.env.ENABLE_DIAGNOSTICO === 'true';
+
+function exigirDiagnostico(req, res, next) {
+  if (!diagnosticLiberado) {
+    return res.status(404).json(standardResponse(false, null, 'Rota não encontrada.'));
+  }
+  return next();
+}
+
+app.get('/api/testar-planilha', exigirDiagnostico, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
+  await requireSession(token, niveis.MATRIZ);
   try {
     const { data, error } = await sheets.supabase
       .from('equipamentos')
@@ -1727,23 +1846,26 @@ app.get('/api/testar-planilha', asyncHandler(async (req, res) => {
     res.json(standardResponse(true, {
       totalLinhas: data?.length || 0,
       cabecalho: HEADER_MAP.EQUIPAMENTOS,
-      primeiraLinha: data?.[0] || null,
+      // Só a lista de COLUNAS: devolver a linha inteira expunha dados de
+      // equipamentos de todas as escolas.
+      colunas: data?.[0] ? Object.keys(toCamelCase(data[0])) : [],
     }));
-  } catch (err) {
-    res.json(standardResponse(false, null, `Erro ao ler equipamentos: ${err.message}`));
+  } catch {
+    res.json(standardResponse(false, null, 'Erro ao ler equipamentos.'));
   }
 }));
 
-app.get('/api/testar-leitura-equipamentos', asyncHandler(async (req, res) => {
+app.get('/api/testar-leitura-equipamentos', exigirDiagnostico, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
+  await requireSession(token, niveis.MATRIZ);
   try {
     const todos = await getAllEquipamentos();
     res.json(standardResponse(true, {
       total: todos.length,
-      primeiros: todos.slice(0, 3),
       colunas: todos.length > 0 ? Object.keys(todos[0]) : [],
     }));
-  } catch (e) {
-    res.json(standardResponse(false, null, e.message));
+  } catch {
+    res.json(standardResponse(false, null, 'Erro ao ler equipamentos.'));
   }
 }));
 
@@ -1758,7 +1880,7 @@ app.get('/health', (req, res) => res.json(standardResponse(true, { status: 'ok',
 
 // Unidades do técnico
 app.get('/api/tecnico-unidades', asyncHandler(async (req, res) => {
-  const token = req.query.token || req.headers.authorization?.replace('Bearer ', '');
+  const token = extrairToken(req);
   const session = await requireSession(token, [niveis.TECNICO]);
   const unidades = session.filial ? session.filial.split(',').map(u => u.trim()).filter(u => u.length > 0) : [];
   res.json(standardResponse(true, unidades));
@@ -1785,16 +1907,82 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Error handler (deve ficar APÓS todas as rotas para capturar erros de rota)
-app.use((err, req, res, next) => {
-  console.error('Erro:', err);
-  res.status(500).json(standardResponse(false, null, err.message || 'Erro interno do servidor'));
-});
+const PORT = process.env.PORT || 3000;
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+/**
+ * Limpeza de sessões expiradas.
+ *
+ * A função existia mas NUNCA era chamada: a tabela `sessoes` crescia sem
+ * parar, guardando tokens válidos por forever. Rodar periodicamente também
+ * limita o material disponível para um ataque de força bruta sobre o token.
+ */
+const INTERVALO_LIMPEZA_MS = 15 * 60 * 1000;
+
+async function iniciarLimpezaDeSessoes() {
+  const rodar = async () => {
+    try {
+      await cleanupExpiredSessions();
+    } catch (e) {
+      console.warn('Falha na limpeza de sessões:', e.message);
+    }
+  };
+  await rodar();
+  const timer = setInterval(rodar, INTERVALO_LIMPEZA_MS);
+  // `unref` para o timer não segurar o processo aberto.
+  timer.unref?.();
+  return timer;
+}
+
+const server = app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log(`📊 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  if (!process.env.SSO_SECRET) {
+    console.warn('⚠️  SSO_SECRET ausente — o SSO do PORTAL está desabilitado.');
+  }
+  if (!process.env.SCE_SYNC_KEY) {
+    console.warn('⚠️  SCE_SYNC_KEY ausente — o sync de usuários do portal está desabilitado.');
+  }
+  void iniciarLimpezaDeSessoes();
+});
+
+/**
+ * Rejeição de promise não tratada derrubava o processo (Node >= 15).
+ * Loga e mantém o servidor no ar.
+ */
+process.on('unhandledRejection', (reason) => {
+  console.error('Promise rejeitada sem tratamento:', reason);
+});
+
+/**
+ * Handler de erro.
+ *
+ * `HttpError` (sessão inválida, permissão negada) sai com o status e a
+ * mensagem originais. Para o resto, em produção só sai uma mensagem genérica:
+ * o `err.message` do Supabase carrega nome de tabela, coluna, constraint e
+ * às vezes o SQL. O detalhe vai para o log.
+ */
+app.use((err, req, res, next) => {
+  // Duck typing em `status` (e não só `instanceof`) para também cobrir os
+  // erros de permissão lançados por `supabaseService.js`, que não pode
+  // importar `security.js` sem criar ciclo.
+  const status = Number(err?.status) || (err instanceof HttpError ? err.status : 500);
+  const ehHttp = status >= 400 && status < 500;
+
+  if (status >= 500) {
+    console.error(`[erro] ${req.method} ${req.path}:`, err?.message || err);
+  } else {
+    console.warn(`[${status}] ${req.method} ${req.path}: ${err?.message}`);
+  }
+
+  if (res.headersSent) return res.end();
+
+  const mensagem = ehHttp
+    ? err.message
+    : (process.env.NODE_ENV === 'production'
+      ? 'Erro interno do servidor. Tente novamente ou contate o suporte.'
+      : (err?.message || 'Erro interno do servidor'));
+
+  res.status(status).json(standardResponse(false, null, mensagem));
 });
 
 export default app;

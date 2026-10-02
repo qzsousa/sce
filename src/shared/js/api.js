@@ -90,7 +90,7 @@ export async function definirSenha(email, password) {
 export async function redefinirSenha(token, email, novaSenha) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/redefinir-senha?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/redefinir-senha`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ email, novaSenha }),
@@ -105,7 +105,7 @@ export async function redefinirSenha(token, email, novaSenha) {
 export async function getNomeUsuario(token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/get-nome-usuario?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/get-nome-usuario`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -119,7 +119,7 @@ export async function getNomeUsuario(token) {
 export async function getListasCadastro(token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/listas-cadastro?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/listas-cadastro`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -133,7 +133,7 @@ export async function getListasCadastro(token) {
 export async function getEquipamentosDaFilial(token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/equipamentos-da-filial?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/equipamentos-da-filial`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -147,7 +147,7 @@ export async function getEquipamentosDaFilial(token) {
 export async function getEquipamentosGlobal(token, incluirRemovidos = false) {
   try {
     const t = token || getToken();
-    const params = new URLSearchParams({ token: t });
+    const params = new URLSearchParams();
     if (incluirRemovidos) params.append('incluirRemovidos', 'true');
     const response = await fetch(`${getApiBaseUrl()}/equipamentos-global?${params}`, {
       method: 'GET',
@@ -163,7 +163,7 @@ export async function getEquipamentosGlobal(token, incluirRemovidos = false) {
 export async function createEquipamento(token, dadosEquipamento) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/create-equipamento?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/create-equipamento`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify(dadosEquipamento),
@@ -178,7 +178,7 @@ export async function createEquipamento(token, dadosEquipamento) {
 export async function updateEquipamento(token, id, camposAlterados) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/update-equipamento?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/update-equipamento`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ id, ...camposAlterados }),
@@ -193,7 +193,7 @@ export async function updateEquipamento(token, id, camposAlterados) {
 export async function cloneEquipamento(token, idOrigem) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/clone-equipamento?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/clone-equipamento`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ idOrigem }),
@@ -208,7 +208,7 @@ export async function cloneEquipamento(token, idOrigem) {
 export async function removerEquipamento(token, id) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/remover-equipamento?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/remover-equipamento`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ id }),
@@ -223,7 +223,7 @@ export async function removerEquipamento(token, id) {
 export async function atualizarStatusManutencao(token, equipamentoId, novoStatus) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/atualizar-status-manutencao?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/atualizar-status-manutencao`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ equipamentoId, novoStatus }),
@@ -238,7 +238,7 @@ export async function atualizarStatusManutencao(token, equipamentoId, novoStatus
 export async function registrarManutencao(token, equipamentoId, descricao, status) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/registrar-manutencao?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/registrar-manutencao`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ equipamentoId, descricao, status }),
@@ -253,7 +253,7 @@ export async function registrarManutencao(token, equipamentoId, descricao, statu
 export async function getRegistrosManutencao(token, equipamentoId) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/registros-manutencao?token=${encodeURIComponent(t)}&equipamentoId=${encodeURIComponent(equipamentoId)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/registros-manutencao?equipamentoId=${encodeURIComponent(equipamentoId)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -267,7 +267,7 @@ export async function getRegistrosManutencao(token, equipamentoId) {
 export async function getHistoricoEquipamento(token, equipamentoId) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/historico-equipamento?token=${encodeURIComponent(t)}&equipamentoId=${encodeURIComponent(equipamentoId)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/historico-equipamento?equipamentoId=${encodeURIComponent(equipamentoId)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -281,7 +281,7 @@ export async function getHistoricoEquipamento(token, equipamentoId) {
 export async function getEspecificacoesModelo(modelo, token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/especificacoes-modelo?token=${encodeURIComponent(t)}&modelo=${encodeURIComponent(modelo)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/especificacoes-modelo?modelo=${encodeURIComponent(modelo)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -295,7 +295,7 @@ export async function getEspecificacoesModelo(modelo, token) {
 export async function getAnexoUrl(path, token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/anexo-url?token=${encodeURIComponent(t)}&path=${encodeURIComponent(path)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/anexo-url?path=${encodeURIComponent(path)}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -309,7 +309,7 @@ export async function getAnexoUrl(path, token) {
 export async function listarUsuarios(token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/listar-usuarios?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/listar-usuarios`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -323,7 +323,7 @@ export async function listarUsuarios(token) {
 export async function adicionarUsuario(token, usuario) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/adicionar-usuario?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/adicionar-usuario`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify(usuario),
@@ -338,7 +338,7 @@ export async function adicionarUsuario(token, usuario) {
 export async function atualizarUsuario(token, emailOriginal, dados) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/atualizar-usuario?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/atualizar-usuario`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ emailOriginal, ...dados }),
@@ -353,7 +353,7 @@ export async function atualizarUsuario(token, emailOriginal, dados) {
 export async function removerUsuario(token, email) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/remover-usuario?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/remover-usuario`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ email }),
@@ -368,7 +368,7 @@ export async function removerUsuario(token, email) {
 export async function getFiliaisParaEmprestimo(token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/filiais-para-emprestimo?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/filiais-para-emprestimo`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -382,7 +382,7 @@ export async function getFiliaisParaEmprestimo(token) {
 export async function registrarEmprestimo(token, ids, dados) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/registrar-emprestimo?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/registrar-emprestimo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ ids, ...dados }),
@@ -397,7 +397,7 @@ export async function registrarEmprestimo(token, ids, dados) {
 export async function registrarDevolucao(token, ids, observacao) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/registrar-devolucao?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/registrar-devolucao`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify({ ids, observacao }),
@@ -412,7 +412,7 @@ export async function registrarDevolucao(token, ids, observacao) {
 export async function exportarCSV(token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/exportar-csv?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/exportar-csv`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
@@ -426,7 +426,7 @@ export async function exportarCSV(token) {
 export async function exportarEquipamentosPDF(token, filtros = {}) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/exportar-pdf?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/exportar-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
       body: JSON.stringify(filtros),
@@ -445,7 +445,7 @@ export async function exportarEquipamentosPDF(token, filtros = {}) {
 export async function getTecnicoUnidades(token) {
   try {
     const t = token || getToken();
-    const response = await fetch(`${getApiBaseUrl()}/tecnico-unidades?token=${encodeURIComponent(t)}`, {
+    const response = await fetch(`${getApiBaseUrl()}/tecnico-unidades`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` },
     });
