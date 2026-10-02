@@ -4,6 +4,7 @@
  *   node scripts/verificar-seguranca.mjs
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   escaparFiltroPostgrest,
   normalizarCaminhoAnexo,
@@ -12,6 +13,18 @@ import {
   corsOptions,
   validarAnexoBoletim,
 } from '../security.js';
+
+/**
+ * Recorta o corpo de uma rota no `server.js` — do `app.post('/api/...')` até
+ * o fim do callback. Permite verificar a ORDEM das operações numa rota sem
+ * subir o servidor nem tocar no banco.
+ */
+function extrairRota(fonte, caminho) {
+  const inicio = fonte.indexOf(`'${caminho}'`);
+  if (inicio === -1) return null;
+  const fim = fonte.indexOf('\n}));', inicio);
+  return fonte.slice(inicio, fim === -1 ? undefined : fim);
+}
 
 let passou = 0;
 const falhas = [];
@@ -174,7 +187,84 @@ teste('PNG real é aceito', () => {
   assert.equal(r.mimeType, 'image/png');
 });
 
-console.log(`\n${'='.repeat(52)}`);
+console.log('\n== Remoção do anexo do B.O. ==');
+
+teste('caminho do banco é o único que vale (nada de path do cliente)', () => {
+  // A rota recebe `id` e lê o caminho do banco. Se algum dia alguém voltar a
+  // aceitar `path` do corpo, quem manda o caminho apaga o anexo de outra
+  // escola — o mesmo bug que já atingiu o /api/anexo-url.
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const rota = extrairRota(fonte, '/api/remover-anexo-boletim');
+  assert.ok(rota, 'rota /api/remover-anexo-boletim não encontrada');
+
+  // O corpo pode trazer `caminhoEsperado` (concorrência), mas ele NUNCA pode
+  // ser a origem do caminho apagado: tem que vir do registro do equipamento.
+  assert.ok(
+    /normalizarCaminhoAnexo\(\s*equipAtual\.boletim_ocorrencia_anexo_url/.test(rota),
+    'o caminho apagado precisa ser lido de equipAtual, não do corpo da requisição',
+  );
+  assert.equal(
+    /const\s+caminho\s*=\s*req\.body\.path/.test(rota),
+    false,
+    'a rota não pode usar req.body.path',
+  );
+});
+
+teste('remoção exige o mesmo caminho que o modal tinha carregado', () => {
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const rota = extrairRota(fonte, '/api/remover-anexo-boletim');
+  assert.ok(
+    /caminhoEsperado\s*&&\s*caminho\s*!==/.test(rota),
+    'sem a comparação com caminhoEsperado, um upload concorrente seria apagado',
+  );
+});
+
+teste('remoção é barrada enquanto o equipamento estiver Extraviado', () => {
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const rota = extrairRota(fonte, '/api/remover-anexo-boletim');
+  const guarda = rota.indexOf("equipAtual.status === 'Extraviado'");
+  const apaga = rota.indexOf('.storage');
+  assert.ok(guarda !== -1, 'falta a guarda do status Extraviado');
+  assert.ok(
+    guarda < apaga,
+    'a guarda do status precisa vir ANTES do apag no storage',
+  );
+});
+
+teste('remoção respeita somente-leitura e o limite de escrita', () => {
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const rota = extrairRota(fonte, '/api/remover-anexo-boletim');
+  assert.ok(/limiteEscrita/.test(rota), 'rota de escrita precisa do limite de escrita');
+  assert.ok(/sessaoSomenteLeitura\(session\)/.test(rota), 'escola FILHA não pode remover anexo');
+  assert.ok(
+    /sessaoTemAcessoAUnidade\(session,\s*equipAtual\.unidade\)/.test(rota),
+    'precisa checar acesso à unidade do equipamento',
+  );
+});
+
+teste('a coluna é limpa ANTES de apagar o arquivo no storage', () => {
+  // Ordem invertida deixaria equipamento "Extraviado" apontando para um anexo
+  // que não existe mais — exatamente o estado que a validação proíbe.
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const rota = extrairRota(fonte, '/api/remover-anexo-boletim');
+  const limpa = rota.indexOf('boletim_ocorrencia_anexo_url: null');
+  const apaga = rota.indexOf('.storage');
+  assert.ok(limpa !== -1, 'a coluna do banco não está sendo limpa');
+  assert.ok(limpa < apaga, 'limpar o banco depois de apagar o arquivo deixa referência órfã');
+});
+
+teste('substituir o anexo apaga o arquivo anterior', () => {
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const trecho = fonte.slice(fonte.indexOf('if (novoAnexoPath) {'));
+  const bloco = trecho.slice(0, trecho.indexOf('for (const h of historico)'));
+  assert.ok(
+    /anexoAnterior\s*!==\s*novoAnexoPath/.test(bloco),
+    'trocar o boletim precisa apagar o arquivo anterior',
+  );
+  assert.ok(bloco.includes('.storage'), 'a troca de anexo não toca no storage');
+});
+console.log(`
+${'='.repeat(52)}`);
 console.log(`${passou} passaram, ${falhas.length} falharam`);
 if (falhas.length) {
   process.exitCode = 1;

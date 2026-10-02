@@ -1334,11 +1334,25 @@ app.post('/api/update-equipamento', limiteEscrita, asyncHandler(async (req, res)
 
   // Salva o caminho do anexo (coluna snake_case separada)
   if (novoAnexoPath) {
+    // Guarda o anterior ANTES de sobrescrever: trocar o boletim deixava o
+    // arquivo velho órfão no bucket para sempre, ocupando espaço sem referência.
+    const anexoAnterior = normalizarCaminhoAnexo(
+      equipAtual.boletim_ocorrencia_anexo_url || equipAtual.boletimOcorrenciaAnexoUrl
+    );
+
     const { error: errAnexo } = await sheets.supabase
       .from('equipamentos')
       .update({ boletim_ocorrencia_anexo_url: novoAnexoPath })
       .eq('id', id);
     if (errAnexo) throw new Error(`Erro ao salvar anexo: ${errAnexo.message}`);
+
+    if (anexoAnterior && anexoAnterior !== novoAnexoPath) {
+      try {
+        await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([anexoAnterior]);
+      } catch (e) {
+        console.warn(`[anexo] falha ao apagar ${anexoAnterior} substituído: ${e.message}`);
+      }
+    }
   }
 
   for (const h of historico) {
@@ -1371,6 +1385,76 @@ app.get('/api/anexo-url', asyncHandler(async (req, res) => {
 
   const url = await gerarUrlAnexo(caminho);
   res.json(standardResponse(true, { url }));
+}));
+
+/**
+ * Remove o anexo do Boletim de Ocorrência de um equipamento.
+ *
+ * O `path` NÃO vem do cliente (mesmo bug que o `/api/anexo-url` já teve):
+ * quem apaga é o `id` do equipamento, e o caminho é lido do próprio banco.
+ * Sem isso, qualquer usuário autenticado apagaria o boletim de outra escola
+ * bastando mandar o `path` dela.
+ *
+ * A ordem é invertida de propósito: limpa a coluna PRIMEIRO e só então apaga
+ * o arquivo. Se a limpeza falhar, sobra um órfão no storage — inofensivo. Ao
+ * contrário, apagar o arquivo antes deixaria o equipamento "Extraviado"
+ * apontando para um anexo inexistente, que é o estado que a validação de
+ * cima existe justamente para impedir.
+ */
+app.post('/api/remover-anexo-boletim', limiteEscrita, asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
+  const session = await requireSession(token);
+  if (sessaoSomenteLeitura(session)) return res.json(standardResponse(false, null, SOMENTE_LEITURA_MSG));
+  const { id, caminhoEsperado } = req.body;
+  if (!id) return res.json(standardResponse(false, null, 'Informe o id do equipamento.'));
+
+  const { data: equipAtual, error } = await sheets.supabase
+    .from('equipamentos')
+    .select('unidade, status, boletim_ocorrencia_anexo_url')
+    .eq('id', id)
+    .single();
+
+  if (error || !equipAtual) return res.json(standardResponse(false, null, 'Equipamento não encontrado.'));
+
+  if (!sheets.sessaoTemAcessoAUnidade(session, equipAtual.unidade)) {
+    return res.json(standardResponse(false, null, 'Você não tem permissão para alterar este equipamento.'));
+  }
+
+  const caminho = normalizarCaminhoAnexo(equipAtual.boletim_ocorrencia_anexo_url);
+  // Sem anexo, ou já substituído por outro upload enquanto o modal estava
+  // aberto: nada a fazer (e nada de arriscar apagar o arquivo novo).
+  if (!caminho || (caminhoEsperado && caminho !== String(caminhoEsperado))) {
+    return res.json(standardResponse(true, { removido: false }));
+  }
+
+  // Extraviado exige anexo por regra do sistema — trocar o status e salvar
+  // antes de remover, senão o registro fica num estado que a API proíbe.
+  if (equipAtual.status === 'Extraviado') {
+    return res.json(standardResponse(false, null,
+      'Para o status "Extraviado", o anexo do Boletim de Ocorrência é obrigatório. ' +
+      'Altere o status ou anexe outro boletim.'));
+  }
+
+  const { error: updError } = await sheets.supabase
+    .from('equipamentos')
+    .update({ boletim_ocorrencia_anexo_url: null })
+    .eq('id', id)
+    // Só limpa se a coluna ainda for a que li — evita apagar duas vezes em
+    // uploads concorrentes.
+    .eq('boletim_ocorrencia_anexo_url', caminho);
+
+  if (updError) return res.json(standardResponse(false, null, `Erro ao remover o anexo: ${updError.message}`));
+
+  try {
+    await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([caminho]);
+  } catch (e) {
+    // O registro já está limpo: o arquivo vira órfão, que a garbage
+    // collection do bucket resolve. Não vale reprovar o salvamento.
+    console.warn(`[anexo] falha ao apagar ${caminho} do storage: ${e.message}`);
+  }
+
+  await registrarAuditoria('removerAnexoBoletim', session.email, { id });
+  res.json(standardResponse(true, { removido: true }));
 }));
 
 app.post('/api/clone-equipamento', limiteEscrita, asyncHandler(async (req, res) => {
