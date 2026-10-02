@@ -1222,6 +1222,10 @@ const CAMPOS_EDITAVEIS = new Set([
   'tamanhoTela', 'responsavelAtual', 'observacoes',
   'justificativaPatrimonio', 'justificativaNumeroSerie',
   'tipoEmprestimo', 'escolaDestino',
+  // Fora da lista de colunas: o anexo é consumido logo abaixo do filtro e
+  // vira um upload no storage. Sem estar aqui ele era descartado, e um
+  // equipamento não conseguia virar "Extraviado" já mandando o B.O. junto.
+  '_anexoBoletim',
 ]);
 
 app.post('/api/update-equipamento', limiteEscrita, asyncHandler(async (req, res) => {

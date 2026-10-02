@@ -263,8 +263,29 @@ teste('substituir o anexo apaga o arquivo anterior', () => {
   );
   assert.ok(bloco.includes('.storage'), 'a troca de anexo não toca no storage');
 });
-console.log(`
-${'='.repeat(52)}`);
+
+teste('_anexoBoletim sobrevive ao filtro de campos editáveis', () => {
+  // Sem estar na allowlist, o anexo era descartado antes da validação: o
+  // equipment recusava "Extraviado" mesmo com o B.O. na mesma requisição.
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const ini = fonte.indexOf('const CAMPOS_EDITAVEIS = new Set([');
+  const allowlist = fonte.slice(ini, fonte.indexOf(']);', ini));
+  assert.ok(
+    allowlist.includes("'_anexoBoletim'"),
+    '_anexoBoletim precisa estar em CAMPOS_EDITAVEIS, senão o upload nunca acontece',
+  );
+});
+
+teste('a guarda de Extraviado não bloqueia quando o anexo vem na requisição', () => {
+  const fonte = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const rota = extrairRota(fonte, '/api/update-equipamento');
+  assert.ok(
+    /!camposAlterados\._anexoBoletim\s*&&\s*!anexoExistente/.test(rota),
+    'a guarda precisa considerar tanto o anexo novo quanto o já gravado',
+  );
+});
+
+console.log(`\n${'='.repeat(52)}`);
 console.log(`${passou} passaram, ${falhas.length} falharam`);
 if (falhas.length) {
   process.exitCode = 1;
