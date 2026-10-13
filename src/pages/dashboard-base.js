@@ -18,14 +18,16 @@ export const CAMPOS_EDITAVEIS = [
   'vinculadoBlueMonitor', 'numeroChamadoManutencao', 'boletimOcorrencia',
   'justificativaVerificacao', 'descricaoQuebrado', 'sistemaOperacional',
   'processador', 'memoriaRAM', 'armazenamento', 'tamanhoTela',
-  'responsavelAtual', 'observacoes', 'justificativaPatrimonio', 'justificativaNumeroSerie'
+  'responsavelAtual', 'observacoes', 'justificativaPatrimonio', 'justificativaNumeroSerie',
+  'numeroEtiqueta'
 ];
 
 export const CAMPOS_CADASTRO = [
   'unidade', 'categoria', 'marca', 'modelo', 'patrimonio', 'numeroSerie', 'status',
   'vinculadoBlueMonitor', 'sistemaOperacional', 'processador', 'memoriaRAM',
   'armazenamento', 'tamanhoTela', 'responsavelAtual', 'observacoes',
-  'justificativaPatrimonio', 'justificativaNumeroSerie', 'descricaoQuebrado'
+  'justificativaPatrimonio', 'justificativaNumeroSerie', 'descricaoQuebrado',
+  'numeroEtiqueta'
 ];
 
 // Cada página deve declarar seu próprio estado (não exportamos estado compartilhado)

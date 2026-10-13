@@ -61,6 +61,7 @@ CREATE TABLE equipamentos (
   modelo                      TEXT NOT NULL,
   patrimonio                  TEXT,
   numero_serie                TEXT,
+  numero_etiqueta             TEXT,
   status                      status_equipamento NOT NULL DEFAULT 'Disponível',
   status_manutencao           status_manutencao,
   vinculado_blue_monitor      TEXT NOT NULL DEFAULT 'Não' CHECK (vinculado_blue_monitor IN ('Sim', 'Não')),

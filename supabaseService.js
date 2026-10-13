@@ -457,7 +457,7 @@ function getHeadersForTable(tableName) {
       'tamanhoTela', 'responsavelAtual', 'observacoes',
       'dataCadastro', 'dataUltimaAtualizacao', 'cadastradoPor', 'ultimaAlteracaoPor',
       'justificativaPatrimonio', 'justificativaNumeroSerie', 'boletimOcorrenciaAnexoUrl',
-      'tipoEmprestimo', 'escolaDestino'
+      'tipoEmprestimo', 'escolaDestino', 'numeroEtiqueta'
     ],
     LISTAS: ['categoria', 'marca', 'modelo'],
     FILIAIS: ['nome'],

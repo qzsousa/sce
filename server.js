@@ -66,7 +66,7 @@ const HEADER_MAP = {
     'tamanhoTela', 'responsavelAtual', 'observacoes',
     'dataCadastro', 'dataUltimaAtualizacao', 'cadastradoPor', 'ultimaAlteracaoPor',
     'justificativaPatrimonio', 'justificativaNumeroSerie', 'boletimOcorrenciaAnexoUrl',
-    'tipoEmprestimo', 'escolaDestino'
+    'tipoEmprestimo', 'escolaDestino', 'numeroEtiqueta'
   ],
   LISTAS: ['categoria', 'marca', 'modelo'],
   FILIAIS: ['nome'],
@@ -1221,7 +1221,7 @@ const CAMPOS_EDITAVEIS = new Set([
   'sistemaOperacional', 'processador', 'memoriaRAM', 'armazenamento',
   'tamanhoTela', 'responsavelAtual', 'observacoes',
   'justificativaPatrimonio', 'justificativaNumeroSerie',
-  'tipoEmprestimo', 'escolaDestino',
+  'tipoEmprestimo', 'escolaDestino', 'numeroEtiqueta',
   // Fora da lista de colunas: o anexo é consumido logo abaixo do filtro e
   // vira um upload no storage. Sem estar aqui ele era descartado, e um
   // equipamento não conseguia virar "Extraviado" já mandando o B.O. junto.
