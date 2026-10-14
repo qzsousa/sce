@@ -111,6 +111,8 @@ export async function initDashboardBase(options = {}) {
     await carregarEquipamentos();
   }
 
+  mostrarPopupNovidadeEtiqueta();
+
   console.log(`✅ Dashboard ${perfil} inicializado`);
 }
 
@@ -514,6 +516,57 @@ export async function editarEquipamento(id) {
     modalEdicaoInstance = M.Modal.init(document.getElementById('modal-editar-equipamento'));
   }
   modalEdicaoInstance?.open();
+
+  // Notificação/tutorial sobre o novo campo "Número da etiqueta" (exibido uma única vez).
+  try {
+    const chave = 'sce_tour_numero_etiqueta_edit_v2';
+    const campoEtiqueta = document.getElementById('edit-numeroEtiqueta');
+    if (!campoEtiqueta) return;
+    if (!localStorage.getItem(chave)) {
+      localStorage.setItem(chave, '1');
+      setTimeout(() => {
+        try { toastInfo('Novidade: agora você pode informar o "Número da etiqueta" na edição de equipamentos.'); } catch (e) {}
+        iniciarTutorialNumeroEtiqueta();
+      }, 500);
+    }
+  } catch (e) {}
+}
+
+function iniciarTutorialNumeroEtiqueta() {
+  const campo = document.getElementById('edit-numeroEtiqueta');
+  if (!campo) return;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'tour-backdrop';
+  document.body.appendChild(backdrop);
+  campo.classList.add('tour-highlight');
+  try { campo.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+  const tooltip = document.createElement('div');
+  tooltip.className = 'tour-tooltip';
+  tooltip.innerHTML = '<strong>Novo campo disponível</strong>' +
+    '<p>Agora você pode informar o <b>Número da etiqueta</b> (identificação interna da escola) ' +
+    'diretamente na edição do equipamento. Basta preencher e salvar.</p>' +
+    '<button type="button" id="tour-numero-etiqueta-ok">Entendi</button>';
+  document.body.appendChild(tooltip);
+  const posicionar = () => {
+    const r = campo.getBoundingClientRect();
+    let top = r.bottom + 10;
+    let left = r.left;
+    if (top + 160 > window.innerHeight) top = Math.max(8, r.top - 170);
+    if (left + 330 > window.innerWidth) left = Math.max(8, window.innerWidth - 340);
+    if (left < 8) left = 8;
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+  };
+  posicionar();
+  window.addEventListener('resize', posicionar);
+  const fechar = () => {
+    campo.classList.remove('tour-highlight');
+    window.removeEventListener('resize', posicionar);
+    if (tooltip.parentNode) tooltip.parentNode.removeChild(tooltip);
+    if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+  };
+  tooltip.querySelector('#tour-numero-etiqueta-ok').addEventListener('click', fechar);
+  backdrop.addEventListener('click', fechar);
 }
 
 function atualizarCamposCondicionais() {
@@ -789,6 +842,63 @@ export async function exportarPDFUI() {
   } finally {
     setButtonLoading(btn, false);
   }
+}
+
+/* ============================================================================
+   POPUP DE NOVIDADE - NUMERO DA ETIQUETA
+   ============================================================================ */
+
+function mostrarPopupNovidadeEtiqueta() {
+  try {
+    const chave = 'sce_popup_numero_etiqueta_site_v3';
+    if (localStorage.getItem(chave)) return;
+
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;background:radial-gradient(circle at 50% 30%,rgba(25,118,210,.18),rgba(10,20,40,.62));z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'position:relative;max-width:470px;width:100%;padding:28px 28px 24px;border-radius:14px;background:#fff;color:#1e293b;border:1px solid #dbeafe;border-left:5px solid #1976d2;box-shadow:0 24px 70px rgba(15,23,42,.26);';
+    card.innerHTML =
+      '<button type="button" id="popup-etiqueta-fechar-x" aria-label="Fechar" style="position:absolute;top:10px;right:14px;background:transparent;border:none;font-size:1.9rem;line-height:1;cursor:pointer;color:#1976d2;font-weight:900;">✕</button>' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">' +
+        '<img src="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP" alt="Logotipo URE Leste 3" style="width:46px;height:auto;flex:0 0 46px;">' +
+        '<div>' +
+          '<div style="font-size:.75rem;color:#64748b;margin-bottom:2px;">Sistema de Controle de Equipamentos</div>' +
+          '<h5 style="margin:0;color:#0f172a;font-size:1.25rem;font-weight:800;">Novidade disponível</h5>' +
+        '</div>' +
+      '</div>' +
+      '<p style="margin:0 0 14px 0;line-height:1.6;font-size:.95rem;">Campo “<strong style="color:#1976d2;">Número da etiqueta</strong>” disponível na edição de equipamentos. Clique em Editar (ícone do lápis) em um equipamento ou <a href="#" id="popup-etiqueta-agora" style="color:#1976d2;font-weight:700;text-decoration:underline;text-underline-offset:2px;">clique aqui para conhecer o novo campo agora</a>.</p>' +
+      '<div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:12px 14px;margin-bottom:2px;">' +
+        '<p style="margin:0 0 10px 0;font-size:.88rem;color:#334155;">Sua escola ainda não colocou etiquetas? Abra o gerador de etiquetas da sua escola e imprima as identificações.</p>' +
+        '<a href="https://script.google.com/macros/s/AKfycbwh3hRIK8Qpv_GIbAAUpCXNOEgDZturRcM1CtiFUBBK383gnfKQcv7f3uzOpK9nqLBUTA/exec" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:#1976d2;color:#fff;text-decoration:none;border-radius:7px;padding:8px 14px;font-weight:700;font-size:.88rem;">🏷️ Gerar etiquetas da escola</a>' +
+      '</div>';
+
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+
+    const fechar = () => {
+      try { localStorage.setItem(chave, '1'); } catch (e) {}
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+    };
+
+    card.querySelector('#popup-etiqueta-fechar-x').addEventListener('click', fechar);
+
+    const irAgora = (ev) => {
+      ev.preventDefault();
+      fechar();
+      const primeiro = Array.isArray(equipamentosCache) ? equipamentosCache[0] : null;
+      if (primeiro && (primeiro.id || primeiro._id)) {
+        const id = primeiro.id || primeiro._id;
+        setTimeout(() => {
+          try { editarEquipamento(id); } catch (e) {}
+          setTimeout(() => { try { iniciarTutorialNumeroEtiqueta(); } catch (e) {} }, 700);
+        }, 250);
+      } else {
+        try { toastInfo('Abra um equipamento e clique em Editar (ícone do lápis) para conhecer o novo campo.'); } catch (e) {}
+      }
+    };
+    card.querySelector('#popup-etiqueta-agora').addEventListener('click', irAgora);
+  } catch (e) {}
 }
 
 /* ============================================================================
