@@ -121,22 +121,38 @@ async function trySsoSession(token) {
   };
 }
 
+// `sessoes.token` é UUID. Um token fora desse formato (o JWT do portal, lixo
+// no localStorage) faz o Postgres recusar o cast e a chamada virar 500. Só vale
+// consultar a tabela quando o formato bate.
+const RE_TOKEN_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function validateSession(token) {
   if (!token) return null;
-  const data = await sheets.getValues('Sessoes');
-  const now = Date.now();
-  for (const row of data) {
-    const sheetToken = String(row.token || '').trim();
-    const sheetEmail = String(row.email || '').trim().toLowerCase();
-    const expiraEm = new Date(row.expira_em).getTime();
-    if (sheetToken === token.trim()) {
-      if (isNaN(expiraEm) || now > expiraEm) return null;
-      const usuario = await findUsuarioByEmail(sheetEmail);
+  const alvo = token.trim();
+
+  // Consulta pontual na PK. Antes lia a tabela `sessoes` INTEIRA e filtrava em
+  // memória — ~0,11 MB de egress POR REQUISIÇÃO, e isto roda em todo request
+  // autenticado do sistema.
+  if (RE_TOKEN_UUID.test(alvo)) {
+    const { data: sessao, error } = await sheets.supabase
+      .from('sessoes')
+      .select('*')
+      .eq('token', alvo)
+      .maybeSingle();
+
+    if (error) throw new Error(`Erro ao validar sessão: ${error.message}`);
+
+    if (sessao) {
+      const expiraEm = new Date(sessao.expira_em).getTime();
+      if (isNaN(expiraEm) || Date.now() > expiraEm) return null;
+      const email = String(sessao.email || '').trim().toLowerCase();
+      const usuario = await findUsuarioByEmail(email);
       if (!usuario || usuario.status === statusUsuario.REMOVIDO) return null;
-      return { token: sheetToken, email: sheetEmail, nivel: row.nivel, filial: row.filial, papelUnidade: usuario.papelUnidade };
+      return { token: sessao.token, email, nivel: sessao.nivel, filial: sessao.filial, papelUnidade: usuario.papelUnidade };
     }
   }
-  // Não achou sessão local: aceita JWT do portal (SSO)
+
+  // Sem sessão local válida: aceita JWT do portal (SSO)
   return await trySsoSession(token);
 }
 
@@ -169,22 +185,30 @@ function sessaoSomenteLeitura(session) {
 }
 
 async function findUsuarioByEmail(email) {
-  const data = await sheets.getValues('Usuarios');
-  for (const row of data) {
-    if (String(row.email).trim().toLowerCase() === email.trim().toLowerCase()) {
-      return {
-        email: row.email,
-        nome: row.nome,
-        nivel: row.nivel,
-        filial: row.filial,
-        status: row.status,
-        dataRemocao: row.data_remocao,
-        senhaDefinida: row.senha_definida !== false,
-        papelUnidade: row.papel_unidade || null,
-      };
-    }
-  }
-  return null;
+  const alvo = String(email || '').trim().toLowerCase();
+
+  // Consulta pontual na PK. Antes varria a tabela `usuarios` inteira em memória
+  // — e esta função é chamada DE DENTRO de `validateSession`, ou seja, em toda
+  // requisição autenticada.
+  const { data: row, error } = await sheets.supabase
+    .from('usuarios')
+    .select('*')
+    .eq('email', alvo)
+    .maybeSingle();
+
+  if (error) throw new Error(`Erro ao buscar usuário: ${error.message}`);
+  if (!row) return null;
+
+  return {
+    email: row.email,
+    nome: row.nome,
+    nivel: row.nivel,
+    filial: row.filial,
+    status: row.status,
+    dataRemocao: row.data_remocao,
+    senhaDefinida: row.senha_definida !== false,
+    papelUnidade: row.papel_unidade || null,
+  };
 }
 
 // Busca um usuário no Supabase Auth pelo e-mail (admin API)
@@ -250,7 +274,32 @@ async function criarSessaoLogin(usuario) {
   return { token, redirectUrl };
 }
 
-async function getAllEquipamentos() {
+// ============================================================
+// CACHE DOS EQUIPAMENTOS — corte de egress
+// ============================================================
+// `getAllEquipamentos()` pagina a tabela inteira (6.220 linhas ≈ 5,7 MB por
+// chamada) e é usada por 7 rotas. Sem cache, cada abertura de painel gastava
+// ~12 MB de egress contra o Supabase. O TTL abaixo corta isso na ordem de 95%.
+//
+// O banco tem ~45 MB; o problema nunca foi o tamanho, foi transmitir o mesmo
+// conteúdo várias vezes. Aqui o ganho é em BYTES TRANSMITIDOS.
+//
+// O TTL curto é só rede de segurança: qualquer escrita em `equipamentos` chama
+// `invalidarCacheEquipamentos()` e a lista some na hora — cadastrar um
+// equipamento e recarregar precisa mostrar o novo.
+
+// 60 s: curto o bastante para o TTL nunca ser notado, longo o bastante para
+// absorver as várias rotas que disparam em paralelo num mesmo carregamento.
+const TTL_CACHE_EQUIPAMENTOS_MS = 60 * 1000;
+let cacheEquipamentos = { em: 0, dados: null, promessa: null };
+
+/** Invalida o cache. Chamar após QUALQUER escrita em `equipamentos`. */
+function invalidarCacheEquipamentos() {
+  cacheEquipamentos = { em: 0, dados: null, promessa: null };
+}
+
+/** Leitura crua da tabela inteira, sem cache — usar dentro de getAllEquipamentos. */
+async function buscarTodosEquipamentos() {
   // PostgREST limita a 1000 linhas por requisição; paginamos em blocos para ler tudo.
   const BLOCO = 1000;
   const todos = [];
@@ -267,6 +316,34 @@ async function getAllEquipamentos() {
     offset += BLOCO;
   }
   return todos.map(item => toCamelCase(item));
+}
+
+async function getAllEquipamentos() {
+  const agora = Date.now();
+  const cache = cacheEquipamentos;
+
+  if (cache.dados && agora - cache.em < TTL_CACHE_EQUIPAMENTOS_MS) {
+    return cache.dados;
+  }
+
+  // Deduplica chamadas concorrentes. Sem isto, N requisições simultâneas (o
+  // painel dispara várias rotas de uma vez) fariam N leituras da tabela
+  // inteira — que é exatamente o que o cache existe para evitar.
+  if (cache.promessa) return cache.promessa;
+
+  cache.promessa = buscarTodosEquipamentos()
+    .then((dados) => {
+      cacheEquipamentos = { em: Date.now(), dados, promessa: null };
+      return dados;
+    })
+    .catch((err) => {
+      // Falha não pode virar cache: devolve ao estado limpo para a próxima
+      // requisição tentar de novo.
+      cacheEquipamentos = { em: 0, dados: null, promessa: null };
+      throw err;
+    });
+
+  return cache.promessa;
 }
 
 // ============================================================
@@ -1200,6 +1277,7 @@ app.post('/api/create-equipamento', limiteEscrita, asyncHandler(async (req, res)
   });
 
   await sheets.appendRow('Equipamentos', linha);
+  invalidarCacheEquipamentos();
   await registrarHistorico(id, 'criação', '', 'Equipamento cadastrado', session.email);
   await registrarAuditoria('createEquipamento', session.email, { id, unidade });
 
@@ -1334,6 +1412,7 @@ app.post('/api/update-equipamento', limiteEscrita, asyncHandler(async (req, res)
       .update(toSnakeCase(updates))
       .eq('id', id);
     if (error) throw new Error(`Erro ao atualizar equipamento: ${error.message}`);
+    invalidarCacheEquipamentos();
   }
 
   // Salva o caminho do anexo (coluna snake_case separada)
@@ -1349,6 +1428,7 @@ app.post('/api/update-equipamento', limiteEscrita, asyncHandler(async (req, res)
       .update({ boletim_ocorrencia_anexo_url: novoAnexoPath })
       .eq('id', id);
     if (errAnexo) throw new Error(`Erro ao salvar anexo: ${errAnexo.message}`);
+    invalidarCacheEquipamentos();
 
     if (anexoAnterior && anexoAnterior !== novoAnexoPath) {
       try {
@@ -1448,6 +1528,7 @@ app.post('/api/remover-anexo-boletim', limiteEscrita, asyncHandler(async (req, r
     .eq('boletim_ocorrencia_anexo_url', caminho);
 
   if (updError) return res.json(standardResponse(false, null, `Erro ao remover o anexo: ${updError.message}`));
+  invalidarCacheEquipamentos();
 
   try {
     await supabaseAdmin.storage.from(STORAGE_BUCKET).remove([caminho]);
@@ -1493,6 +1574,7 @@ app.post('/api/clone-equipamento', limiteEscrita, asyncHandler(async (req, res) 
   setIf(novaLinha, 'ultimaAlteracaoPor', session.email);
 
   await sheets.appendRow('Equipamentos', novaLinha);
+  invalidarCacheEquipamentos();
   await registrarHistorico(novoId, 'criação', '', `Clonado a partir de ${idOrigem}`, session.email);
   await registrarAuditoria('cloneEquipamento', session.email, { idOrigem, novoId });
 
@@ -1524,6 +1606,7 @@ app.post('/api/remover-equipamento', limiteEscrita, asyncHandler(async (req, res
     .eq('id', id);
 
   if (updError) throw new Error(`Erro ao remover equipamento: ${updError.message}`);
+  invalidarCacheEquipamentos();
 
   await registrarHistorico(id, 'status', statusAntigo, 'Removido', session.email);
   await registrarAuditoria('removerEquipamento', session.email, { id });
@@ -1562,6 +1645,7 @@ app.post('/api/atualizar-status-manutencao', limiteEscrita, asyncHandler(async (
     .eq('id', equipamentoId);
 
   if (updError) throw new Error(`Erro ao atualizar status: ${updError.message}`);
+  invalidarCacheEquipamentos();
 
   await registrarHistorico(equipamentoId, 'statusManutencao', statusAntigo, novoStatus, session.email);
   await registrarAuditoria('atualizarStatusManutencao', session.email, { id: equipamentoId, novoStatus });
@@ -1628,6 +1712,7 @@ app.post('/api/registrar-manutencao', limiteEscrita, asyncHandler(async (req, re
     .from('equipamentos')
     .update(toSnakeCase({ statusManutencao: status || 'Pendente' }))
     .eq('id', equipamentoId);
+  invalidarCacheEquipamentos();
 
   await registrarAuditoria('registrarManutencao', session.email, { id: equipamentoId, status });
 
@@ -1738,6 +1823,7 @@ app.post('/api/registrar-emprestimo', limiteEscrita, asyncHandler(async (req, re
       .from('equipamentos')
       .update({ status: 'Emprestado' })
       .eq('id', alvo.id);
+    invalidarCacheEquipamentos();
 
     await registrarHistorico(alvo.id, 'status', 'Disponível', 'Emprestado', session.email);
   }
@@ -1787,12 +1873,79 @@ app.post('/api/registrar-devolucao', limiteEscrita, asyncHandler(async (req, res
       .from('equipamentos')
       .update({ status: 'Disponível' })
       .eq('id', id);
+    invalidarCacheEquipamentos();
 
     await registrarHistorico(id, 'status', statusAntigo, 'Disponível', session.email);
   }
 
   await registrarAuditoria('registrarDevolucao', session.email, { ids, observacao });
   res.json(standardResponse(true, { message: 'Devolução(s) registrada(s).' }));
+}));
+
+/**
+ * Empréstimos em aberto (status "Emprestado") dentro do escopo do usuário.
+ *
+ * Existe separado do equipamento porque os campos do empréstimo — quem levou,
+ * data prevista, escola de destino — vivem na tabela `emprestimos`. Sem esta
+ * rota a tela só sabia que o item estava "Emprestado": o prazo e o atraso
+ * ficavam invisíveis, e a devolução era às cegas.
+ *
+ * `emAtraso` e `diasAtraso` são calculados aqui, e não no cliente, para que
+ * as telas não discordem entre si sobre o que está atrasado. O corte é feito
+ * no início do dia (fuso de São Paulo), não na hora exata: "ontem" já é atraso.
+ */
+app.get('/api/emprestimos-ativos', asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
+  const session = await requireSession(token);
+
+  const { data, error } = await sheets.supabase
+    .from('emprestimos')
+    .select('id, equipamento_id, patrimonio, unidade, responsavel, cpf, email_responsavel, ' +
+      'data_emprestimo, data_prevista_devolucao, tipo_emprestimo, escola_destino')
+    .eq('status', 'Emprestado');
+
+  if (error) throw new Error(`Erro ao buscar empréstimos ativos: ${error.message}`);
+
+  // A unidade gravada no empréstimo é a de origem do equipamento — a mesma
+  // regra de escopo das demais rotas, senão um gestor veria o emprestimo de
+  // outra escola por causa de uma grafia legada diferente.
+  const visiveis = (data || []).filter(e => sheets.sessaoTemAcessoAUnidade(session, e.unidade));
+
+  // Dia 00:00 no fuso do servidor. Comparar com a data prevista (que é DATE,
+  // volta como 'YYYY-MM-DD') evita o erro clássico de "vence hoje" virar atraso
+  // por causa das horas.
+  const hoje = new Date();
+  const inicioDeHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const MS_DIA = 24 * 60 * 60 * 1000;
+
+  const ativos = visiveis.map(e => {
+    let emAtraso = false;
+    let diasAtraso = 0;
+    if (e.data_prevista_devolucao) {
+      const prevista = new Date(`${e.data_prevista_devolucao}T00:00:00`);
+      if (!Number.isNaN(prevista.getTime())) {
+        diasAtraso = Math.floor((inicioDeHoje - prevista) / MS_DIA);
+        emAtraso = diasAtraso > 0;
+      }
+    }
+    return {
+      id: e.id,
+      equipamentoId: e.equipamento_id,
+      patrimonio: e.patrimonio || '',
+      unidade: e.unidade || '',
+      responsavel: e.responsavel || '',
+      cpf: e.cpf || '',
+      emailResponsavel: e.email_responsavel || '',
+      dataEmprestimo: e.data_emprestimo || null,
+      dataPrevistaDevolucao: e.data_prevista_devolucao || null,
+      tipoEmprestimo: e.tipo_emprestimo || null,
+      escolaDestino: e.escola_destino || '',
+      emAtraso,
+      diasAtraso,
+    };
+  });
+
+  res.json(standardResponse(true, ativos));
 }));
 
 // ============================================================
