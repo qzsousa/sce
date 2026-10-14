@@ -34,6 +34,15 @@ export const CORRECOES = {
   'Zipora Rubinstein Profa': 'E.E. ZÍPORA RUBISTEIN',
 
   // --- vira o PREDIO inteiro: a escola-irma entra na mesma unidade ---
+  // A master da lista-mestra abrevia o nome do meio: "Carmelinda M. Pereira".
+  // O SCE grava por extenso ("Carmelinda Marques Pereira"), e o casamento
+  // estrito exige chave IGUAL — "MARQUES PEREIRA" != "M PEREIRA" — então a
+  // escola e seu 1 equipamento apareciam como "não atribuídos" no /unidades.
+  // Confirmado por duas fontes independentes: a master antiga do chamados
+  // traz "E.E. CARMELINDA MARQUES PEREIRA PROFESSORA" por extenso, e o mapa
+  // de e-mails liga 'E.E. CARMELINDA M. PEREIRA' ao e909166a@educacao.sp.gov.br,
+  // que é o AdminFilial cadastrado exatamente nesta grafia.
+  'Carmelinda Marques Pereira Profa': 'E.E. CARMELINDA M. PEREIRA / LIMA BARRETO',
   'Claudia Dutra Viana': 'E.E. CLAUDIA DUTRA VIANA / ROSA PARKS',
   'Decio Ferraz Alvim Prof Dr': 'E.E. DÉCIO FERRAZ ALVIM / FLORIANO PEIXOTO',
   'Geraldino Dos Santos Deputado': 'E.E. GERALDINO DOS SANTOS, DEPUTADO / JOSUÉ DE CASTRO',

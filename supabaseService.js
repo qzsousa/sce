@@ -161,9 +161,22 @@ export function findRowIndex(data, idCol, id) {
   return -1;
 }
 
+/**
+ * Lista de unidades do técnico a partir de `Usuario.filial`.
+ *
+ * A vírgula NÃO é separador confiável: três escolas oficiais têm vírgula no
+ * NOME ("E.E. BRENO ROSSI, MAESTRO", "E.E. FERNANDO MAURO P. ROCHA, DEPUTADO",
+ * "E.E. GERALDINO DOS SANTOS, DEPUTADO / JOSUÉ DE CASTRO"). Quebrando por ela a
+ * escola virava dois pedaços e o pedaço solto "DEPUTADO" casava com a escola do
+ * técnico vizinho. O portal grava a lista com "|" — quando ele estiver presente
+ * ele manda, e a vírgula é só parte do nome.
+ *
+ * A vírgula continua aceita porque já está gravada em vários usuários.
+ */
 export function parseFiliais(filialRaw) {
-  return String(filialRaw || '')
-    .split(',')
+  const bruto = String(filialRaw || '');
+  const partes = bruto.includes('|') ? bruto.split('|') : bruto.split(',');
+  return partes
     .map(f => f.trim())
     .filter(f => f.length > 0);
 }

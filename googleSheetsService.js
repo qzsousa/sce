@@ -207,9 +207,13 @@ class GoogleSheetsService {
     return -1;
   }
 
+  // Mesma regra do portal (chamados): "|" manda quando presente, porque três
+  // escolas oficiais têm vírgula no NOME e ela não pode virar separador.
+  // Ver `parseFiliais` em supabaseService.js.
   parseFiliais(filialRaw) {
-    return String(filialRaw || '')
-      .split(',')
+    const bruto = String(filialRaw || '');
+    const partes = bruto.includes('|') ? bruto.split('|') : bruto.split(',');
+    return partes
       .map(f => f.trim())
       .filter(f => f.length > 0);
   }

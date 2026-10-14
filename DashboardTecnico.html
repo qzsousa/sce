@@ -469,8 +469,10 @@
   // ================================================================
   // UNIDADES DO TÉCNICO
   // ================================================================
-  const UNIDADES_TECNICO = String(<?!= JSON.stringify(session.filial || '') ?>)
-    .split(',')
+  // Mesma regra do servidor: "|" manda quando presente, porque três escolas
+  // oficiais têm vírgula no NOME e ela não pode virar separador.
+  const FILIAL_BRUTO = String(<?!= JSON.stringify(session.filial || '') ?>);
+  const UNIDADES_TECNICO = (FILIAL_BRUTO.includes('|') ? FILIAL_BRUTO.split('|') : FILIAL_BRUTO.split(','))
     .map(function (u) { return u.trim(); })
     .filter(function (u) { return u.length > 0; });
 

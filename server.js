@@ -7,7 +7,7 @@ import { createClient } from '@supabase/supabase-js';
 import PDFDocument from 'pdfkit';
 import 'dotenv/config';
 
-import sheets, { supabase as supabaseAdmin, toCamelCase, toSnakeCase, chaveUnidade } from './supabaseService.js';
+import sheets, { supabase as supabaseAdmin, toCamelCase, toSnakeCase, chaveUnidade, parseFiliais } from './supabaseService.js';
 import {
   securityHeaders, corsOptions, limiteGeral, limiteAuth, limiteEscrita,
   extrairToken, verificarTokenPortal, politicaSenha,
@@ -2123,7 +2123,9 @@ app.get('/health', (req, res) => res.json(standardResponse(true, { status: 'ok',
 app.get('/api/tecnico-unidades', asyncHandler(async (req, res) => {
   const token = extrairToken(req);
   const session = await requireSession(token, [niveis.TECNICO]);
-  const unidades = session.filial ? session.filial.split(',').map(u => u.trim()).filter(u => u.length > 0) : [];
+  // `parseFiliais` (e não split(',')) porque três escolas oficiais têm vírgula
+  // no nome — ver a regra em supabaseService.js.
+  const unidades = parseFiliais(session.filial);
   res.json(standardResponse(true, unidades));
 }));
 
