@@ -1082,7 +1082,7 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
       // busca crua, `busca = "x,unidade.eq.EscolaSecreta"` injetava um filtro
       // novo e trazia equipamentos de outra escola.
       const b = escaparFiltroPostgrest(busca);
-      query = query.or(`patrimonio.ilike.%${b}%,numero_serie.ilike.%${b}%,modelo.ilike.%${b}%,unidade.ilike.%${b}%`);
+      query = query.or(`patrimonio.ilike.%${b}%,numero_serie.ilike.%${b}%,numero_etiqueta.ilike.%${b}%,modelo.ilike.%${b}%,unidade.ilike.%${b}%`);
     }
     return query;
   };
@@ -2130,6 +2130,69 @@ app.get('/api/tecnico-unidades', asyncHandler(async (req, res) => {
 }));
 
 // ============================================================
+// RELATORIO DE TECNICOS (equipamentos arrumados)
+app.get('/api/relatorio-tecnicos', asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
+  const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
+
+  const { data: regs, error } = await sheets.supabase
+    .from('registros_manutencao')
+    .select('autor, status, data, equipamento_id')
+    .eq('status', 'Concluído');
+
+  if (error) throw new Error('Erro ao buscar registros de manutenção.');
+
+  const equipIds = [...new Set((regs || []).map((r) => r.equipamento_id).filter(Boolean))];
+  let equipamentos = [];
+  if (equipIds.length) {
+    const { data: eqs, error: eqErr } = await sheets.supabase
+      .from('equipamentos')
+      .select('id, unidade')
+      .in('id', equipIds);
+    if (eqErr) throw new Error('Erro ao buscar equipamentos.');
+    equipamentos = eqs || [];
+  }
+  const unitByEquip = new Map(equipamentos.map((e) => [e.id, e.unidade]));
+
+  const filtered = (regs || []).filter((r) => {
+    const unidade = unitByEquip.get(r.equipamento_id);
+    if (!unidade) return session.nivel === niveis.MATRIZ;
+    return sheets.sessaoTemAcessoAUnidade(session, unidade);
+  });
+
+  const map = new Map();
+  for (const r of filtered) {
+    const key = r.autor;
+    if (!map.has(key)) map.set(key, { email: key, total: 0, ultima: r.data });
+    const item = map.get(key);
+    item.total += 1;
+    if (new Date(r.data) > new Date(item.ultima)) item.ultima = r.data;
+  }
+
+  const emails = [...map.keys()];
+  let usuarios = [];
+  if (emails.length) {
+    const { data: us, error: usErr } = await sheets.supabase
+      .from('usuarios')
+      .select('email, nome')
+      .in('email', emails);
+    if (usErr) throw new Error('Erro ao buscar usuários.');
+    usuarios = us || [];
+  }
+  const nomeByEmail = new Map(usuarios.map((u) => [u.email, u.nome]));
+
+  const result = [...map.values()]
+    .map((item) => ({
+      email: item.email,
+      nome: nomeByEmail.get(item.email) || item.email,
+      total: item.total,
+      ultima: item.ultima,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  res.json(standardResponse(true, result));
+}));
+
 // SERVE STATIC FILES (Vite build output)
 // ============================================================
 import path from 'path';
