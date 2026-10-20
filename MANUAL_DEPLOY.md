@@ -76,6 +76,7 @@ CREATE TYPE tipo_emprestimo AS ENUM ('interno', 'interestadual');
 -- ============================================================
 -- TABELA: usuarios
 -- ============================================================
+-- ATENÇÃO: PK é `email` (TEXT). NÃO existe coluna `id` nesta tabela.
 CREATE TABLE usuarios (
   email         TEXT PRIMARY KEY,
   nome          TEXT NOT NULL,
@@ -241,6 +242,8 @@ CREATE INDEX idx_manutencao_data ON registros_manutencao(data DESC);
 -- ============================================================
 -- TABELA: sessoes (tokens de autenticação OTP)
 -- ============================================================
+-- ATENÇÃO: PK é `token` (UUID). NÃO existe coluna `id` nesta tabela.
+-- Use `sessoes.token` em SELECT / WHERE / JOIN / ORDER BY.
 CREATE TABLE sessoes (
   token      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email      TEXT NOT NULL REFERENCES usuarios(email),
@@ -256,6 +259,7 @@ CREATE INDEX idx_sessoes_expira_em ON sessoes(expira_em);
 -- ============================================================
 -- TABELA: otp_codes (códigos temporários de login)
 -- ============================================================
+-- ATENÇÃO: PK é `email` (TEXT). NÃO existe coluna `id` nesta tabela.
 CREATE TABLE otp_codes (
   email      TEXT PRIMARY KEY REFERENCES usuarios(email),
   code       TEXT NOT NULL,

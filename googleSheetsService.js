@@ -211,11 +211,9 @@ class GoogleSheetsService {
   // escolas oficiais têm vírgula no NOME e ela não pode virar separador.
   // Ver `parseFiliais` em supabaseService.js.
   parseFiliais(filialRaw) {
-    const bruto = String(filialRaw || '');
-    const partes = bruto.includes('|') ? bruto.split('|') : bruto.split(',');
-    return partes
-      .map(f => f.trim())
-      .filter(f => f.length > 0);
+    const bruto = String(filialRaw || '')
+    const partes = bruto.includes('|') ? bruto.split('|') : bruto.split(',')
+    return partes.map(f => f.trim()).filter(f => f.length > 0);
   }
 
   sessaoTemAcessoAUnidade(session, unidade) {

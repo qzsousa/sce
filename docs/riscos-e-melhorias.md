@@ -57,8 +57,14 @@ Toda a API aceita `?token=...` além do header. Tokens em URL vazam em logs de p
 - `server.js` com ~1.600 linhas concentrando rotas, regras de negócio, storage, PDF e estáticos; sem camadas, sem testes (repo não tem nenhum teste), sem lint/CI à vista.
 - Código morto acumulado: `googleSheetsService.js`, `api.js` (raiz), exports de sessão/OTP de `supabaseService.js`, metade de `Code.js` + HTMLs legados.
 - Rotas duplicadas de listas: `/api/listas-adicionar|remover` × `/api/listas/adicionar|remover` (semânticas diferentes).
-- Funções duplicadas entre `server.js` e `supabaseService.js` (ex.: `findUsuarioByEmail` local faz **full scan**; a do service faz query pontual).
-- Full-table scans frequentes: `validateSession` lê **toda** `sessoes` e `findUsuarioByEmail` **toda** `usuarios` a cada request; `findAuthUserByEmail` lista até 1000 usuários do Auth por chamada; `equipamentos-da-filial`/exports paginam a tabela inteira e filtram em memória.
+- ~~Funções duplicadas entre `server.js` e `supabaseService.js`~~ — `findUsuarioByEmail` do `server.js` agora faz query pontual na PK (igual à do service). **Resolvido.**
+- **Egress do Supabase estourado (crítico, parcialmente resolvido).** O banco do SCE tem ~45 MB, mas o painel acusava 4,43 GB de saída/mês. A causa era transmitir os mesmos dados repetidamente, não o tamanho do banco:
+  - ✅ `validateSession` lia **toda** `sessoes` em **todo** request → agora `.eq('token', ...)` na PK (média de 110 KB → 220 B por chamada).
+  - ✅ `findUsuarioByEmail` lia **toda** `usuarios` → agora `.eq('email', ...)` na PK (42 KB → 279 B).
+  - ✅ `getAllEquipamentos()` (5,74 MB por chamada, 7 rotas, sem cache) → agora com cache de 60 s, invalidado a cada escrita.
+  - ⚠️ **Ainda aberto:** `findAuthUserByEmail` (`server.js`) lista até **1000 usuários** do Auth por chamada. Só no fluxo de login/reset, mas é o maior custo unitário restante.
+  - ⚠️ **Ainda aberto:** `/api/equipamentos-da-filial` responde **5,36 MB** por abertura de painel (a filial filtra em memória no cliente). Reduzir com paginação + campos enxutos. Não conta na egress do Supabase (é Render→navegador), mas pesa em performance.
+  - Medido no benchmark local (5 aberturas, usuário Matriz): **60,55 MB → 5,79 MB** (cache frio) e **→ 0,05 MB** (cache quente).
 - Semântica HTTP inexistente: erros de negócio voltam 200 com `success:false`; auth/perm voltam 500.
 - Histórico: um `INSERT` por campo alterado, em série (lento em edições grandes).
 - `PORT` default 3001 × proxy Vite 3000 × `.env` 3000 — confuso.

@@ -3,6 +3,24 @@
 -- Schema completo para Supabase (PostgreSQL)
 -- Execute TODO este script no SQL Editor do Supabase
 -- ============================================================
+--
+-- !! ATENÇÃO — CHAVES PRIMÁRIAS NÃO-PADRÃO (leia antes de escrever SQL) !!
+--
+-- A maioria das tabelas usa `id UUID`. TRÊS tabelas NÃO têm `id` e usam
+-- chave natural. Consultar `id` nelas gera o erro:
+--     ERROR: column "<tabela>.id" does not exist
+--
+--   tabela      | chave primária | JOIN / filtro por
+--   ------------+----------------+--------------------------
+--   sessoes     | token (UUID)   | sessoes.token
+--   usuarios    | email (TEXT)   | usuarios.email
+--   otp_codes   | email (TEXT)   | otp_codes.email
+--
+-- Exemplo ERRADO:  SELECT * FROM sessoes WHERE id = '...';
+-- Exemplo CORRETO:  SELECT * FROM sessoes WHERE token = '...';
+--
+-- Vale notar também que `usuarios` e `otp_codes` usam `email` como PK, então
+-- qualquer "id de usuário" neste projeto é o próprio e-mail.
 
 -- Habilitar extensão UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -23,6 +41,7 @@ CREATE TYPE tipo_emprestimo AS ENUM ('interno', 'interestadual');
 -- ============================================================
 -- TABELA: usuarios
 -- ============================================================
+-- ATENÇÃO: PK é `email` (TEXT). NÃO existe coluna `id` nesta tabela.
 CREATE TABLE usuarios (
   email          TEXT PRIMARY KEY,
   nome           TEXT NOT NULL,
@@ -201,6 +220,8 @@ CREATE INDEX idx_manutencao_data ON registros_manutencao(data DESC);
 -- ============================================================
 -- TABELA: sessoes (tokens de autenticação OTP)
 -- ============================================================
+-- ATENÇÃO: PK é `token` (UUID). NÃO existe coluna `id` nesta tabela.
+-- Use `sessoes.token` em SELECT / WHERE / JOIN / ORDER BY.
 CREATE TABLE sessoes (
   token      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email      TEXT NOT NULL REFERENCES usuarios(email),
@@ -216,6 +237,7 @@ CREATE INDEX idx_sessoes_expira_em ON sessoes(expira_em);
 -- ============================================================
 -- TABELA: otp_codes (códigos temporários de login)
 -- ============================================================
+-- ATENÇÃO: PK é `email` (TEXT). NÃO existe coluna `id` nesta tabela.
 CREATE TABLE otp_codes (
   email      TEXT PRIMARY KEY REFERENCES usuarios(email),
   code       TEXT NOT NULL,

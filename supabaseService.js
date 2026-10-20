@@ -174,11 +174,11 @@ export function findRowIndex(data, idCol, id) {
  * A vírgula continua aceita porque já está gravada em vários usuários.
  */
 export function parseFiliais(filialRaw) {
-  const bruto = String(filialRaw || '');
-  const partes = bruto.includes('|') ? bruto.split('|') : bruto.split(',');
-  return partes
-    .map(f => f.trim())
-    .filter(f => f.length > 0);
+  const bruto = String(filialRaw || '')
+  // "|" é o separador padrão (escola com vírgula no nome não quebra);
+  // "," fica por compatibilidade com contas antigas gravadas com vírgula.
+  const partes = bruto.includes('|') ? bruto.split('|') : bruto.split(',')
+  return partes.map(f => f.trim()).filter(f => f.length > 0);
 }
 
 // ============================================================
