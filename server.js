@@ -356,6 +356,7 @@ async function getAllEquipamentos() {
 // ============================================================
 const TTL_INDICE_UNIDADES_MS = 5 * 60 * 1000;
 let cacheIndiceUnidades = { em: 0, indice: null };
+let cacheGrafiasUnidade = { em: 0, dados: null };
 
 /** Índice oficial (nomes de `filiais`) com cache curto — a lista muda pouco. */
 async function indiceUnidades(forcar = false) {
@@ -389,6 +390,10 @@ async function resolverNomeOficial(nome) {
  * mesmo antes de a migração de dados rodar.
  */
 async function listarGrafiasUnidade() {
+  const agora = Date.now();
+  if (cacheGrafiasUnidade.dados && agora - cacheGrafiasUnidade.em < TTL_INDICE_UNIDADES_MS) {
+    return cacheGrafiasUnidade.dados;
+  }
   const BLOCO = 1000;
   const grafias = new Set();
   let offset = 0;
@@ -405,7 +410,9 @@ async function listarGrafiasUnidade() {
     if (!data || data.length < BLOCO) break;
     offset += BLOCO;
   }
-  return [...grafias];
+  const resultado = [...grafias];
+  cacheGrafiasUnidade = { em: agora, dados: resultado };
+  return resultado;
 }
 
 // ============================================================
@@ -989,7 +996,31 @@ app.get('/api/catalogo-equipamentos', asyncHandler(async (req, res) => {
 app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
   const token = extrairToken(req);
   const session = await requireSession(token);
-  const [todos, indice] = await Promise.all([getAllEquipamentos(), indiceUnidades()]);
+  const unidadeFiltro = String(req.query.unidade || '').trim();
+  const indice = await indiceUnidades();
+
+  // Quando a unidade é informada, busca apenas os equipamentos daquela escola
+  // (filtrado no banco), em vez de baixar a tabela inteira e filtrar no cliente.
+  if (unidadeFiltro) {
+    if (!sheets.sessaoTemAcessoAUnidade(session, unidadeFiltro)) {
+      throw negado('Você não atende a unidade solicitada.');
+    }
+    const grafias = await listarGrafiasUnidade();
+    const conjunto = indice.grafiasIguais(unidadeFiltro, grafias);
+    const { data, error } = await sheets.supabase
+      .from('equipamentos')
+      .select('*')
+      .neq('status', 'Removido')
+      .in('unidade', conjunto.length ? conjunto : [unidadeFiltro]);
+    if (error) throw new Error(error.message);
+    const filtrados = (data || [])
+      .map((item) => toCamelCase(item))
+      .map((item) => ({ ...item, unidade: indice.resolver(item.unidade) }));
+    res.json(standardResponse(true, filtrados));
+    return;
+  }
+
+  const todos = await getAllEquipamentos();
   const filtrados = todos
     .filter(item => item.status !== 'Removido' && sheets.sessaoTemAcessoAUnidade(session, item.unidade))
     // Sai no nome oficial: o agrupamento do filtro acontece no cliente (a filial
