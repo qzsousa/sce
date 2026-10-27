@@ -136,7 +136,7 @@ async function validateSession(token) {
   if (RE_TOKEN_UUID.test(alvo)) {
     const { data: sessao, error } = await sheets.supabase
       .from('sessoes')
-      .select('*')
+      .select('token, email, nivel, filial, expira_em')
       .eq('token', alvo)
       .maybeSingle();
 
@@ -192,7 +192,7 @@ async function findUsuarioByEmail(email) {
   // requisição autenticada.
   const { data: row, error } = await sheets.supabase
     .from('usuarios')
-    .select('*')
+    .select('email, nome, nivel, filial, status, data_remocao, senha_definida, papel_unidade')
     .eq('email', alvo)
     .maybeSingle();
 
@@ -214,10 +214,9 @@ async function findUsuarioByEmail(email) {
 // Busca um usuário no Supabase Auth pelo e-mail (admin API)
 async function findAuthUserByEmail(email) {
   try {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const { data, error } = await supabaseAdmin.auth.admin.getUserByEmail(String(email).trim().toLowerCase());
     if (error) return null;
-    const users = data?.users || [];
-    return users.find(u => (u.email || '').toLowerCase() === String(email).toLowerCase()) || null;
+    return data?.user || null;
   } catch {
     return null;
   }
@@ -467,17 +466,12 @@ async function registrarAuditoria(acao, usuarioEmail, detalhes) {
 }
 
 async function cleanupExpiredSessions() {
-  const data = await sheets.getValues('Sessoes');
-  if (data.length <= 1) return;
-  const now = Date.now();
-  const rowsToDelete = [];
-  for (let i = data.length - 1; i >= 1; i--) {
-    const expiraEm = Number(data[i][5]);
-    if (isNaN(expiraEm) || now > expiraEm) rowsToDelete.push(i + 1);
-  }
-  for (const rowIndex of rowsToDelete.reverse()) {
-    await sheets.deleteRow('Sessoes', rowIndex);
-  }
+  const now = new Date().toISOString();
+  const { error } = await sheets.supabase
+    .from('sessoes')
+    .delete()
+    .lt('expira_em', now);
+  if (error) console.warn('Erro ao limpar sessões expiradas:', error.message);
 }
 
 // ============================================================
@@ -696,8 +690,11 @@ app.get('/api/get-nome-usuario', asyncHandler(async (req, res) => {
 app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
   const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
-  const data = await sheets.getValues('Usuarios');
-  let usuarios = data.map(row => ({
+  const { data, error } = await sheets.supabase
+    .from('usuarios')
+    .select('email, nome, nivel, filial, status, data_remocao, senha_definida');
+  if (error) throw new Error(error.message);
+  let usuarios = (data || []).map(row => ({
     email: row.email,
     nome: row.nome,
     nivel: row.nivel,
@@ -877,7 +874,7 @@ app.get('/api/auditoria', asyncHandler(async (req, res) => {
 
   const { data, error } = await sheets.supabase
     .from('auditoria')
-    .select('*')
+    .select('data, usuario, acao, detalhes')
     .order('data', { ascending: false })
     .limit(limite);
   if (error) throw new Error(error.message);
@@ -1701,7 +1698,7 @@ app.get('/api/registros-manutencao', asyncHandler(async (req, res) => {
 
   const { data, error } = await sheets.supabase
     .from('registros_manutencao')
-    .select('*')
+    .select('id, equipamento_id, autor, data, descricao, status')
     .eq('equipamento_id', equipamentoId)
     .order('data', { ascending: false });
 
@@ -1767,7 +1764,7 @@ app.get('/api/historico-equipamento', asyncHandler(async (req, res) => {
 
   const { data, error } = await sheets.supabase
     .from('historico_itens')
-    .select('*')
+    .select('id, equipamento_id, campo, valor_antigo, valor_novo, autor, data')
     .eq('equipamento_id', equipamentoId)
     .order('data', { ascending: false });
 
