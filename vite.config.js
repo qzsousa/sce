@@ -17,7 +17,6 @@ export default defineConfig({
         matriz: 'pages/matriz.html',
         filial: 'pages/filial.html',
         tecnico: 'pages/tecnico.html',
-        maintenance: 'maintenance.html',
       },
     },
   },
