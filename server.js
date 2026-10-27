@@ -289,7 +289,7 @@ async function criarSessaoLogin(usuario) {
 
 // 60 s: curto o bastante para o TTL nunca ser notado, longo o bastante para
 // absorver as várias rotas que disparam em paralelo num mesmo carregamento.
-const TTL_CACHE_EQUIPAMENTOS_MS = 60 * 1000;
+const TTL_CACHE_EQUIPAMENTOS_MS = 5 * 60 * 1000;
 let cacheEquipamentos = { em: 0, dados: null, promessa: null };
 
 /** Invalida o cache. Chamar após QUALQUER escrita em `equipamentos`. */
@@ -306,7 +306,7 @@ async function buscarTodosEquipamentos() {
   while (true) {
     const { data, error } = await sheets.supabase
       .from('equipamentos')
-      .select('*')
+      .select('id, unidade, categoria, marca, modelo, patrimonio, numero_serie, status, status_manutencao, vinculado_blue_monitor, numero_chamado_manutencao, responsavel_atual, data_cadastro, data_ultima_atualizacao, cadastrado_por, ultima_alteracao_por, tipo_emprestimo, escola_destino, numero_etiqueta, boletim_ocorrencia_anexo_url')
       .order('data_cadastro', { ascending: false })
       .range(offset, offset + BLOCO - 1);
     if (error) throw new Error(`Erro ao buscar equipamentos: ${error.message}`);
@@ -1004,9 +1004,9 @@ app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
     }
     const grafias = await listarGrafiasUnidade();
     const conjunto = indice.grafiasIguais(unidadeFiltro, grafias);
-    const { data, error } = await sheets.supabase
+     const { data, error } = await sheets.supabase
       .from('equipamentos')
-      .select('*')
+      .select('id, unidade, categoria, marca, modelo, patrimonio, numero_serie, status, status_manutencao, vinculado_blue_monitor, numero_chamado_manutencao, responsavel_atual, data_cadastro, data_ultima_atualizacao, cadastrado_por, ultima_alteracao_por, tipo_emprestimo, escola_destino, numero_etiqueta, boletim_ocorrencia_anexo_url')
       .neq('status', 'Removido')
       .in('unidade', conjunto.length ? conjunto : [unidadeFiltro]);
     if (error) throw new Error(error.message);
@@ -1117,7 +1117,7 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
 
   // Página de resultados
   const pageQuery = aplicarFiltros(
-    sheets.supabase.from('equipamentos').select('*', { count: 'exact' })
+    sheets.supabase.from('equipamentos').select('id, unidade, categoria, marca, modelo, patrimonio, numero_serie, status, status_manutencao, vinculado_blue_monitor, numero_chamado_manutencao, responsavel_atual, data_cadastro, data_ultima_atualizacao, cadastrado_por, ultima_alteracao_por, tipo_emprestimo, escola_destino, numero_etiqueta, boletim_ocorrencia_anexo_url', { count: 'exact' })
   ).order(ordem, { ascending: ascendente }).range(offset, offset + limite - 1);
 
   const { data, count, error } = await pageQuery;
