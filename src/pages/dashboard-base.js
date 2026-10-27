@@ -7,6 +7,7 @@ import { showLoading, hideLoading, toastSuccess, toastError, toastInfo, setButto
 import { preencherSelectCategoria, popularMarcas, popularModelos, limparMarcaModelo, limparModelo, toggleOutro, getValorFinal, setupSelectCascata, getCategorias, getMarcas, getModelos, setListasCache, getListasCache, habilitarOutroModelo } from '../shared/js/lists.js';
 import { formatDate, formatDateShort, getFormData, clearForm, getNested } from '../shared/js/utils.js';
 import { getToken, initAuthFromUrl, logout, getAuthHeaders, isAuthenticated } from '../shared/js/auth.js';
+import '../shared/js/maintenance-banner.js';
 
 // ============================================================================
 // CONSTANTES COMPARTILHADAS (exportadas para uso nas páginas)

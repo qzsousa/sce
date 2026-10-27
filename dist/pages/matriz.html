@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>(function(){var n=new Date();var s=new Date(n);s.setHours(16,30,0,0);var e=new Date(n);e.setHours(19,30,0,0);if(n>=s&&n<=e&&!location.pathname.endsWith('maintenance.html'))location.replace('/maintenance.html');})();</script>
   <title>SCE - Dashboard Matriz</title>
   <meta name="api-base-url" content="/api">
   <link rel="icon" href="https://lh3.googleusercontent.com/u/0/d/1R-7mJ0Eb6Kxfi_NucEOZ9AzW4xz0PnaP">
@@ -20,10 +21,10 @@
     .campo-outro { margin-top: 0; padding: 0 0 10px 0; display: none; }
     .campo-outro input { width: 100%; }
   </style>
-  <script type="module" crossorigin src="/assets/matriz-BJwzv3xW.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/auth-CDvwzjwO.js">
-  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-B3-j6pXt.js">
-  <link rel="stylesheet" crossorigin href="/assets/auth-ZPHhHppy.css">
+  <script type="module" crossorigin src="/assets/matriz-D3I4OlGs.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/maintenance-banner-DUEs9O_N.js">
+  <link rel="modulepreload" crossorigin href="/assets/dashboard-base-DQ3CXup2.js">
+  <link rel="stylesheet" crossorigin href="/assets/maintenance-banner-BfQwYaL5.css">
 </head>
 <body class="theme-matriz">
   <div class="sce-header">
@@ -83,6 +84,7 @@
         <button class="btn-flat waves-effect" id="btn-atualizar-lista"><i class="material-icons left">refresh</i>Atualizar</button>
         <button class="btn" id="btn-exportar-csv"><i class="material-icons left">description</i>CSV</button>
         <button class="btn" id="btn-exportar-pdf"><i class="material-icons left">picture_as_pdf</i>PDF</button>
+<a class="btn waves-effect" target="_blank" rel="noopener noreferrer" href="https://script.google.com/macros/s/AKfycbwh3hRIK8Qpv_GIbAAUpCXNOEgDZturRcM1CtiFUBBK383gnfKQcv7f3uzOpK9nqLBUTA/exec"><i class="material-icons left">label</i>Gerar etiquetas</a>
       </div>
     </div>
 
@@ -160,6 +162,11 @@
           <input type="text" id="new-patrimonio">
           <label for="new-patrimonio">Patrimônio</label>
         </div>
+        <div class="input-field col s6">
+          <input type="text" id="new-numeroEtiqueta">
+          <label for="new-numeroEtiqueta">Numero da etiqueta</label>
+          <span class="helper-text">Etiqueta colocada pela escola para controle interno</span>
+        </div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio" style="display:none;">
           <textarea id="new-justificativaPatrimonio" class="materialize-textarea"></textarea>
           <label for="new-justificativaPatrimonio">Justificativa para ausência de Patrimônio</label>
@@ -230,6 +237,7 @@
       </div>
     </div>
     <div class="modal-footer">
+      <a class="btn waves-effect" target="_blank" rel="noopener noreferrer" href="https://script.google.com/macros/s/AKfycbwh3hRIK8Qpv_GIbAAUpCXNOEgDZturRcM1CtiFUBBK383gnfKQcv7f3uzOpK9nqLBUTA/exec" style="margin-right:8px;"><i class="material-icons left">label</i>Gerar etiquetas</a>
       <a class="modal-close btn-flat">Cancelar</a>
       <a class="btn" id="btn-salvar-cadastro">Salvar</a>
     </div>
@@ -273,6 +281,11 @@
         <div class="input-field col s6">
           <input type="text" id="edit-patrimonio">
           <label for="edit-patrimonio" class="active">Patrimônio</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" id="edit-numeroEtiqueta">
+          <label for="edit-numeroEtiqueta" class="active">Número da etiqueta <span class="novo-campo-badge">novo</span></label>
+          <span class="helper-text">Etiqueta colocada pela escola para controle interno</span>
         </div>
         <div class="input-field col s12" id="campo-justificativa-patrimonio-edit" style="display:none;">
           <textarea id="edit-justificativaPatrimonio" class="materialize-textarea"></textarea>
@@ -357,6 +370,7 @@
       </div>
     </div>
     <div class="modal-footer">
+      <a class="btn waves-effect" target="_blank" rel="noopener noreferrer" href="https://script.google.com/macros/s/AKfycbwh3hRIK8Qpv_GIbAAUpCXNOEgDZturRcM1CtiFUBBK383gnfKQcv7f3uzOpK9nqLBUTA/exec" style="margin-right:8px;"><i class="material-icons left">label</i>Gerar etiquetas</a>
       <a class="modal-close btn-flat">Cancelar</a>
       <a class="btn" id="btn-salvar-edicao">Salvar</a>
     </div>

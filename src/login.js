@@ -5,6 +5,7 @@
 import { loginWithPassword, verificarUsuario, definirSenha } from './shared/js/api.js';
 import { toastError, toastSuccess, toastInfo, setButtonLoading, isButtonLoading } from './shared/js/ui.js';
 import { setToken, initAuthFromUrl } from './shared/js/auth.js';
+import './shared/js/maintenance-banner.js';
 
 console.log('🔄 Login module loading...');
 
