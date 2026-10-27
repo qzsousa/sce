@@ -136,7 +136,7 @@ async function validateSession(token) {
   if (RE_TOKEN_UUID.test(alvo)) {
     const { data: sessao, error } = await sheets.supabase
       .from('sessoes')
-      .select('*')
+      .select('token, email, nivel, filial, expira_em')
       .eq('token', alvo)
       .maybeSingle();
 
@@ -192,7 +192,7 @@ async function findUsuarioByEmail(email) {
   // requisição autenticada.
   const { data: row, error } = await sheets.supabase
     .from('usuarios')
-    .select('*')
+    .select('email, nome, nivel, filial, status, data_remocao, senha_definida, papel_unidade')
     .eq('email', alvo)
     .maybeSingle();
 
@@ -214,10 +214,9 @@ async function findUsuarioByEmail(email) {
 // Busca um usuário no Supabase Auth pelo e-mail (admin API)
 async function findAuthUserByEmail(email) {
   try {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const { data, error } = await supabaseAdmin.auth.admin.getUserByEmail(String(email).trim().toLowerCase());
     if (error) return null;
-    const users = data?.users || [];
-    return users.find(u => (u.email || '').toLowerCase() === String(email).toLowerCase()) || null;
+    return data?.user || null;
   } catch {
     return null;
   }
@@ -290,7 +289,7 @@ async function criarSessaoLogin(usuario) {
 
 // 60 s: curto o bastante para o TTL nunca ser notado, longo o bastante para
 // absorver as várias rotas que disparam em paralelo num mesmo carregamento.
-const TTL_CACHE_EQUIPAMENTOS_MS = 60 * 1000;
+const TTL_CACHE_EQUIPAMENTOS_MS = 5 * 60 * 1000;
 let cacheEquipamentos = { em: 0, dados: null, promessa: null };
 
 /** Invalida o cache. Chamar após QUALQUER escrita em `equipamentos`. */
@@ -307,7 +306,7 @@ async function buscarTodosEquipamentos() {
   while (true) {
     const { data, error } = await sheets.supabase
       .from('equipamentos')
-      .select('*')
+      .select('id, unidade, categoria, marca, modelo, patrimonio, numero_serie, status, status_manutencao, vinculado_blue_monitor, numero_chamado_manutencao, responsavel_atual, data_cadastro, data_ultima_atualizacao, cadastrado_por, ultima_alteracao_por, tipo_emprestimo, escola_destino, numero_etiqueta, boletim_ocorrencia_anexo_url')
       .order('data_cadastro', { ascending: false })
       .range(offset, offset + BLOCO - 1);
     if (error) throw new Error(`Erro ao buscar equipamentos: ${error.message}`);
@@ -356,6 +355,7 @@ async function getAllEquipamentos() {
 // ============================================================
 const TTL_INDICE_UNIDADES_MS = 5 * 60 * 1000;
 let cacheIndiceUnidades = { em: 0, indice: null };
+let cacheGrafiasUnidade = { em: 0, dados: null };
 
 /** Índice oficial (nomes de `filiais`) com cache curto — a lista muda pouco. */
 async function indiceUnidades(forcar = false) {
@@ -389,6 +389,10 @@ async function resolverNomeOficial(nome) {
  * mesmo antes de a migração de dados rodar.
  */
 async function listarGrafiasUnidade() {
+  const agora = Date.now();
+  if (cacheGrafiasUnidade.dados && agora - cacheGrafiasUnidade.em < TTL_INDICE_UNIDADES_MS) {
+    return cacheGrafiasUnidade.dados;
+  }
   const BLOCO = 1000;
   const grafias = new Set();
   let offset = 0;
@@ -405,7 +409,9 @@ async function listarGrafiasUnidade() {
     if (!data || data.length < BLOCO) break;
     offset += BLOCO;
   }
-  return [...grafias];
+  const resultado = [...grafias];
+  cacheGrafiasUnidade = { em: agora, dados: resultado };
+  return resultado;
 }
 
 // ============================================================
@@ -460,17 +466,12 @@ async function registrarAuditoria(acao, usuarioEmail, detalhes) {
 }
 
 async function cleanupExpiredSessions() {
-  const data = await sheets.getValues('Sessoes');
-  if (data.length <= 1) return;
-  const now = Date.now();
-  const rowsToDelete = [];
-  for (let i = data.length - 1; i >= 1; i--) {
-    const expiraEm = Number(data[i][5]);
-    if (isNaN(expiraEm) || now > expiraEm) rowsToDelete.push(i + 1);
-  }
-  for (const rowIndex of rowsToDelete.reverse()) {
-    await sheets.deleteRow('Sessoes', rowIndex);
-  }
+  const now = new Date().toISOString();
+  const { error } = await sheets.supabase
+    .from('sessoes')
+    .delete()
+    .lt('expira_em', now);
+  if (error) console.warn('Erro ao limpar sessões expiradas:', error.message);
 }
 
 // ============================================================
@@ -689,8 +690,11 @@ app.get('/api/get-nome-usuario', asyncHandler(async (req, res) => {
 app.get('/api/listar-usuarios', asyncHandler(async (req, res) => {
   const token = extrairToken(req);
   const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
-  const data = await sheets.getValues('Usuarios');
-  let usuarios = data.map(row => ({
+  const { data, error } = await sheets.supabase
+    .from('usuarios')
+    .select('email, nome, nivel, filial, status, data_remocao, senha_definida');
+  if (error) throw new Error(error.message);
+  let usuarios = (data || []).map(row => ({
     email: row.email,
     nome: row.nome,
     nivel: row.nivel,
@@ -870,7 +874,7 @@ app.get('/api/auditoria', asyncHandler(async (req, res) => {
 
   const { data, error } = await sheets.supabase
     .from('auditoria')
-    .select('*')
+    .select('data, usuario, acao, detalhes')
     .order('data', { ascending: false })
     .limit(limite);
   if (error) throw new Error(error.message);
@@ -989,7 +993,31 @@ app.get('/api/catalogo-equipamentos', asyncHandler(async (req, res) => {
 app.get('/api/equipamentos-da-filial', asyncHandler(async (req, res) => {
   const token = extrairToken(req);
   const session = await requireSession(token);
-  const [todos, indice] = await Promise.all([getAllEquipamentos(), indiceUnidades()]);
+  const unidadeFiltro = String(req.query.unidade || '').trim();
+  const indice = await indiceUnidades();
+
+  // Quando a unidade é informada, busca apenas os equipamentos daquela escola
+  // (filtrado no banco), em vez de baixar a tabela inteira e filtrar no cliente.
+  if (unidadeFiltro) {
+    if (!sheets.sessaoTemAcessoAUnidade(session, unidadeFiltro)) {
+      throw negado('Você não atende a unidade solicitada.');
+    }
+    const grafias = await listarGrafiasUnidade();
+    const conjunto = indice.grafiasIguais(unidadeFiltro, grafias);
+     const { data, error } = await sheets.supabase
+      .from('equipamentos')
+      .select('id, unidade, categoria, marca, modelo, patrimonio, numero_serie, status, status_manutencao, vinculado_blue_monitor, numero_chamado_manutencao, responsavel_atual, data_cadastro, data_ultima_atualizacao, cadastrado_por, ultima_alteracao_por, tipo_emprestimo, escola_destino, numero_etiqueta, boletim_ocorrencia_anexo_url')
+      .neq('status', 'Removido')
+      .in('unidade', conjunto.length ? conjunto : [unidadeFiltro]);
+    if (error) throw new Error(error.message);
+    const filtrados = (data || [])
+      .map((item) => toCamelCase(item))
+      .map((item) => ({ ...item, unidade: indice.resolver(item.unidade) }));
+    res.json(standardResponse(true, filtrados));
+    return;
+  }
+
+  const todos = await getAllEquipamentos();
   const filtrados = todos
     .filter(item => item.status !== 'Removido' && sheets.sessaoTemAcessoAUnidade(session, item.unidade))
     // Sai no nome oficial: o agrupamento do filtro acontece no cliente (a filial
@@ -1082,14 +1110,14 @@ app.get('/api/equipamentos-global', asyncHandler(async (req, res) => {
       // busca crua, `busca = "x,unidade.eq.EscolaSecreta"` injetava um filtro
       // novo e trazia equipamentos de outra escola.
       const b = escaparFiltroPostgrest(busca);
-      query = query.or(`patrimonio.ilike.%${b}%,numero_serie.ilike.%${b}%,modelo.ilike.%${b}%,unidade.ilike.%${b}%`);
+      query = query.or(`patrimonio.ilike.%${b}%,numero_serie.ilike.%${b}%,numero_etiqueta.ilike.%${b}%,modelo.ilike.%${b}%,unidade.ilike.%${b}%`);
     }
     return query;
   };
 
   // Página de resultados
   const pageQuery = aplicarFiltros(
-    sheets.supabase.from('equipamentos').select('*', { count: 'exact' })
+    sheets.supabase.from('equipamentos').select('id, unidade, categoria, marca, modelo, patrimonio, numero_serie, status, status_manutencao, vinculado_blue_monitor, numero_chamado_manutencao, responsavel_atual, data_cadastro, data_ultima_atualizacao, cadastrado_por, ultima_alteracao_por, tipo_emprestimo, escola_destino, numero_etiqueta, boletim_ocorrencia_anexo_url', { count: 'exact' })
   ).order(ordem, { ascending: ascendente }).range(offset, offset + limite - 1);
 
   const { data, count, error } = await pageQuery;
@@ -1670,7 +1698,7 @@ app.get('/api/registros-manutencao', asyncHandler(async (req, res) => {
 
   const { data, error } = await sheets.supabase
     .from('registros_manutencao')
-    .select('*')
+    .select('id, equipamento_id, autor, data, descricao, status')
     .eq('equipamento_id', equipamentoId)
     .order('data', { ascending: false });
 
@@ -1736,7 +1764,7 @@ app.get('/api/historico-equipamento', asyncHandler(async (req, res) => {
 
   const { data, error } = await sheets.supabase
     .from('historico_itens')
-    .select('*')
+    .select('id, equipamento_id, campo, valor_antigo, valor_novo, autor, data')
     .eq('equipamento_id', equipamentoId)
     .order('data', { ascending: false });
 
@@ -2130,6 +2158,69 @@ app.get('/api/tecnico-unidades', asyncHandler(async (req, res) => {
 }));
 
 // ============================================================
+// RELATORIO DE TECNICOS (equipamentos arrumados)
+app.get('/api/relatorio-tecnicos', asyncHandler(async (req, res) => {
+  const token = extrairToken(req);
+  const session = await requireSession(token, [niveis.MATRIZ, niveis.ADMIN_FILIAL]);
+
+  const { data: regs, error } = await sheets.supabase
+    .from('registros_manutencao')
+    .select('autor, status, data, equipamento_id')
+    .eq('status', 'Concluído');
+
+  if (error) throw new Error('Erro ao buscar registros de manutenção.');
+
+  const equipIds = [...new Set((regs || []).map((r) => r.equipamento_id).filter(Boolean))];
+  let equipamentos = [];
+  if (equipIds.length) {
+    const { data: eqs, error: eqErr } = await sheets.supabase
+      .from('equipamentos')
+      .select('id, unidade')
+      .in('id', equipIds);
+    if (eqErr) throw new Error('Erro ao buscar equipamentos.');
+    equipamentos = eqs || [];
+  }
+  const unitByEquip = new Map(equipamentos.map((e) => [e.id, e.unidade]));
+
+  const filtered = (regs || []).filter((r) => {
+    const unidade = unitByEquip.get(r.equipamento_id);
+    if (!unidade) return session.nivel === niveis.MATRIZ;
+    return sheets.sessaoTemAcessoAUnidade(session, unidade);
+  });
+
+  const map = new Map();
+  for (const r of filtered) {
+    const key = r.autor;
+    if (!map.has(key)) map.set(key, { email: key, total: 0, ultima: r.data });
+    const item = map.get(key);
+    item.total += 1;
+    if (new Date(r.data) > new Date(item.ultima)) item.ultima = r.data;
+  }
+
+  const emails = [...map.keys()];
+  let usuarios = [];
+  if (emails.length) {
+    const { data: us, error: usErr } = await sheets.supabase
+      .from('usuarios')
+      .select('email, nome')
+      .in('email', emails);
+    if (usErr) throw new Error('Erro ao buscar usuários.');
+    usuarios = us || [];
+  }
+  const nomeByEmail = new Map(usuarios.map((u) => [u.email, u.nome]));
+
+  const result = [...map.values()]
+    .map((item) => ({
+      email: item.email,
+      nome: nomeByEmail.get(item.email) || item.email,
+      total: item.total,
+      ultima: item.ultima,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  res.json(standardResponse(true, result));
+}));
+
 // SERVE STATIC FILES (Vite build output)
 // ============================================================
 import path from 'path';

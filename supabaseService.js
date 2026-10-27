@@ -81,14 +81,12 @@ export async function appendRow(tableName, rowValues) {
   headers.forEach((h, i) => obj[h] = rowValues[i]);
   const snakeObj = toSnakeCase(obj);
   
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from(TABLES[tableName] || tableName.toLowerCase())
-    .insert(snakeObj)
-    .select()
-    .single();
+    .insert(snakeObj);
 
   if (error) throw new Error(`Erro ao inserir em ${tableName}: ${error.message}`);
-  return data;
+  return null;
 }
 
 export async function updateCell(tableName, row, col, value) {
@@ -494,7 +492,7 @@ function getHeadersForTable(tableName) {
 export async function findUsuarioByEmail(email) {
   const { data, error } = await supabase
     .from('usuarios')
-    .select('*')
+    .select('email, nome, nivel, filial, status, data_remocao, senha_definida, papel_unidade')
     .eq('email', email.toLowerCase().trim())
     .single();
   
@@ -529,7 +527,7 @@ export async function validateSession(token) {
   
   const { data, error } = await supabase
     .from('sessoes')
-    .select('*')
+    .select('token, email, nivel, filial, expira_em')
     .eq('token', token.trim())
     .single();
   
