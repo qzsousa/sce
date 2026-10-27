@@ -9,10 +9,12 @@
   <script>
     (function(){var n=new Date();var s=new Date(n);s.setHours(17,0,0,0);var e=new Date(n);e.setHours(20,0,0,0);if(n>=s&&n<=e){window.location.replace('/maintenance.html');return;} if (!window.location.pathname.match(/\/(login|matriz|filial|tecnico)(\.html)?$/)) { window.location.href = '/login'; } })();
   </script>
+  <script>(function(){var n=new Date();var s=new Date(n);s.setHours(17,0,0,0);var e=new Date(n);e.setHours(20,0,0,0);var ms=s.getTime()-n.getTime();if(ms>0){setTimeout(function(){var nn=new Date();if(nn>=s&&nn<=e&&!location.pathname.endsWith("maintenance.html"))location.replace("/maintenance.html");},ms);}})();</script>
 </head>
 <body>
   <p>Redirecionando para o login...</p>
   <p>Redirecionando para o login...</p>
 </body>
 </html>
+
 
