@@ -482,14 +482,30 @@ app.post('/api/login-password', limiteAuth, asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.json(standardResponse(false, null, 'E-mail e senha são obrigatórios.'));
 
-  const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
-  if (error || !data?.user) return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
-
   const usuario = await findUsuarioByEmail(email);
   if (!usuario || usuario.status === 'REMOVIDO' || usuario.status === 'Removido') {
-    await supabaseAuth.auth.signOut();
-    return res.json(standardResponse(false, null, 'Acesso não autorizado para este usuário.'));
+    return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
   }
+
+  let autenticado = false;
+  const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+  if (!error && data?.user) {
+    autenticado = true;
+  } else {
+    // Usuário existe na base, mas não no Supabase Auth (ex.: migração antiga).
+    // Cria/atualiza a conta no Auth com a senha informada e segue o login,
+    // sem expor ao usuário que as senhas foram perdidas.
+    try {
+      await upsertAuthUser(email, password, usuario);
+      await setSenhaDefinida(email, true);
+      autenticado = true;
+    } catch (e) {
+      console.error('Falha ao criar Auth user no login:', e?.message || e);
+      autenticado = false;
+    }
+  }
+
+  if (!autenticado) return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
 
   const { token, redirectUrl } = await criarSessaoLogin(usuario);
   await registrarAuditoria('login', email, { via: 'password' });

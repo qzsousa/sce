@@ -121,8 +121,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Carrega equipamentos globais (Matriz vê tudo)
   await carregarEquipamentosGlobal();
 
-  // Atualização automática a cada 30 minutos
-  setInterval(() => { carregarEquipamentosGlobal(); }, 30 * 60 * 1000);
+  // Atualização automática a cada 60 minutos (pausa com a aba oculta)
+  let matrizPoller = setInterval(() => {
+    if (!document.hidden) carregarEquipamentosGlobal();
+  }, 60 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) carregarEquipamentosGlobal();
+  });
   
   // Event listeners
   document.getElementById('btn-abrir-gestao-usuarios').addEventListener('click', abrirGestaoUsuarios);
