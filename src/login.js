@@ -141,8 +141,10 @@ function agendarVerificacaoEmail() {
       setEmailStatus('', '');
       setSenhaBloqueada(false);
     } else if (usuario.senhaDefinida === false) {
-      setEmailStatus('Primeiro acesso: este e-mail ainda não tem senha. Clique em "Primeiro acesso" abaixo.', 'success');
-      setSenhaBloqueada(true);
+      // Permite digitar a senha diretamente; o backend cria a conta Auth
+      // on-the-fly (UX de login normal).
+      setEmailStatus('Primeiro acesso: defina sua senha abaixo.', 'info');
+      setSenhaBloqueada(false);
     } else {
       setEmailStatus('', '');
       setSenhaBloqueada(false);
@@ -177,7 +179,7 @@ async function fazerLogin() {
 
     if (usuario.senhaDefinida === false) {
       if (!modoPrimeiroAcesso) {
-        entrarModoPrimeiroAcesso();
+        // Login normal: backend cria conta Auth on-the-fly para migrados.
       } else {
         const confirm = confirmPasswordInput.value;
         if (!confirm || confirm !== password) {

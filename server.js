@@ -483,9 +483,34 @@ app.post('/api/login-password', limiteAuth, asyncHandler(async (req, res) => {
   if (!email || !password) return res.json(standardResponse(false, null, 'E-mail e senha são obrigatórios.'));
 
   const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
-  if (error || !data?.user) return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
 
-  const usuario = await findUsuarioByEmail(email);
+  // Usuário migrado sem conta no Supabase Auth: cria a conta on-the-fly
+  // com a senha informada, mantendo a UX de login normal.
+  let usuario = await findUsuarioByEmail(email);
+  if ((error || !data?.user) && usuario && usuario.senhaDefinida === false &&
+      (usuario.status === 'Ativo' || usuario.status === 'ATIVO')) {
+    const politica = politicaSenha.validar(password);
+    if (politica.valida) {
+      try {
+        await upsertAuthUser(email, password, usuario);
+        await setSenhaDefinida(email, true);
+        const retry = await supabaseAuth.auth.signInWithPassword({ email, password });
+        data = retry.data;
+        error = retry.error;
+      } catch (e) {
+        console.warn('Falha ao criar conta Auth no login:', e.message);
+      }
+    } else {
+      return res.json(standardResponse(false, null, politica.erros.join(' ')));
+    }
+  }
+
+  if (error || !data?.user) {
+    await supabaseAuth.auth.signOut();
+    return res.json(standardResponse(false, null, 'Credenciais inválidas.'));
+  }
+
+  usuario = await findUsuarioByEmail(email);
   if (!usuario || usuario.status === 'REMOVIDO' || usuario.status === 'Removido') {
     await supabaseAuth.auth.signOut();
     return res.json(standardResponse(false, null, 'Acesso não autorizado para este usuário.'));
